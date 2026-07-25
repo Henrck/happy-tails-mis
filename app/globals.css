@@ -1,6 +1,27 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
+/* Sections targeted by nav anchor links (#services, #about, #footer) get
+   breathing room above them equal to roughly the sticky nav's height, so
+   smooth-scrolling never leaves the heading tucked under the nav bar. */
+section[id], footer[id] {
+  scroll-margin-top: 4rem;
+}
+
 :root {
+  /* Brand colors — the ONE place these hex values live. Every component
+     should reference these tokens (bg-brand-pink, text-brand-cyan, etc.)
+     instead of hardcoding hex codes, so a brand color tweak is a one-line
+     change instead of a find-and-replace across 15 files. */
+  --color-brand-pink: #F53D93;
+  --color-brand-pink-dark: #D42B7C;
+  --color-brand-pink-light: #FBA8CE;
+  --color-brand-tint: #FDF1F7;
+  --color-brand-cyan: #7DD3FC;
+
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -8,19 +29,42 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-brand-pink: var(--color-brand-pink);
+  --color-brand-pink-dark: var(--color-brand-pink-dark);
+  --color-brand-pink-light: var(--color-brand-pink-light);
+  --color-brand-tint: var(--color-brand-tint);
+  --color-brand-cyan: var(--color-brand-cyan);
+  --font-heading: var(--font-heading);
+  --font-body: var(--font-body);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 600;
+}
+
+@layer components {
+  /* The ONE shared content width for every section on the site. Using this
+     instead of ad-hoc max-w-4xl / max-w-5xl / max-w-6xl per section keeps
+     every section's content aligned to the same left/right edges as you
+     scroll — the single biggest fix for the "floaty desktop" feeling. */
+  .site-container {
+    max-width: 72rem; /* 1152px — roomy on desktop, matches Tailwind's max-w-6xl */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  @media (min-width: 768px) {
+    .site-container {
+      padding-left: 2.5rem;
+      padding-right: 2.5rem;
+    }
+  }
 }
