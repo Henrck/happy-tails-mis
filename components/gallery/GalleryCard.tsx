@@ -1,23 +1,22 @@
-// Shared before/after photo tile, used by both the homepage carousel and
-// the full /gallery page. Shows a placeholder until real photos exist.
 import Image from "next/image";
-import type { GalleryPhoto } from "@/lib/data/gallery";
+import type { GalleryPhoto } from "@/lib/types/gallery";
 
 export default function GalleryCard({ photo }: { photo: GalleryPhoto }) {
   return (
-    <div className="relative aspect-square rounded-2xl overflow-hidden border-2 border-white bg-pink-50">
-      {photo.imageUrl ? (
-        <Image src={photo.imageUrl} alt={photo.petName ?? "Groomed pet"} fill className="object-cover" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center">
-          <svg viewBox="0 0 64 64" className="w-10 h-10 text-pink-200">
-            <path
-              fill="currentColor"
-              d="M20 20c3 0 5-3 5-6s-2-6-5-6-5 3-5 6 2 6 5 6zm24 0c3 0 5-3 5-6s-2-6-5-6-5 3-5 6 2 6 5 6zM12 30c2.5 0 4.5-2.7 4.5-6S14.5 18 12 18s-4.5 2.7-4.5 6S9.5 30 12 30zm40 0c2.5 0 4.5-2.7 4.5-6S54.5 18 52 18s-4.5 2.7-4.5 6S49.5 30 52 30zM32 26c-7 0-16 4-16 12v3c0 3 2.5 5.5 5.5 5.5h21c3 0 5.5-2.5 5.5-5.5v-3c0-8-9-12-16-12z"
-            />
-          </svg>
+    <article className="overflow-hidden rounded-2xl border-2 border-white bg-white shadow-sm">
+      <div className="grid grid-cols-2 gap-1 bg-pink-50 p-1">
+        <div className="relative aspect-square overflow-hidden rounded-xl">
+          <Image src={photo.before_url} alt={`${photo.title ?? "Pet"} before`} fill sizes="(min-width: 768px) 20vw, 45vw" className="object-cover" unoptimized />
+          <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-[9px] font-bold uppercase text-white">Before</span>
         </div>
+        <div className="relative aspect-square overflow-hidden rounded-xl">
+          <Image src={photo.after_url} alt={`${photo.title ?? "Pet"} after`} fill sizes="(min-width: 768px) 20vw, 45vw" className="object-cover" unoptimized />
+          <span className="absolute bottom-2 left-2 rounded-full bg-brand-pink/90 px-2 py-0.5 text-[9px] font-bold uppercase text-white">After</span>
+        </div>
+      </div>
+      {photo.title && (
+        <p className="truncate px-3 py-2 text-xs font-semibold text-zinc-700">{photo.title}</p>
       )}
-    </div>
+    </article>
   );
 }

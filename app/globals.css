@@ -1,27 +1,15 @@
 @import "tailwindcss";
 
-html {
-  scroll-behavior: smooth;
-}
+html { scroll-behavior: smooth; }
 
-/* Sections targeted by nav anchor links (#services, #about, #footer) get
-   breathing room above them equal to roughly the sticky nav's height, so
-   smooth-scrolling never leaves the heading tucked under the nav bar. */
-section[id], footer[id] {
-  scroll-margin-top: 4rem;
-}
+section[id], footer[id] { scroll-margin-top: 4rem; }
 
 :root {
-  /* Brand colors — the ONE place these hex values live. Every component
-     should reference these tokens (bg-brand-pink, text-brand-cyan, etc.)
-     instead of hardcoding hex codes, so a brand color tweak is a one-line
-     change instead of a find-and-replace across 15 files. */
   --color-brand-pink: #F53D93;
   --color-brand-pink-dark: #D42B7C;
   --color-brand-pink-light: #FBA8CE;
   --color-brand-tint: #FDF1F7;
   --color-brand-cyan: #7DD3FC;
-
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -38,33 +26,47 @@ section[id], footer[id] {
   --font-body: var(--font-body);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-body), sans-serif;
-}
-
-h1, h2, h3, h4 {
-  font-family: var(--font-heading), sans-serif;
-  font-weight: 600;
-}
+body { background: var(--background); color: var(--foreground); font-family: var(--font-body), sans-serif; }
+h1, h2, h3, h4 { font-family: var(--font-heading), sans-serif; font-weight: 600; }
 
 @layer components {
-  /* The ONE shared content width for every section on the site. Using this
-     instead of ad-hoc max-w-4xl / max-w-5xl / max-w-6xl per section keeps
-     every section's content aligned to the same left/right edges as you
-     scroll — the single biggest fix for the "floaty desktop" feeling. */
   .site-container {
-    max-width: 72rem; /* 1152px — roomy on desktop, matches Tailwind's max-w-6xl */
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    width: min(100% - 3rem, 1152px);
+    margin-inline: auto;
   }
-  @media (min-width: 768px) {
-    .site-container {
-      padding-left: 2.5rem;
-      padding-right: 2.5rem;
-    }
+  @media (max-width: 767px) { .site-container { width: min(100% - 2rem, 1152px); } }
+  @media (min-width: 1440px) { .site-container { width: min(100% - 5rem, 1280px); } }
+}
+
+/* Landing-page desktop reference: a 1920x1080 viewport. The Hero occupies
+   the usable viewport below the fixed 64px navigation; content sections stay
+   content-driven rather than being incorrectly forced to 1080px tall. */
+@media (min-width: 1024px) {
+  main > section:first-of-type > div.relative.w-full {
+    height: calc(100svh - 4rem);
+    aspect-ratio: auto;
   }
 }
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  main > section:first-of-type > div.relative.w-full {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+@media (max-width: 767px) {
+  main > section:first-of-type > div.relative.w-full {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* Keep photo banners proportional while remaining fully visible. */
+@media (min-width: 1024px) {
+  main > section > img[alt*="Groom"],
+  main > section > img[alt*="Board"],
+  main > section > img[alt*="spa"],
+  main > section > img[alt*="SPA"] { max-height: 560px; object-fit: cover; }
+}
+
+/* Prevent long pricing inclusion labels from escaping their cards. */
+article { min-width: 0; }
