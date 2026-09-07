@@ -1,9 +1,6 @@
-// Shared banner used by Grooming/Boarding/Spa sections: full, uncropped
-// photo (no object-cover clipping) with a heading + subtext overlay.
-// Uses the image's real intrinsic size instead of `fill`, so the whole
-// photo is always visible. width/height can now come from a dynamically
-// uploaded image (see Website Management) — real dimensions captured at
-// upload time — not just the bundled defaults.
+// Shared banner used by Grooming/Boarding/Spa.
+// The desktop banner has a consistent viewport-oriented height; the image
+// fills the frame while the text stays centered and readable.
 import Image from "next/image";
 
 export default function PhotoBanner({
@@ -24,22 +21,22 @@ export default function PhotoBanner({
   isRemote?: boolean;
 }) {
   return (
-    <section className="relative w-full">
+    <section className="relative h-[calc(100dvh-4rem)] min-h-[420px] w-full overflow-hidden bg-brand-tint md:h-[calc(100dvh-4rem)]">
       <Image
         src={src}
         alt={alt}
-        width={width}
-        height={height}
-        className="w-full h-auto"
+        fill
+        className="object-cover"
         sizes="100vw"
         unoptimized={isRemote}
+        priority
       />
       <div className="absolute inset-0 bg-black/45" />
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 md:px-16">
-        <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white drop-shadow-md">
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center md:px-16">
+        <h2 className="text-3xl font-bold text-white drop-shadow-md md:text-5xl lg:text-6xl">
           {heading}
         </h2>
-        <p className="mt-5 max-w-3xl text-base md:text-2xl text-white leading-relaxed drop-shadow-sm">
+        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white drop-shadow-sm md:text-xl lg:text-2xl">
           {children}
         </p>
       </div>

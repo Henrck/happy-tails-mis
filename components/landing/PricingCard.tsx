@@ -1,28 +1,25 @@
-// Shared pricing card used by Grooming (Basic/Diamond/Premium) and
-// Boarding (Small/Big Kennels).
-//
-// Redesign pass 2 — the first pass crammed a full ingredient-list
-// paragraph into the colored header on top of a photo, which made every
-// card a different height and felt visually noisy. Fixed here:
-//   - header now takes a short tagline instead of a paragraph (the
-//     "Includes" icons already say what's in the package — repeating it
-//     as prose above them was redundant, not informative)
-//   - a thin white seam separates the photo from the pink, instead of a
-//     hard clip edge
-//   - includes icons sit in a proper ring instead of a flat tint circle
-//   - each price row gets a small tag icon, closer to the reference
-//   - a subtle hover lift, since these are the kind of cards people
-//     scan and compare
 import Image from "next/image";
 
 export type PriceTier = { label: string; price: string };
 export type IncludeItem = { icon: React.ReactNode; label: string };
 
-function TagIcon() {
+function WeightIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.6 12.3 12.7 20a1.5 1.5 0 0 1-2.1 0l-6.6-6.6a1.5 1.5 0 0 1 0-2.1L11.7 3.6a2 2 0 0 1 1.4-.6H19a2 2 0 0 1 2 2v5.9a2 2 0 0 1-.4 1.4z" />
-      <circle cx="16" cy="8" r="1.3" />
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 5h8" />
+      <path d="M9 5 7 8h10l-2-3" />
+      <path d="M6.5 8h11a1 1 0 0 1 1 1l1 10a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19l1-10a1 1 0 0 1 1-1Z" />
+      <path d="M12 11v3" />
+      <path d="M10.5 12.5h3" />
     </svg>
   );
 }
@@ -47,73 +44,109 @@ export default function PricingCard({
   tiers: PriceTier[];
 }) {
   return (
-    <div className="h-full rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 bg-white flex flex-col">
-      {/* Mobile header: plain stacked photo, no diagonal — a diagonal cut
-          has no room to read cleanly at narrow widths. */}
-      <div className="md:hidden">
-        <div className="relative w-full aspect-[16/9]">
-          <Image src={imageSrc} alt={imageAlt} fill className="object-cover" />
-        </div>
-        <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-5 py-4 text-white">
+    <article className="flex h-full flex-col overflow-hidden rounded-[1.15rem] border border-brand-pink-light/70 bg-white shadow-[0_6px_20px_rgba(245,61,147,0.10)] transition-transform duration-300 hover:-translate-y-1 hover:shadow-[0_12px_28px_rgba(245,61,147,0.16)]">
+      <div className="relative hidden h-[176px] overflow-hidden bg-gradient-to-br from-brand-pink to-brand-pink-dark md:block">
+        <div className="absolute inset-y-0 left-0 z-10 flex w-[68%] flex-col justify-start px-6 pt-6 pr-4 text-white">
           <div className="flex items-center gap-2">
-            {headerIcon}
-            <h3 className="text-xl font-bold tracking-wide">{label}</h3>
+            <span className="shrink-0 [&>svg]:h-6 [&>svg]:w-6">
+              {headerIcon}
+            </span>
+            <h3 className="text-[1.28rem] font-bold leading-none tracking-tight lg:text-[1.38rem]">
+              {label}
+            </h3>
           </div>
+
           {badge && (
-            <span className="mt-2 inline-block bg-white/15 border border-white/30 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide">
+            <span className="mt-2 w-fit rounded-full border border-white/80 bg-white/10 px-3 py-1 text-[10px] font-medium leading-none text-white">
               {badge}
             </span>
           )}
-          <p className="mt-2 text-xs text-white/90">{tagline}</p>
-        </div>
-      </div>
 
-      {/* Desktop header: diagonal photo cut into the pink ribbon, with a
-          thin white seam between them and a short tagline instead of a
-          full paragraph — keeps every card the same height regardless
-          of how much copy the tier needs. */}
-      <div className="hidden md:flex relative h-[130px] bg-gradient-to-br from-brand-pink to-brand-pink-dark overflow-hidden items-center">
-        <div className="relative z-10 max-w-[56%] px-6">
-          <div className="flex items-center gap-2 text-white">
-            {headerIcon}
-            <h3 className="text-xl lg:text-2xl font-bold tracking-wide leading-tight">{label}</h3>
-          </div>
-          {badge ? (
-            <span className="mt-2 inline-block bg-white/15 border border-white/30 rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-              {badge}
-            </span>
-          ) : (
-            <p className="mt-1.5 text-xs text-white/90 leading-snug">{tagline}</p>
-          )}
+          <p className="mt-1.5 max-w-[290px] text-[10.5px] leading-[1.45] text-white/95">
+            {tagline}
+          </p>
         </div>
 
-        {/* White seam, 3px wider than the photo itself */}
         <div
-          className="absolute inset-y-0 right-0 w-[46%] bg-white"
-          style={{ clipPath: "polygon(calc(18% - 3px) 0%, 100% 0%, 100% 100%, calc(0% - 3px) 100%)" }}
+          className="absolute inset-y-0 right-0 z-20 w-[47%] bg-white"
+          style={{ clipPath: "polygon(19% 0%, 100% 0%, 100% 100%, 0% 100%)" }}
+          aria-hidden="true"
         />
         <div
-          className="absolute inset-y-0 right-0 w-[46%]"
-          style={{ clipPath: "polygon(18% 0%, 100% 0%, 100% 100%, 0% 100%)" }}
+          className="absolute inset-y-0 right-0 z-30 w-[46%]"
+          style={{ clipPath: "polygon(19% 0%, 100% 0%, 100% 100%, 0% 100%)" }}
         >
-          <Image src={imageSrc} alt={imageAlt} fill className="object-cover" />
+          <Image
+            src={imageSrc}
+            alt={imageAlt}
+            fill
+            sizes="(min-width: 1024px) 18vw, 46vw"
+            className="object-cover"
+          />
         </div>
       </div>
 
-      {/* Body: optional includes row + price table */}
-      <div className="flex-1 flex flex-col px-5 md:px-6 pt-6 pb-6">
+      <div className="md:hidden">
+        <div className="relative h-[170px] w-full">
+          <Image
+            src={imageSrc}
+            alt={imageAlt}
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+        </div>
+        <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-5 py-5 text-white">
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 [&>svg]:h-6 [&>svg]:w-6">{headerIcon}</span>
+            <h3 className="text-xl font-bold leading-none">{label}</h3>
+          </div>
+          {badge && (
+            <span className="mt-3 inline-block rounded-full border border-white/70 bg-white/10 px-3 py-1 text-[10px] font-medium">
+              {badge}
+            </span>
+          )}
+          <p className="mt-2 text-xs leading-relaxed text-white/95">{tagline}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col px-4 pb-3.5 pt-4 md:px-4 md:pb-3.5 md:pt-4">
         {includes && includes.length > 0 && (
           <>
-            <p className="text-center text-xs font-bold tracking-wide text-brand-pink">
-              INCLUDES:
-            </p>
-            <div className="mt-4 flex flex-wrap justify-center gap-x-3 gap-y-4">
+            <div className="flex justify-center">
+              <span className="rounded-full bg-brand-tint px-3.5 py-1 text-[11px] font-bold tracking-wide text-brand-pink">
+                INCLUDES:
+              </span>
+            </div>
+
+            {/* Grid keeps every inclusion inside the card.
+                Seven-item packages get seven equal columns; basic gets four. */}
+            <div
+              className={`mt-4 grid w-full items-start ${
+                includes.length > 5
+                  ? "grid-cols-4 sm:grid-cols-7 gap-x-2 sm:gap-x-0.5 gap-y-3"
+                  : "grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-3"
+              }`}
+            >
               {includes.map((item) => (
-                <div key={item.label} className="flex flex-col items-center gap-1.5 w-[4.6rem]">
-                  <div className="w-11 h-11 rounded-full bg-white ring-2 ring-pink-100 flex items-center justify-center text-brand-pink">
+                <div
+                  key={item.label}
+                  className="flex min-w-0 flex-col items-center gap-1.5 text-center"
+                >
+                  <div
+                    className={`flex items-center justify-center text-brand-pink ${
+                      includes.length > 5
+                        ? "h-8 w-8 [&>svg]:h-6 [&>svg]:w-6"
+                        : "h-9 w-9 [&>svg]:h-7 [&>svg]:w-7"
+                    }`}
+                  >
                     {item.icon}
                   </div>
-                  <span className="text-[10px] leading-tight text-center text-zinc-500">
+                  <span
+                    className={`w-full break-words leading-[1.15] text-zinc-600 ${
+                      includes.length > 5 ? "text-[9px] sm:text-[8px]" : "text-[10px] sm:text-[9px]"
+                    }`}
+                  >
                     {item.label}
                   </span>
                 </div>
@@ -122,25 +155,25 @@ export default function PricingCard({
           </>
         )}
 
-        <div className={`w-full rounded-2xl bg-brand-tint p-4 ${includes ? "mt-6" : ""}`}>
-          {tiers.map((tier, i) => (
+        <div className={`${includes ? "mt-4" : "mt-0"} space-y-1.5`}>
+          {tiers.map((tier) => (
             <div
               key={tier.label}
-              className={`flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg ${
-                i % 2 === 0 ? "bg-white" : ""
-              } ${i !== tiers.length - 1 ? "mb-1" : ""}`}
+              className="flex min-h-[40px] items-center justify-between gap-3 rounded-[10px] bg-gradient-to-r from-brand-tint to-white px-3 py-1.5"
             >
-              <span className="flex items-center gap-2 text-xs md:text-sm font-semibold text-zinc-700">
-                <span className="text-brand-pink-light"><TagIcon /></span>
-                {tier.label}
+              <span className="flex min-w-0 items-center gap-2 text-[11px] font-medium leading-tight text-zinc-700 md:text-[12px]">
+                <span className="shrink-0 text-brand-pink-light">
+                  <WeightIcon />
+                </span>
+                <span>{tier.label}</span>
               </span>
-              <span className="text-base md:text-lg font-extrabold text-brand-pink shrink-0">
+              <span className="shrink-0 text-[15px] font-extrabold text-brand-pink md:text-[16px]">
                 {tier.price}
               </span>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </article>
   );
 }

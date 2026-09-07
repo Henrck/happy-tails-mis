@@ -2,20 +2,15 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 4rem;
 }
 
-/* Sections targeted by nav anchor links (#services, #about, #footer) get
-   breathing room above them equal to roughly the sticky nav's height, so
-   smooth-scrolling never leaves the heading tucked under the nav bar. */
 section[id], footer[id] {
   scroll-margin-top: 4rem;
 }
 
+/* Shared brand system — Sonnet 5-inspired Happy Tails palette. */
 :root {
-  /* Brand colors — the ONE place these hex values live. Every component
-     should reference these tokens (bg-brand-pink, text-brand-cyan, etc.)
-     instead of hardcoding hex codes, so a brand color tweak is a one-line
-     change instead of a find-and-replace across 15 files. */
   --color-brand-pink: #F53D93;
   --color-brand-pink-dark: #D42B7C;
   --color-brand-pink-light: #FBA8CE;
@@ -50,21 +45,88 @@ h1, h2, h3, h4 {
 }
 
 @layer components {
-  /* The ONE shared content width for every section on the site. Using this
-     instead of ad-hoc max-w-4xl / max-w-5xl / max-w-6xl per section keeps
-     every section's content aligned to the same left/right edges as you
-     scroll — the single biggest fix for the "floaty desktop" feeling. */
   .site-container {
-    max-width: 72rem; /* 1152px — roomy on desktop, matches Tailwind's max-w-6xl */
+    width: 100%;
+    max-width: 72rem;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
   }
+
   @media (min-width: 768px) {
     .site-container {
-      padding-left: 2.5rem;
-      padding-right: 2.5rem;
+      padding-left: 2rem;
+      padding-right: 2rem;
     }
+  }
+
+  /*
+   * Landing-page sizing:
+   * - every direct section gets the same anchor offset;
+   * - short sections are given at least one viewport of breathing room;
+   * - long sections are allowed to grow naturally rather than clipping
+   *   descriptions or pricing rows.
+   */
+  main > section {
+    scroll-margin-top: 4rem;
+    box-sizing: border-box;
+  }
+}
+
+
+/* ============================================================
+   LANDING PAGE VIEWPORT FORMAT
+   Desktop reference: 1920 × 1080.
+   The section uses the actual browser viewport so it remains fitted
+   when Windows/browser scaling makes the CSS viewport smaller.
+   Tablet/mobile use natural content height.
+   ============================================================ */
+
+@media (min-width: 1024px) {
+  main > section {
+    width: 100%;
+    min-height: calc(100dvh - 4rem);
+    box-sizing: border-box;
+    scroll-margin-top: 4rem;
+  }
+
+  /* Keep content sections vertically balanced without forcing a fixed
+     1080 CSS-pixel height that can extend below the user's screen. */
+  main > section:not(#home) {
+    min-height: calc(100dvh - 4rem);
+  }
+
+  main > section#services,
+  main > section:not(#home):not(#services):not(#about) {
+    display: flex;
+    align-items: center;
+  }
+
+  main > section#services > .site-container,
+  main > section:not(#home):not(#services):not(#about) > .site-container {
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  main > section {
+    width: 100%;
+    min-height: calc(100dvh - 4rem);
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    scroll-margin-top: 4rem;
+  }
+}
+
+@media (max-width: 767px) {
+  main > section {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    scroll-margin-top: 4rem;
   }
 }

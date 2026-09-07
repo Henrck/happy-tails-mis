@@ -19,7 +19,7 @@ export default function SpaBanner({
       alt="Dog receiving an herbal Ayurvedic spa treatment"
       width={width || 552}
       height={height || 371}
-      heading="Pet SPA Ayuverda Services"
+      heading="Pet SPA Ayurveda Services"
       isRemote={!!backgroundUrl}
     >
       Pet Spa Ayurveda is a holistic pet grooming and wellness service

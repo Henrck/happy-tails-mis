@@ -1,75 +1,76 @@
 "use client";
-// Photo gallery carousel — this REPLACES the original testimonials/star-
-// review section per Josh's decision. Shows before/after grooming shots,
-// paged with arrows like the Products carousel. "View More" is relocated
-// below the carousel (rather than overlapping the grid like the original
-// screenshot) and links to a full /gallery page, same pattern as Products.
-// No real photos yet — placeholders until the admin module supports photo
-// uploads for this section.
-import { useState } from "react";
+// Before/After teaser on the homepage.
+// REAL FIX per request: cards were small (4 per row on desktop, 2 on
+// mobile) and not clickable — just static thumbnails. Now 3 per row max
+// (1 on mobile) so each before/after photo is meaningfully bigger, and
+// clicking any card opens a full-size lightbox (components/gallery/
+// GalleryLightbox) with prev/next through the whole photo list, not just
+// whatever page happened to be visible.
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { galleryPhotos } from "@/lib/data/gallery";
+import type { GalleryPhoto } from "@/lib/types/gallery";
 import GalleryCard from "@/components/gallery/GalleryCard";
+import GalleryLightbox from "@/components/gallery/GalleryLightbox";
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 3;
+const AUTOPLAY_MS = 4000;
 
-export default function Gallery() {
+export default function Gallery({ photos }: { photos: GalleryPhoto[] }) {
   const [page, setPage] = useState(0);
-  const pageCount = Math.max(1, Math.ceil(galleryPhotos.length / PAGE_SIZE));
-  const visible = galleryPhotos.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  const [paused, setPaused] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const pageCount = Math.max(1, Math.ceil(photos.length / PAGE_SIZE));
+  const visible = photos.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
-  function prev() {
-    setPage((p) => (p - 1 + pageCount) % pageCount);
-  }
-  function next() {
-    setPage((p) => (p + 1) % pageCount);
-  }
+  useEffect(() => {
+    if (pageCount <= 1 || paused || lightboxIndex !== null) return;
+    const id = window.setInterval(() => setPage((p) => (p + 1) % pageCount), AUTOPLAY_MS);
+    return () => window.clearInterval(id);
+  }, [pageCount, paused, lightboxIndex]);
 
   return (
-    <section className="py-14 bg-brand-tint">
+    <section className="bg-brand-tint py-14">
       <div className="site-container text-center">
-        <h2 className="text-2xl md:text-3xl font-bold text-zinc-900">
-          Happy Tails, Happy Pets
-        </h2>
-        <p className="mt-2 text-sm md:text-base text-zinc-600">
-          A few before-and-afters from our grooming table.
-        </p>
+        <h2 className="text-2xl font-bold text-zinc-900 md:text-3xl">Happy Tails, Happy Pets</h2>
+        <p className="mt-2 text-sm text-zinc-600 md:text-base">A few before-and-afters from our grooming table.</p>
 
-        <div className="mt-8 flex items-center justify-center gap-3">
-          <button
-            onClick={prev}
-            aria-label="Previous photos"
-            className="shrink-0 w-9 h-9 rounded-full bg-brand-pink hover:bg-brand-pink-dark text-white flex items-center justify-center transition-colors"
+        {visible.length ? (
+          <div
+            className="mt-8 flex items-center gap-3"
+            onMouseEnter={() => setPaused(true)}
+            onMouseLeave={() => setPaused(false)}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {visible.map((photo) => (
-              <GalleryCard key={photo.id} photo={photo} />
-            ))}
+            <button onClick={() => setPage((p) => (p - 1 + pageCount) % pageCount)} aria-label="Previous photos" className="h-9 w-9 shrink-0 rounded-full bg-brand-pink text-white hover:bg-brand-pink-dark transition-colors">‹</button>
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {visible.map((photo) => (
+                <GalleryCard
+                  key={photo.id}
+                  photo={photo}
+                  onClick={() => setLightboxIndex(photos.findIndex((p) => p.id === photo.id))}
+                />
+              ))}
+            </div>
+            <button onClick={() => setPage((p) => (p + 1) % pageCount)} aria-label="Next photos" className="h-9 w-9 shrink-0 rounded-full bg-brand-pink text-white hover:bg-brand-pink-dark transition-colors">›</button>
           </div>
+        ) : (
+          <div className="mt-8 rounded-2xl border border-brand-pink-light/60 bg-white/70 px-6 py-10 text-sm text-zinc-500">
+            Before-and-after photos will appear here soon.
+          </div>
+        )}
 
-          <button
-            onClick={next}
-            aria-label="Next photos"
-            className="shrink-0 w-9 h-9 rounded-full bg-brand-pink hover:bg-brand-pink-dark text-white flex items-center justify-center transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-
-        <Link
-          href="/gallery"
-          className="mt-8 inline-block bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold text-sm px-8 py-2.5 rounded-full transition-colors"
-        >
+        <Link href="/gallery" className="mt-8 inline-block rounded-full bg-brand-pink px-8 py-2.5 text-sm font-semibold text-white hover:bg-brand-pink-dark">
           View More
         </Link>
       </div>
+
+      {lightboxIndex !== null && (
+        <GalleryLightbox
+          photos={photos}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
+      )}
     </section>
   );
 }

@@ -1,26 +1,12 @@
 "use client";
-// Hero section — top of the landing page. Now a real carousel: rotates
-// through however many slides the superadmin has uploaded via Website
-// Management (hero_slides table), so there's an active "advertisement"
-// the moment a visitor lands, not just one static photo.
-//
-// The logo + "Book Now" CTA are intentionally NOT part of each slide —
-// they stay fixed on top through every rotation. That keeps the brand
-// mark and the one action that matters consistent no matter which promo
-// image is currently showing, instead of every slide needing its own
-// logo/CTA baked in (which the admin would have to redo for every photo
-// they upload).
-//
-// REAL BUG FIXED (kept from before): "Book Now" checks the session
-// directly — logged in -> /account/appointments (the real route),
-// logged out -> /sign-in.
+
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { HeroSlide } from "@/lib/types/hero-slides";
 
-const AUTOPLAY_MS = 5500;
+const AUTOPLAY_MS = 2000;
 
 export default function Hero({
   slides,
@@ -33,18 +19,12 @@ export default function Hero({
   const resolvedLogo = logoUrl || "/images/logo.png";
   const isRemoteLogo = !!logoUrl && logoUrl !== "/images/logo.png";
 
-  // Fallback to the bundled default photo if no slides have been
-  // uploaded yet, so the hero never renders blank.
   const displaySlides: { id: string; image_url: string }[] =
     slides.length > 0 ? slides : [{ id: "default", image_url: "/images/hero-bg.png" }];
 
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
-
-  // Clamp at render time rather than in an effect — if the admin deletes
-  // a slide out from under a visitor's stale index, this just falls back
-  // to the first slide immediately with no extra render/effect round-trip.
   const activeIndex = index < displaySlides.length ? index : 0;
 
   const goTo = useCallback(
@@ -88,7 +68,6 @@ export default function Hero({
       onTouchEnd={handleTouchEnd}
     >
       <div className="relative w-full aspect-[3/2] md:aspect-[16/7] overflow-hidden bg-brand-tint">
-        {/* Crossfading slides */}
         {displaySlides.map((slide, i) => (
           <div
             key={slide.id}
@@ -107,7 +86,6 @@ export default function Hero({
           </div>
         ))}
 
-        {/* Fixed brand overlay — same on every slide */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <Image
             src={resolvedLogo}
@@ -122,13 +100,12 @@ export default function Hero({
             className="pointer-events-auto mt-3 md:mt-5 flex items-center gap-2 bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold px-6 py-2.5 rounded-full transition-colors text-sm md:text-base shadow-lg"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8.5 9.5c1.1 0 2-1.1 2-2.5S9.6 4.5 8.5 4.5 6.5 5.6 6.5 7s.9 2.5 2 2.5zm7 0c1.1 0 2-1.1 2-2.5s-.9-2.5-2-2.5-2 1.1-2 2.5.9 2.5 2 2.5zM4.5 14c1.1 0 2-1.1 2-2.5S5.6 9 4.5 9 2.5 10.1 2.5 11.5 3.4 14 4.5 14zm15 0c1.1 0 2-1.1 2-2.5S20.6 9 19.5 9s-2 1.1-2 2.5.9 2.5 2 2.5zM12 12c-2.5 0-7 1.5-7 4.5V18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-1.5c0-3-4.5-4.5-7-4.5z"/>
+              <path d="M8.5 9.5c1.1 0 2-1.1 2-2.5S9.6 4.5 8.5 4.5 6.5 5.6 6.5 7s.9 2.5 2 2.5zm7 0c1.1 0 2-1.1 2-2.5-2 2.5-2.5-2.5-2-2.5-2 1.1-2 2.5.9 2.5 2 2.5zM4.5 14c1.1 0 2-1.1 2-2.5S5.6 9 4.5 9 2.5 10.1 2.5 11.5 3.4 14 4.5 14zm15 0c1.1 0 2-1.1 2-2.5S20.6 9 19.5 9 17.5 10.1 17.5 11.5s.9 2.5 2 2.5zM12 12c-2.5 0-7 1.5-7 4.5V18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-1.5c0-3-4.5-4.5-7-4.5z"/>
             </svg>
             Book Now
           </button>
         </div>
 
-        {/* Arrows — only when there's more than one slide to move between */}
         {displaySlides.length > 1 && (
           <>
             <button
@@ -149,8 +126,6 @@ export default function Hero({
                 <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-
-            {/* Dots */}
             <div className="absolute bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5">
               {displaySlides.map((slide, i) => (
                 <button
