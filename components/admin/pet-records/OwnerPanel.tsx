@@ -1,28 +1,32 @@
 "use client";
+// Same panel as before, now against real Customer accounts instead of
+// the mock Owner entity. Only used on the Registered Owners tab —
+// Walk-in Only pets don't have a Customer entity to browse by.
 import { useState, useMemo } from "react";
-import type { Owner, Pet } from "@/lib/data/pet-records-mock";
+import type { Customer } from "@/lib/types/users";
+import type { Pet } from "@/lib/types/appointments";
 
 export default function OwnerPanel({
-  owners,
+  customers,
   pets,
   onSelectOwner,
   onShowAll,
 }: {
-  owners: Owner[];
+  customers: Customer[];
   pets: Pet[];
-  onSelectOwner: (owner: Owner) => void;
+  onSelectOwner: (customer: Customer) => void;
   onShowAll: () => void;
 }) {
   const [search, setSearch] = useState("");
 
-  const petCount = (ownerId: string) => pets.filter((p) => p.ownerId === ownerId).length;
+  const petCount = (customerId: string) => pets.filter((p) => p.customer_id === customerId).length;
 
-  const filteredOwners = useMemo(() => {
+  const filteredCustomers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return owners
-      .filter((o) => !q || o.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [owners, search]);
+    return customers
+      .filter((c) => !q || c.full_name.toLowerCase().includes(q))
+      .sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [customers, search]);
 
   return (
     <div className="w-full lg:w-72 shrink-0 bg-white rounded-2xl border border-pink-100 p-4">
@@ -54,23 +58,23 @@ export default function OwnerPanel({
       </button>
 
       <div className="mt-2 space-y-1.5 max-h-[calc(100vh-19.5rem)] overflow-y-auto pr-1">
-        {filteredOwners.length === 0 ? (
+        {filteredCustomers.length === 0 ? (
           <p className="text-sm text-zinc-400 text-center py-6">No owners match your search.</p>
         ) : (
-          filteredOwners.map((owner) => (
+          filteredCustomers.map((customer) => (
             <button
-              key={owner.id}
-              onClick={() => onSelectOwner(owner)}
+              key={customer.id}
+              onClick={() => onSelectOwner(customer)}
               className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-brand-tint transition-colors text-left"
             >
               <span className="flex items-center gap-2 text-sm text-zinc-700">
                 <span className="w-6 h-6 rounded-full bg-brand-pink text-white text-xs font-bold flex items-center justify-center shrink-0">
-                  {owner.name.charAt(0)}
+                  {customer.full_name.charAt(0)}
                 </span>
-                {owner.name}
+                {customer.full_name}
               </span>
               <span className="bg-brand-pink text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0">
-                {petCount(owner.id)}
+                {petCount(customer.id)}
               </span>
             </button>
           ))

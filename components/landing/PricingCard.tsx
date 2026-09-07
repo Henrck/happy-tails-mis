@@ -1,43 +1,100 @@
-// Shared pricing card used by both Grooming (Diamond/Premium) and Boarding
-// (Small/Big Kennels). Portrait photo badge, ribbon header, zebra-striped
-// price rows with bold accent pricing, and an optional Policies button.
+// Shared pricing card used by Grooming (Basic/Diamond/Premium) and
+// Boarding (Small/Big Kennels). Redesigned to match the reference
+// images: a photo built into the header via a diagonal cut (desktop) —
+// simplified to a plain stacked photo on mobile, where a diagonal cut
+// has no room to breathe — an optional "Includes" icon row (Grooming
+// only; Boarding passes nothing and skips it), then the price list.
 import Image from "next/image";
 
 export type PriceTier = { label: string; price: string };
+export type IncludeItem = { icon: React.ReactNode; label: string };
 
 export default function PricingCard({
+  headerIcon,
   label,
-  subLines,
+  badge,
+  description,
   imageSrc,
   imageAlt,
+  includes,
   tiers,
 }: {
+  headerIcon: React.ReactNode;
   label: string;
-  subLines: string[];
+  badge?: string;
+  description: string;
   imageSrc: string;
   imageAlt: string;
+  includes?: IncludeItem[];
   tiers: PriceTier[];
 }) {
   return (
-    <div className="h-full rounded-3xl overflow-hidden shadow-xl border-2 border-brand-pink-light bg-white flex flex-col">
-      {/* Ribbon header — fixed min-height so Diamond (2 lines) and Premium
-          (3 lines) cards still line up evenly side by side. */}
-      <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-6 py-5 text-center text-white min-h-[112px] md:min-h-[128px] flex flex-col justify-center">
-        <h3 className="text-2xl md:text-3xl font-bold tracking-wide">{label}</h3>
-        {subLines.map((line, i) => (
-          <p key={i} className={`mt-1 ${i === 0 ? "text-sm font-semibold" : "text-[11px] opacity-90"}`}>
-            {line}
-          </p>
-        ))}
-      </div>
-
-      {/* Body: portrait photo badge + price table */}
-      <div className="flex-1 flex flex-col items-center px-6 pt-6 pb-6">
-        <div className="relative w-32 md:w-36 aspect-[3/4] rounded-2xl overflow-hidden shadow-lg border-4 border-white ring-1 ring-pink-100">
+    <div className="h-full rounded-3xl overflow-hidden shadow-xl bg-white flex flex-col">
+      {/* Mobile header: plain stacked photo, no diagonal — a diagonal cut
+          has no room to read cleanly at narrow widths. */}
+      <div className="md:hidden">
+        <div className="relative w-full aspect-[16/10]">
           <Image src={imageSrc} alt={imageAlt} fill className="object-cover" />
         </div>
+        <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-5 py-4 text-white">
+          <div className="flex items-center gap-2">
+            {headerIcon}
+            <h3 className="text-xl font-bold tracking-wide">{label}</h3>
+          </div>
+          {badge && (
+            <span className="mt-2 inline-block bg-white/20 rounded-full px-3 py-0.5 text-[11px] font-medium">
+              {badge}
+            </span>
+          )}
+          <p className="mt-2 text-xs leading-relaxed opacity-90">{description}</p>
+        </div>
+      </div>
 
-        <div className="mt-5 w-full rounded-2xl bg-brand-tint p-4">
+      {/* Desktop header: diagonal photo cut into the pink ribbon. */}
+      <div className="hidden md:block relative min-h-[180px] bg-gradient-to-r from-brand-pink to-brand-pink-dark overflow-hidden">
+        <div className="relative z-10 max-w-[58%] px-6 py-6">
+          <div className="flex items-center gap-2 text-white">
+            {headerIcon}
+            <h3 className="text-2xl font-bold tracking-wide">{label}</h3>
+          </div>
+          {badge && (
+            <span className="mt-2 inline-block bg-white/20 text-white rounded-full px-3 py-0.5 text-xs font-medium">
+              {badge}
+            </span>
+          )}
+          <p className="mt-3 text-xs leading-relaxed text-white/90">{description}</p>
+        </div>
+        <div
+          className="absolute inset-y-0 right-0 w-[46%]"
+          style={{ clipPath: "polygon(18% 0%, 100% 0%, 100% 100%, 0% 100%)" }}
+        >
+          <Image src={imageSrc} alt={imageAlt} fill className="object-cover" />
+        </div>
+      </div>
+
+      {/* Body: optional includes row + price table */}
+      <div className="flex-1 flex flex-col px-5 md:px-6 pt-5 pb-6">
+        {includes && includes.length > 0 && (
+          <>
+            <p className="text-center text-xs font-bold tracking-wide text-brand-pink">
+              INCLUDES:
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-3">
+              {includes.map((item) => (
+                <div key={item.label} className="flex flex-col items-center gap-1 w-16">
+                  <div className="w-9 h-9 rounded-full bg-brand-tint flex items-center justify-center text-brand-pink">
+                    {item.icon}
+                  </div>
+                  <span className="text-[10px] leading-tight text-center text-zinc-500">
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className={`w-full rounded-2xl bg-brand-tint p-4 ${includes ? "mt-5" : ""}`}>
           {tiers.map((tier, i) => (
             <div
               key={tier.label}
@@ -45,10 +102,10 @@ export default function PricingCard({
                 i % 2 === 0 ? "bg-white" : ""
               } ${i !== tiers.length - 1 ? "mb-1" : ""}`}
             >
-              <span className="text-sm md:text-base font-semibold text-zinc-700">
+              <span className="text-xs md:text-sm font-semibold text-zinc-700">
                 {tier.label}
               </span>
-              <span className="text-lg md:text-xl font-extrabold text-brand-pink">
+              <span className="text-base md:text-lg font-extrabold text-brand-pink shrink-0 ml-2">
                 {tier.price}
               </span>
             </div>

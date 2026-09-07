@@ -1,21 +1,15 @@
-// Mock inventory data: Products (master catalog record + stock rules) and
-// Stocks (batch-level tracking). These are kept as SEPARATE mock files
-// from lib/data/products.ts for now, since Inventory needs richer fields
-// (unit, minStock, batches) the customer-facing catalog doesn't have yet.
-// In the real schema these become one reconciled set of tables — this
-// split is a mock-data-phase simplification, not the final design.
+// Mock inventory data — Products (master catalog) and Stocks (batch-level
+// tracking). Updated to mirror the REAL 35-item catalog seeded into
+// Supabase (supabase/019_real_product_catalog.sql), using the SAME
+// category-prefixed codes (F101, T101, G101, A101, H101...) the real
+// database generates — so when the UI gets rewired to real queries
+// later, the codes customers/staff already got used to don't change out
+// from under them.
 //
-// IMPORTANT: totalStock and status are NEVER stored directly — they're
-// always computed from batches (see getTotalStock/getStatus below). This
-// is the same principle as "Today's Appointment" matching the Dashboard:
-// one real source, everything else derives from it, so numbers can't
-// silently drift out of sync with each other.
+// totalStock and status are still always computed from batches, never
+// stored — same principle as before, now just pointed at real data.
 
-export type InventoryCategory = "Food" | "Grooming" | "Accessories" | "Hygiene";
-// NOTE: category list is a placeholder — Josh is finalizing the full
-// product list, and categories should eventually be their own manageable
-// table (not a hardcoded type) so they can be added/edited without a code
-// change. That becomes possible once real Supabase tables exist.
+export type InventoryCategory = "Food" | "Treats" | "Grooming" | "Accessories" | "Hygiene";
 
 export type InventoryProduct = {
   id: string;
@@ -31,26 +25,63 @@ export type StockBatch = {
   productId: string;
   batchNumber: string;
   quantity: number;
-  expirationDate: string | null; // null = doesn't expire (e.g. some accessories)
+  expirationDate: string | null;
   receivedDate: string;
 };
 
 export const inventoryProducts: InventoryProduct[] = [
-  { id: "P101", name: "Dog Food", unit: "Kilo", category: "Food", minStock: 20, status: "active" },
-  { id: "P102", name: "Cat Food", unit: "Kilo", category: "Food", minStock: 20, status: "active" },
-  { id: "P103", name: "Shampoo", unit: "Liters", category: "Grooming", minStock: 30, status: "active" },
-  { id: "P104", name: "Dog Leash", unit: "Piece", category: "Accessories", minStock: 10, status: "active" },
-  { id: "P105", name: "Cat Litter", unit: "Kilo", category: "Hygiene", minStock: 15, status: "active" },
+  // FOOD
+  { id: "F101", name: "Aozi Cat Can", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  { id: "F102", name: "Aozi Dog Can", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  { id: "F103", name: "Whiskas Pouch Jr", unit: "Piece", category: "Food", minStock: 20, status: "active" },
+  { id: "F104", name: "Whiskas Pouch Adult", unit: "Piece", category: "Food", minStock: 20, status: "active" },
+  { id: "F105", name: "Brit Canned Food", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  { id: "F106", name: "Special Dog Can", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  { id: "F107", name: "Pedigree Puppy Pouch", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  { id: "F108", name: "Pedigree Adult Pouch", unit: "Piece", category: "Food", minStock: 15, status: "active" },
+  // GROOMING
+  { id: "G101", name: "LC-Vit (120mL)", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G102", name: "Vitality Shampoo", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G103", name: "HT Cologne", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G104", name: "St. Roche Soap", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G105", name: "St. Roche Shampoo (450mL)", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G106", name: "Pibline Shampoo", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G107", name: "Pibline Tick/Flea Shampoo Spray", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G108", name: "Fur Magic Shampoo/Powder", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G109", name: "Pibline Tooth-Paw-te (Dental)", unit: "Piece", category: "Grooming", minStock: 10, status: "active" },
+  { id: "G110", name: "St. Roche Shampoo (1000mL)", unit: "Piece", category: "Grooming", minStock: 8, status: "active" },
+  // ACCESSORIES
+  { id: "A101", name: "Dog Bowl - Big Stainless", unit: "Piece", category: "Accessories", minStock: 8, status: "active" },
+  { id: "A102", name: "Pibline Collar", unit: "Piece", category: "Accessories", minStock: 8, status: "active" },
+  { id: "A103", name: "Luxtail", unit: "Piece", category: "Accessories", minStock: 8, status: "active" },
+  // HYGIENE
+  { id: "H101", name: "Diaper - Female (L)", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H102", name: "Diaper - Male (L)", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H103", name: "Diaper - F/M (XL)", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H104", name: "Diaper - Male (S-M)", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H105", name: "Diaper - Female (S-M)", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H106", name: "Pet Pad - Large", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  { id: "H107", name: "Pet Pad - Medium", unit: "Piece", category: "Hygiene", minStock: 10, status: "active" },
+  // TREATS
+  { id: "T101", name: "Pampered Pooch Powder", unit: "Piece", category: "Treats", minStock: 10, status: "active" },
+  { id: "T102", name: "Jerkigh Treat", unit: "Piece", category: "Treats", minStock: 15, status: "active" },
+  { id: "T103", name: "Petpero", unit: "Piece", category: "Treats", minStock: 15, status: "active" },
+  { id: "T104", name: "Kitty Crunch Kitten", unit: "Piece", category: "Treats", minStock: 15, status: "active" },
+  { id: "T105", name: "Denta Light Trainer Treats", unit: "Piece", category: "Treats", minStock: 10, status: "active" },
+  { id: "T106", name: "Treat Lert", unit: "Piece", category: "Treats", minStock: 10, status: "active" },
+  { id: "T107", name: "Catnip", unit: "Piece", category: "Treats", minStock: 10, status: "active" },
 ];
 
-export const stockBatches: StockBatch[] = [
-  { id: "b1", productId: "P101", batchNumber: "B-2026-014", quantity: 30, expirationDate: "2026-08-15", receivedDate: "2026-06-01" },
-  { id: "b2", productId: "P101", batchNumber: "B-2026-022", quantity: 20, expirationDate: "2026-10-01", receivedDate: "2026-07-10" },
-  { id: "b3", productId: "P102", batchNumber: "B-2026-015", quantity: 18, expirationDate: "2026-07-30", receivedDate: "2026-06-01" },
-  { id: "b4", productId: "P103", batchNumber: "B-2026-009", quantity: 40, expirationDate: "2027-01-01", receivedDate: "2026-05-15" },
-  { id: "b5", productId: "P104", batchNumber: "B-2026-011", quantity: 8, expirationDate: null, receivedDate: "2026-05-20" },
-  { id: "b6", productId: "P105", batchNumber: "B-2026-018", quantity: 60, expirationDate: "2026-09-01", receivedDate: "2026-06-20" },
-];
+// One starter batch per product — 25 units, 180-day expiration — matching
+// the real database seed exactly.
+export const stockBatches: StockBatch[] = inventoryProducts.map((p, i) => ({
+  id: `b-init-${i + 1}`,
+  productId: p.id,
+  batchNumber: "B-2026-INIT",
+  quantity: 25,
+  expirationDate: "2027-01-25",
+  receivedDate: "2026-07-29",
+}));
 
 export function getTotalStock(productId: string, batches: StockBatch[]): number {
   return batches.filter((b) => b.productId === productId).reduce((sum, b) => sum + b.quantity, 0);

@@ -1,94 +1,103 @@
 "use client";
-// Grooming Management: stats, search/filter/history, groomer-grouped
-// session cards, detail modal with the full Scheduled -> In Progress ->
-// Completed lifecycle including the payment confirmation step.
-import { useState, useMemo } from "react";
+// Grooming Management — real version. Groomers now come from the real
+// `groomers` table (not staff-mock.ts, and deliberately not
+// staff_profiles either — groomers are names tied to the grooming
+// service, not login accounts).
+//
+// Sessions stay genuinely empty: there's no real appointments/bookings
+// table yet, so there's nothing true to show. The old GroomerGroup
+// component only ever rendered per-groomer when that groomer already had
+// sessions — with zero sessions that meant the whole roster vanished.
+// GroomerRoster replaces it: it shows every real groomer regardless of
+// session count, which is what "it's okay to display groomers, no
+// sessions yet" actually means.
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { groomingSessions as initialSessions, type GroomingSession, type SessionStage } from "@/lib/data/grooming-sessions-mock";
+import { fetchGroomers, addGroomer, setGroomerStatus } from "@/lib/supabase/pet-services";
+import type { Groomer } from "@/lib/types/pet-services";
 import SessionStats from "@/components/admin/pet-services/SessionStats";
 import SessionFilters, { type SessionFilterState } from "@/components/admin/pet-services/SessionFilters";
-import GroomerGroup from "@/components/admin/pet-services/GroomerGroup";
-import SessionDetailModal from "@/components/admin/pet-services/SessionDetailModal";
+import GroomerRoster from "@/components/admin/pet-services/GroomerRoster";
 import HistoryModal from "@/components/admin/pet-services/HistoryModal";
+import AddGroomerModal from "@/components/admin/pet-services/AddGroomerModal";
 
 export default function GroomingManagementPage() {
   const router = useRouter();
-  const [sessions, setSessions] = useState(initialSessions);
+  const [groomers, setGroomers] = useState<Groomer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState<SessionFilterState>({ search: "", status: "all", groomer: "all" });
-  const [selected, setSelected] = useState<GroomingSession | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [groomerModalOpen, setGroomerModalOpen] = useState(false);
 
-  const groomerNames = useMemo(
-    () => Array.from(new Set(sessions.map((s) => s.groomerName))),
-    [sessions]
-  );
+  const loadGroomers = useCallback(async () => {
+    const { groomers: data, error } = await fetchGroomers();
+    if (error) { setLoadError(error); return; }
+    setLoadError(null);
+    setGroomers(data);
+  }, []);
 
-  const filtered = useMemo(() => {
-    const search = filters.search.trim().toLowerCase();
-    return sessions.filter((s) => {
-      const matchesSearch =
-        !search ||
-        s.petName.toLowerCase().includes(search) ||
-        s.ownerName.toLowerCase().includes(search) ||
-        s.groomerName.toLowerCase().includes(search);
-      const matchesStatus = filters.status === "all" || s.stage === filters.status;
-      const matchesGroomer = filters.groomer === "all" || s.groomerName === filters.groomer;
-      return matchesSearch && matchesStatus && matchesGroomer;
-    });
-  }, [sessions, filters]);
+  useEffect(() => {
+    setLoading(true);
+    loadGroomers().finally(() => setLoading(false));
+  }, [loadGroomers]);
 
-  // Active = scheduled or in_progress. Completed sessions move to History
-  // instead of cluttering the groomer cards, matching the reference.
-  const active = filtered.filter((s) => s.stage === "scheduled" || s.stage === "in_progress");
-  const completedSessions = sessions.filter((s) => s.stage === "completed");
+  const activeGroomers = groomers.filter((g) => g.status === "active");
+  const groomerNames = activeGroomers.map((g) => g.name);
 
-  const activeByGroomer = active.reduce<Record<string, GroomingSession[]>>((acc, s) => {
-    (acc[s.groomerName] ??= []).push(s);
-    return acc;
-  }, {});
+  async function handleAddGroomer(name: string): Promise<string | null> {
+    const { error } = await addGroomer(name);
+    if (error) return error.message;
+    await loadGroomers();
+    return null;
+  }
 
-  function updateStage(id: string, stage: SessionStage, startedAt?: string) {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, stage, sessionStartedAt: startedAt ?? s.sessionStartedAt } : s))
-    );
-    setSelected((prev) =>
-      prev && prev.id === id ? { ...prev, stage, sessionStartedAt: startedAt ?? prev.sessionStartedAt } : prev
-    );
+  async function handleToggleGroomerArchive(id: string, currentStatus: "active" | "archived") {
+    await setGroomerStatus(id, currentStatus === "active" ? "archived" : "active");
+    await loadGroomers();
   }
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-brand-pink">Grooming Management</h1>
 
+      {loadError && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{loadError}</p>}
+
+      {/* Sessions genuinely don't exist yet — every count here is real,
+          just real zeros, not a placeholder. */}
       <div className="mt-6">
-        <SessionStats sessions={sessions} />
+        <SessionStats sessions={[]} />
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap items-center gap-3">
         <SessionFilters
           filters={filters}
           onChange={setFilters}
           groomerNames={groomerNames}
           onBack={() => router.push("/admin/pet-services")}
           onOpenHistory={() => setHistoryOpen(true)}
-          historyCount={completedSessions.length}
+          historyCount={0}
         />
+        <button onClick={() => setGroomerModalOpen(true)} className="border-2 border-brand-pink text-brand-pink font-semibold text-sm px-5 py-2 rounded-full hover:bg-brand-pink hover:text-white transition-colors whitespace-nowrap">
+          Add Groomer
+        </button>
       </div>
 
-      {Object.keys(activeByGroomer).length === 0 ? (
-        <p className="mt-10 text-center text-zinc-400">No active sessions match your search/filter.</p>
+      {loading ? (
+        <p className="mt-10 text-center text-zinc-400">Loading groomers…</p>
       ) : (
-        Object.entries(activeByGroomer).map(([groomer, groomerSessions]) => (
-          <GroomerGroup key={groomer} groomerName={groomer} sessions={groomerSessions} onView={setSelected} />
-        ))
+        <GroomerRoster groomers={activeGroomers} onArchiveToggle={(id) => handleToggleGroomerArchive(id, "active")} />
       )}
 
-      {selected && (
-        <SessionDetailModal session={selected} onClose={() => setSelected(null)} onUpdateStage={updateStage} />
-      )}
+      {historyOpen && <HistoryModal completedSessions={[]} onClose={() => setHistoryOpen(false)} />}
 
-      {historyOpen && (
-        <HistoryModal completedSessions={completedSessions} onClose={() => setHistoryOpen(false)} />
+      {groomerModalOpen && (
+        <AddGroomerModal
+          groomers={groomers}
+          onClose={() => setGroomerModalOpen(false)}
+          onAdd={handleAddGroomer}
+          onArchiveToggle={handleToggleGroomerArchive}
+        />
       )}
     </div>
   );

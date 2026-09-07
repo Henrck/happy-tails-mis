@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { KennelSize } from "@/lib/data/boarding-kennels-mock";
+import type { KennelSize } from "@/lib/types/pet-services";
 
 export default function AddKennelModal({
   nextNumber,

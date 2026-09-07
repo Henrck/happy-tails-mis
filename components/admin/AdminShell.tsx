@@ -1,19 +1,25 @@
 "use client";
 // Client wrapper around the admin area: owns the sidebar open/closed state
-// (toggled by the hamburger in the top bar) and handles logout. Kept
-// separate from app/(admin)/layout.tsx so that layout can stay a Server
-// Component and do the auth/role check server-side before anything here
-// even renders.
+// and handles logout. Kept separate from app/(admin)/layout.tsx so that
+// layout can stay a Server Component and do the auth/role check
+// server-side before anything here even renders.
+//
+// The old top black "DASHBOARD ADMIN" bar is gone — its hamburger moved
+// into the sidebar itself. Logout now asks for confirmation instead of
+// signing out immediately on click.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import AdminSidebar from "./AdminSidebar";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 export default function AdminShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const router = useRouter();
 
   async function handleLogout() {
+    setLogoutConfirmOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/sign-in");
@@ -22,26 +28,22 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar open={sidebarOpen} onLogout={handleLogout} />
+      <AdminSidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} onLogout={() => setLogoutConfirmOpen(true)} />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="bg-zinc-900 text-zinc-300 text-xs font-semibold tracking-wide px-4 py-2 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            className="text-white hover:text-brand-pink-light transition-colors"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M4 7h16M4 12h16M4 17h16" />
-            </svg>
-          </button>
-          DASHBOARD ADMIN
-        </header>
+      <main className="flex-1 min-w-0 bg-[#FDF1F7] p-6 md:p-8 overflow-y-auto">
+        {children}
+      </main>
 
-        <main className="flex-1 bg-[#FDF1F7] p-6 md:p-8 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+      {logoutConfirmOpen && (
+        <ConfirmDialog
+          title="Log Out"
+          message="Are you sure you want to log out?"
+          confirmLabel="Log Out"
+          danger
+          onConfirm={handleLogout}
+          onCancel={() => setLogoutConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }

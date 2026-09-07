@@ -1,7 +1,7 @@
 // Cute face-style dog/cat icons (rounded head, ear shapes, dot eyes),
 // matching Josh's reference image, instead of the previous abstract
 // silhouette style — meant to be instantly recognizable at small sizes.
-import type { Species } from "@/lib/data/pet-records-mock";
+import type { Species } from "@/lib/types/appointments";
 
 export default function SpeciesIcon({ species, className }: { species: Species; className?: string }) {
   if (species === "Cat") {

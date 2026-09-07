@@ -3,15 +3,19 @@
 // product cards, paged with the left/right arrows (4 cards per page on
 // desktop, fewer on mobile via CSS scroll-snap so nothing looks broken).
 // This is a teaser — the full catalog lives on the separate /products page.
+//
+// REAL REWIRE: this used to read a static mock file. `products` is now
+// the REAL active POS catalog, fetched server-side in app/page.tsx and
+// passed down as a prop — same pattern as site_settings/hero_slides.
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { products, type ProductCategory } from "@/lib/data/products";
+import type { Product, ProductCategory } from "@/lib/types/products";
 import ProductCard from "@/components/products/ProductCard";
 import CategoryTabs from "@/components/products/CategoryTabs";
 
 const PAGE_SIZE = 4;
 
-export default function ProductsCarousel() {
+export default function ProductsCarousel({ products }: { products: Product[] }) {
   const [category, setCategory] = useState<ProductCategory | "all">("all");
   const [page, setPage] = useState(0);
 
@@ -20,7 +24,7 @@ export default function ProductsCarousel() {
       category === "all"
         ? products
         : products.filter((p) => p.category === category),
-    [category]
+    [products, category]
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -58,33 +62,39 @@ export default function ProductsCarousel() {
           <CategoryTabs active={category} onChange={changeCategory} />
         </div>
 
-        <div className="mt-8 relative flex items-center justify-center gap-3">
-          <button
-            onClick={prev}
-            aria-label="Previous products"
-            className="shrink-0 w-9 h-9 rounded-full bg-sky-400 hover:bg-sky-500 text-white flex items-center justify-center transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+        {visible.length === 0 ? (
+          <p className="mt-10 text-white/90 text-center text-sm">
+            No products in this category yet.
+          </p>
+        ) : (
+          <div className="mt-8 relative flex items-center justify-center gap-2 md:gap-3">
+            <button
+              onClick={prev}
+              aria-label="Previous products"
+              className="shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full bg-sky-400 hover:bg-sky-500 text-white flex items-center justify-center transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
 
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {visible.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-3 md:gap-4">
+              {visible.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+
+            <button
+              onClick={next}
+              aria-label="Next products"
+              className="shrink-0 w-8 h-8 md:w-9 md:h-9 rounded-full bg-sky-400 hover:bg-sky-500 text-white flex items-center justify-center transition-colors"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           </div>
-
-          <button
-            onClick={next}
-            aria-label="Next products"
-            className="shrink-0 w-9 h-9 rounded-full bg-sky-400 hover:bg-sky-500 text-white flex items-center justify-center transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-              <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+        )}
 
         <div className="mt-8 text-center">
           <Link

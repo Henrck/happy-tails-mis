@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { Species } from "@/lib/data/pet-records-mock";
+import type { Species } from "@/lib/types/appointments";
 
 export type PetFilterState = {
   search: string;

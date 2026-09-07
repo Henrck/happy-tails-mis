@@ -1,28 +1,50 @@
 "use client";
+// Real version — onUpdate now calls updatePet() for real instead of just
+// mutating local state. Owner info section shows either the matched
+// Customer (Registered tab) or the pet's own owner_name/owner_contact
+// (Walk-in Only tab) — same "resolved owner info passed in" pattern as
+// PetCard, so this modal doesn't need to know which tab it came from.
 import { useState } from "react";
-import type { Pet, Owner, Species, Sex } from "@/lib/data/pet-records-mock";
+import { updatePet } from "@/lib/supabase/appointments";
+import type { Pet, Species, Sex } from "@/lib/types/appointments";
 import SpeciesIcon from "./SpeciesIcon";
 
 export default function PetDetailModal({
   pet,
-  owner,
+  ownerName,
+  ownerContact,
+  ownerAddress,
   onClose,
-  onUpdate,
+  onUpdated,
 }: {
   pet: Pet;
-  owner: Owner | undefined;
+  ownerName: string | null;
+  ownerContact: string | null;
+  ownerAddress: string | null;
   onClose: () => void;
-  onUpdate: (updated: Pet) => void;
+  onUpdated: (updated: Pet) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(pet.name);
   const [breed, setBreed] = useState(pet.breed);
   const [species, setSpecies] = useState<Species>(pet.species);
-  const [age, setAge] = useState(String(pet.age));
-  const [sex, setSex] = useState<Sex>(pet.sex);
+  const [age, setAge] = useState(pet.age != null ? String(pet.age) : "");
+  const [sex, setSex] = useState<Sex | "">(pet.sex ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function save() {
-    onUpdate({ ...pet, name, breed, species, age: parseInt(age) || 0, sex });
+  async function save() {
+    setSaving(true);
+    setError(null);
+    const { error: err } = await updatePet(pet.id, {
+      name, breed, species,
+      size_label: pet.size_label,
+      age: age ? parseInt(age) : null,
+      sex: sex || null,
+    });
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    onUpdated({ ...pet, name, breed, species, age: age ? parseInt(age) : null, sex: (sex || null) as Sex | null });
     setEditing(false);
   }
 
@@ -42,8 +64,7 @@ export default function PetDetailModal({
             </div>
             <div>
               <h3 className="text-xl font-bold text-zinc-900">{pet.name}</h3>
-              <p className="text-sm text-zinc-500">{pet.breed} · {pet.sex}</p>
-              <p className="text-xs text-zinc-400">{pet.id}</p>
+              <p className="text-sm text-zinc-500">{pet.breed} · {pet.sex ?? "—"}</p>
             </div>
           </div>
         </div>
@@ -58,7 +79,8 @@ export default function PetDetailModal({
                 <Field label="Breed"><input value={breed} onChange={(e) => setBreed(e.target.value)} className="input" /></Field>
                 <Field label="Age"><input type="number" min={0} value={age} onChange={(e) => setAge(e.target.value)} className="input" /></Field>
                 <Field label="Sex">
-                  <select value={sex} onChange={(e) => setSex(e.target.value as Sex)} className="input">
+                  <select value={sex} onChange={(e) => setSex(e.target.value as Sex | "")} className="input">
+                    <option value="">—</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
                   </select>
@@ -71,29 +93,29 @@ export default function PetDetailModal({
                 </select>
               </Field>
               <p className="text-xs text-zinc-400">
-                Owner details are edited from the Owner panel, not here — a
-                pet's owner assignment isn't something to change casually.
+                Owner details are edited from the Owner panel (or the
+                customer's account directly), not here.
               </p>
+              {error && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
               <div className="flex gap-3">
                 <button onClick={() => setEditing(false)} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold text-sm py-2 rounded-full hover:border-zinc-400 transition-colors">
                   Cancel
                 </button>
-                <button onClick={save} className="flex-1 bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold text-sm py-2 rounded-full transition-colors">
-                  Save
+                <button onClick={save} disabled={saving} className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-50 text-white font-semibold text-sm py-2 rounded-full transition-colors">
+                  {saving ? "Saving..." : "Save"}
                 </button>
               </div>
             </>
           ) : (
             <>
-              <Row label="Pet ID" value={pet.id} />
               <Row label="Breed" value={pet.breed} />
-              <Row label="Age" value={`${pet.age} yrs`} />
+              <Row label="Size" value={pet.size_label} />
+              <Row label="Age" value={pet.age != null ? `${pet.age} yrs` : null} />
               <Row label="Sex" value={pet.sex} />
               <div className="border-t border-pink-100 my-2" />
-              <Row label="Owner Name" value={owner?.name} />
-              <Row label="Owner ID" value={owner?.id} />
-              <Row label="Contact Number" value={owner?.contactNumber} />
-              <Row label="Address" value={owner?.address} />
+              <Row label="Owner Name" value={ownerName} />
+              <Row label="Contact Number" value={ownerContact} />
+              <Row label="Address" value={ownerAddress} />
 
               <button
                 onClick={() => setEditing(true)}

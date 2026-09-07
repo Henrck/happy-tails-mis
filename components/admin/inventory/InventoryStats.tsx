@@ -1,17 +1,30 @@
-import { inventoryProducts, stockBatches, getTotalStock, getStatus, isExpiringSoon } from "@/lib/data/inventory-mock";
+import type { Product, ProductBatch } from "@/lib/types/products";
+import { computeTotalStock, computeStatus } from "@/lib/supabase/products";
 
-export default function InventoryStats() {
-  const activeProducts = inventoryProducts.filter((p) => p.status === "active");
+function isExpiringSoon(expirationDate: string | null, withinDays = 30): boolean {
+  if (!expirationDate) return false;
+  const days = (new Date(expirationDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  return days >= 0 && days <= withinDays;
+}
+
+export default function InventoryStats({ products, batches }: { products: Product[]; batches: ProductBatch[] }) {
+  const activeProducts = products.filter((p) => p.status === "active");
   const lowStockCount = activeProducts.filter(
-    (p) => getStatus(getTotalStock(p.id, stockBatches), p.minStock) === "Low Stock"
+    (p) => computeStatus(computeTotalStock(p.id, batches), p.min_stock) === "Low Stock"
   ).length;
-  const expiringSoonCount = stockBatches.filter((b) => isExpiringSoon(b.expirationDate)).length;
+  const expiringSoonCount = batches.filter((b) => isExpiringSoon(b.expiration_date)).length;
+
+  // Only real deliveries count as "batches" — adjustments (damaged/lost/
+  // miscount corrections) still affect stock totals, but they're a
+  // different kind of record and shouldn't inflate this count every
+  // time someone corrects a number.
+  const realBatchCount = batches.filter((b) => !b.is_adjustment).length;
 
   const cards = [
     { label: "Total Products", value: activeProducts.length, icon: "📦" },
     { label: "Low Stock", value: lowStockCount, dot: "bg-red-500" },
     { label: "Expiring Soon", value: expiringSoonCount, dot: "bg-yellow-400" },
-    { label: "Total Batches", value: stockBatches.length, icon: "🧾" },
+    { label: "Total Batches", value: realBatchCount, icon: "🧾" },
   ];
 
   return (

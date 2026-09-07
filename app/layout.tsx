@@ -32,7 +32,13 @@ export default function RootLayout({
       lang="en"
       className={`${fredoka.variable} ${nunito.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-body">{children}</body>
+      {/* suppressHydrationWarning here specifically: browser extensions
+          like Grammarly inject attributes (data-gr-ext-installed, etc.)
+          into <body> after the page loads, which React then flags as a
+          hydration mismatch even though nothing in this app caused it.
+          This only suppresses warnings on this one element — it won't
+          hide a real mismatch anywhere else in the tree. */}
+      <body className="min-h-full flex flex-col font-body" suppressHydrationWarning>{children}</body>
     </html>
   );
 }

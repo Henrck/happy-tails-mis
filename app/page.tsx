@@ -15,18 +15,25 @@ import { PoliciesModalProvider } from "@/components/landing/PoliciesModalContext
 import PoliciesModal from "@/components/landing/PoliciesModal";
 import { createClient } from "@/lib/supabase/server";
 import type { SiteSetting } from "@/lib/supabase/site-settings";
+import type { HeroSlide } from "@/lib/types/hero-slides";
+import type { Product } from "@/lib/types/products";
 
 export default async function Home() {
-  // Fetch each section's current background from site_settings. This is a
-  // Server Component, so this runs on the server before any HTML is sent —
-  // if Website Management has never been used for a section, image_url is
-  // null and the component below falls back to its bundled default.
   const supabase = await createClient();
-  const { data } = await supabase.from("site_settings").select("*");
+  const [{ data }, { data: heroSlidesData }, { data: productsData }] = await Promise.all([
+    supabase.from("site_settings").select("*"),
+    supabase.from("hero_slides").select("*").eq("active", true).order("sort_order", { ascending: true }),
+    supabase.from("products").select("*").eq("status", "active").order("product_code"),
+  ]);
   const settings = (data as SiteSetting[]) ?? [];
+  const heroSlides = (heroSlidesData as HeroSlide[]) ?? [];
+  const products = (productsData as Product[]) ?? [];
   const get = (key: string) => settings.find((s) => s.key === key);
 
-  const hero = get("hero_background");
+  const logo = get("site_logo");
+  const servicesGrooming = get("services_grooming_image");
+  const servicesBoarding = get("services_boarding_image");
+  const servicesSpa = get("services_spa_image");
   const grooming = get("grooming_banner_background");
   const boarding = get("boarding_banner_background");
   const spa = get("spa_banner_background");
@@ -34,17 +41,21 @@ export default async function Home() {
 
   return (
     <PoliciesModalProvider>
-      <Navbar />
+      <Navbar logoUrl={logo?.image_url} />
       <main>
-        <Hero backgroundUrl={hero?.image_url} />
-        <Services />
+        <Hero slides={heroSlides} logoUrl={logo?.image_url} />
+        <Services
+          groomingImage={servicesGrooming?.image_url}
+          boardingImage={servicesBoarding?.image_url}
+          spaImage={servicesSpa?.image_url}
+        />
         <GroomingBanner backgroundUrl={grooming?.image_url} width={grooming?.image_width} height={grooming?.image_height} />
         <GroomingPricing />
         <BoardingBanner backgroundUrl={boarding?.image_url} width={boarding?.image_width} height={boarding?.image_height} />
         <BoardingPricing />
         <SpaBanner backgroundUrl={spa?.image_url} width={spa?.image_width} height={spa?.image_height} />
         <SpaBenefits />
-        <ProductsCarousel />
+        <ProductsCarousel products={products} />
         <AboutUs backgroundUrl={about?.image_url} />
         <Gallery />
       </main>

@@ -5,6 +5,7 @@
 // later via the admin/MIS module.
 import PricingCard from "./PricingCard";
 import PoliciesButton from "./PoliciesButton";
+import { PawHeaderIcon } from "./pricing-icons";
 
 const smallKennelTiers = [
   { label: "1 NIGHT", price: "₱530" },
@@ -29,15 +30,17 @@ export default function BoardingPricing() {
     <section className="bg-brand-tint py-14">
       <div className="site-container grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
         <PricingCard
+          headerIcon={<PawHeaderIcon />}
           label="SMALL KENNELS"
-          subLines={[]}
+          description="Perfect for small breeds who love a cozy space."
           imageSrc="/images/small-kennel-dog.png"
           imageAlt="Dog relaxing on a bed in a small kennel"
           tiers={smallKennelTiers}
         />
         <PricingCard
+          headerIcon={<PawHeaderIcon />}
           label="BIG KENNELS"
-          subLines={[]}
+          description="Spacious and comfortable for medium to large breeds."
           imageSrc="/images/big-kennel-dog.png"
           imageAlt="Pomeranian in a big kennel"
           tiers={bigKennelTiers}

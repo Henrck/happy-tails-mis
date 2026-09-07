@@ -1,5 +1,5 @@
 "use client";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/types/products";
 
 export type CartLine = { product: Product; qty: number };
 
@@ -38,32 +38,16 @@ export default function CartPanel({
         ) : (
           cart.map((line) => (
             <div key={line.product.id} className="bg-white/10 rounded-xl p-3 relative">
-              <button
-                onClick={() => onRemove(line.product.id)}
-                aria-label={`Remove ${line.product.name}`}
-                className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors"
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-                </svg>
+              <button onClick={() => onRemove(line.product.id)} aria-label={`Remove ${line.product.name}`} className="absolute top-2 right-2 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center transition-colors">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
               </button>
               <p className="text-sm font-semibold pr-6">{line.product.name}</p>
               <p className="text-xs opacity-80">₱{line.product.price.toFixed(2)}</p>
               <div className="mt-1.5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onDecrement(line.product.id)}
-                    className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center"
-                  >
-                    −
-                  </button>
+                  <button onClick={() => onDecrement(line.product.id)} className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">−</button>
                   <span className="text-sm font-semibold w-4 text-center">{line.qty}</span>
-                  <button
-                    onClick={() => onIncrement(line.product.id)}
-                    className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center"
-                  >
-                    +
-                  </button>
+                  <button onClick={() => onIncrement(line.product.id)} className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center">+</button>
                 </div>
                 <span className="text-sm font-bold">₱{(line.product.price * line.qty).toFixed(2)}</span>
               </div>
@@ -79,27 +63,12 @@ export default function CartPanel({
       </div>
 
       <div className="px-4 pb-4 pt-2 space-y-2 shrink-0">
-        <button
-          onClick={onProcessPayment}
-          disabled={cart.length === 0}
-          className="w-full bg-white text-brand-pink font-bold py-2.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-pink-50 transition-colors"
-        >
+        <button onClick={onProcessPayment} disabled={cart.length === 0} className="w-full bg-white text-brand-pink font-bold py-2.5 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-pink-50 transition-colors">
           Process Payment
         </button>
         <div className="flex gap-2">
-          <button
-            onClick={onClear}
-            disabled={cart.length === 0}
-            className="flex-1 bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2 rounded-full transition-colors"
-          >
-            Clear
-          </button>
-          <button
-            onClick={onReturnExchange}
-            className="flex-1 bg-white/15 hover:bg-white/25 font-semibold text-sm py-2 rounded-full transition-colors"
-          >
-            Return / Exchange
-          </button>
+          <button onClick={onClear} disabled={cart.length === 0} className="flex-1 bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2 rounded-full transition-colors">Clear</button>
+          <button onClick={onReturnExchange} className="flex-1 bg-white/15 hover:bg-white/25 font-semibold text-sm py-2 rounded-full transition-colors">Return / Exchange</button>
         </div>
       </div>
     </div>

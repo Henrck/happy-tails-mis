@@ -1,14 +1,19 @@
 "use client";
-// Real sign-in form. On success, checks the user's role in `profiles` and
-// redirects accordingly: superadmin -> /admin, everyone else (customer,
-// and eventually admin/staff once that's built) -> /account.
+// Real sign-in form. Accepts either a username or an email in one
+// field — Supabase Auth itself only understands email, so a typed
+// username gets resolved to its real email first (via the narrow
+// email_for_username RPC, safe to call before login — see migration
+// 030), then signs in normally with that email. On success, checks the
+// user's role in `profiles` and redirects: superadmin -> /admin,
+// everyone else -> /account.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { resolveEmailForLogin } from "@/lib/supabase/customer-auth";
 
 export default function SignInPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,12 +23,15 @@ export default function SignInPage() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
+    const { email, error: resolveError } = await resolveEmailForLogin(identifier.trim());
+    if (resolveError || !email) {
+      setError(resolveError ?? "Couldn't find that account.");
+      setLoading(false);
+      return;
+    }
 
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const supabase = createClient();
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError || !data.user) {
       setError(signInError?.message ?? "Something went wrong signing in.");
@@ -38,8 +46,6 @@ export default function SignInPage() {
       .single();
 
     if (profileError || !profile) {
-      // Shouldn't normally happen — the trigger creates a profile on
-      // signup — but fail safe to the customer side rather than admin.
       router.push("/account");
       return;
     }
@@ -57,15 +63,16 @@ export default function SignInPage() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-zinc-700">
-            Email
+          <label htmlFor="identifier" className="block text-sm font-medium text-zinc-700">
+            Username or Email
           </label>
           <input
-            id="email"
-            type="email"
+            id="identifier"
+            type="text"
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink"
           />
         </div>
@@ -78,6 +85,7 @@ export default function SignInPage() {
             id="password"
             type="password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink"

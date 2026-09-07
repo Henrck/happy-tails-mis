@@ -1,0 +1,11 @@
+-- Real bug fix: BoardingSelectionStep was storing the chosen
+-- package_pricing.id (the duration/rate tier — "1 Night", "3 Days & 2
+-- Nights", etc.) into DraftPetSelection.packageId, reusing that field
+-- because it needed somewhere to remember which rate was picked. That
+-- was fine for computing prices client-side, but package_id has a real
+-- foreign key to packages.id — a package_pricing.id is never a valid
+-- packages.id, so saving it there violates
+-- appointment_pets_package_id_fkey the moment a real boarding booking
+-- tries to save. Adding the field boarding actually needed instead of
+-- continuing to misuse an existing one.
+alter table public.appointment_pets add column if not exists package_pricing_id uuid references public.package_pricing(id) on delete set null;

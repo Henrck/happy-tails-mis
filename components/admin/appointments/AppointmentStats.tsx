@@ -1,15 +1,27 @@
+"use client";
+import { useState, useEffect } from "react";
 import StatCard from "@/components/admin/StatCard";
-import {
-  todaysAppointmentCount,
-  totalPetsRegistered,
-  totalTransactionToday,
-} from "@/lib/data/admin-appointments-mock";
+import { fetchTodaysAppointmentCount, fetchTodaysTransactionTotal } from "@/lib/supabase/appointment-management";
+import { fetchAllPets } from "@/lib/supabase/appointments";
 
-export default function AppointmentStats() {
+// Refetches on every `refreshKey` change — the parent bumps this key
+// whenever the realtime subscription fires, so these numbers stay live
+// too, not just the table.
+export default function AppointmentStats({ refreshKey }: { refreshKey: number }) {
+  const [todaysCount, setTodaysCount] = useState(0);
+  const [totalPets, setTotalPets] = useState(0);
+  const [todaysTotal, setTodaysTotal] = useState(0);
+
+  useEffect(() => {
+    fetchTodaysAppointmentCount().then((r) => setTodaysCount(r.count));
+    fetchAllPets().then((r) => setTotalPets(r.pets.length));
+    fetchTodaysTransactionTotal().then((r) => setTodaysTotal(r.total));
+  }, [refreshKey]);
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <StatCard
-        value={String(todaysAppointmentCount)}
+        value={String(todaysCount)}
         label="Today's Appointment"
         icon={
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#F53D93" strokeWidth="1.8">
@@ -19,7 +31,7 @@ export default function AppointmentStats() {
         }
       />
       <StatCard
-        value={String(totalPetsRegistered)}
+        value={String(totalPets)}
         label="Total Pets Registered"
         icon={
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#84cc16" strokeWidth="1.8">
@@ -28,7 +40,7 @@ export default function AppointmentStats() {
         }
       />
       <StatCard
-        value={`₱${totalTransactionToday.toLocaleString()}`}
+        value={`₱${todaysTotal.toLocaleString()}`}
         label="Total Transaction Today"
         icon={
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.8">

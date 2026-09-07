@@ -1,7 +1,8 @@
-// Shared types + helpers for site_settings — the table that holds the
-// CURRENT image URL for each editable background across the site.
 export type SiteSettingKey =
-  | "hero_background"
+  | "site_logo"
+  | "services_grooming_image"
+  | "services_boarding_image"
+  | "services_spa_image"
   | "grooming_banner_background"
   | "boarding_banner_background"
   | "spa_banner_background"
@@ -16,7 +17,10 @@ export type SiteSetting = {
 };
 
 export const SITE_SETTING_LABELS: Record<SiteSettingKey, string> = {
-  hero_background: "Homepage Hero",
+  site_logo: "Site Logo",
+  services_grooming_image: "Pet Services — Grooming Photo",
+  services_boarding_image: "Pet Services — Boarding Photo",
+  services_spa_image: "Pet Services — Spa Photo",
   grooming_banner_background: "Grooming Services Banner",
   boarding_banner_background: "Boarding Services Banner",
   spa_banner_background: "Pet Spa Banner",

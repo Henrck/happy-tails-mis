@@ -1,18 +1,24 @@
-// Shared product card, used by both the homepage carousel and the /products
-// page grid. Shows a placeholder image until real product photos exist.
+// Shared product card, used by both the homepage carousel and the
+// /products page grid. Now backed by the REAL POS `products` table
+// (lib/types/products) instead of the old mock catalog — shows the
+// admin-uploaded product photo, or a placeholder icon if none has been
+// set yet.
 import Image from "next/image";
-import type { Product } from "@/lib/data/products";
+import type { Product } from "@/lib/types/products";
 
 export default function ProductCard({ product }: { product: Product }) {
+  const size = product.package_size ?? product.unit;
+
   return (
     <div className="bg-white rounded-xl overflow-hidden shadow-sm">
       <div className="relative w-full aspect-square bg-pink-50 flex items-center justify-center">
-        {product.imageUrl ? (
+        {product.image_url ? (
           <Image
-            src={product.imageUrl}
+            src={product.image_url}
             alt={product.name}
             fill
             className="object-cover"
+            unoptimized
           />
         ) : (
           <svg viewBox="0 0 64 64" className="w-12 h-12 text-pink-200">
@@ -24,12 +30,12 @@ export default function ProductCard({ product }: { product: Product }) {
         )}
       </div>
       <div className="px-3 py-2.5">
-        <p className="text-xs font-semibold text-zinc-800 uppercase truncate">
+        <p className="text-xs font-semibold text-zinc-800 uppercase truncate" title={product.name}>
           {product.name}
         </p>
-        <div className="mt-1 flex items-center justify-between">
-          <span className="text-xs text-zinc-500">{product.weight}</span>
-          <span className="text-sm font-bold text-brand-pink">
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <span className="text-xs text-zinc-500 truncate">{size}</span>
+          <span className="text-sm font-bold text-brand-pink shrink-0">
             ₱{product.price}
           </span>
         </div>
