@@ -32,7 +32,7 @@ export default function BoardingPricing() {
         <PricingCard
           headerIcon={<PawHeaderIcon />}
           label="SMALL KENNELS"
-          description="Perfect for small breeds who love a cozy space."
+          tagline="Perfect for small breeds who love a cozy space."
           imageSrc="/images/small-kennel-dog.png"
           imageAlt="Dog relaxing on a bed in a small kennel"
           tiers={smallKennelTiers}
@@ -40,7 +40,7 @@ export default function BoardingPricing() {
         <PricingCard
           headerIcon={<PawHeaderIcon />}
           label="BIG KENNELS"
-          description="Spacious and comfortable for medium to large breeds."
+          tagline="Spacious and comfortable for medium to large breeds."
           imageSrc="/images/big-kennel-dog.png"
           imageAlt="Pomeranian in a big kennel"
           tiers={bigKennelTiers}

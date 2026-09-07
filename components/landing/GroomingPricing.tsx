@@ -62,7 +62,7 @@ export default function GroomingPricing() {
           <PricingCard
             headerIcon={<PawHeaderIcon />}
             label="BASIC GROOMING"
-            description="Essential care to keep your pet clean and fresh."
+            tagline="Essential care to keep your pet clean and fresh."
             imageSrc="/images/pomeranian.png"
             imageAlt="Freshly groomed Pomeranian after a basic grooming session"
             includes={[
@@ -76,8 +76,8 @@ export default function GroomingPricing() {
           <PricingCard
             headerIcon={<DiamondHeaderIcon />}
             label="DIAMOND"
-            badge="All coat / all styles applies."
-            description="Bath & dry, hair cut, conditioner, ear clean, nail trim, teeth brushing, anal sac + pupucino."
+            badge="All coat / all styles"
+            tagline="Full-service grooming for every coat and style."
             imageSrc="/images/pomeranian.png"
             imageAlt="Pomeranian groomed with the Diamond package"
             includes={[
@@ -94,8 +94,8 @@ export default function GroomingPricing() {
           <PricingCard
             headerIcon={<CrownHeaderIcon />}
             label="PREMIUM"
-            badge="Double coated, long / curly haired"
-            description="Specialty cut, Asian fusion, puppy cut, teddy style, bath & dry, hair cut, conditioner, ear clean, nail trim, teeth brushing, anal sac + pupucino."
+            badge="Double coat / long-curly hair"
+            tagline="Specialty styling for double-coated, long or curly hair."
             imageSrc="/images/poodle.png"
             imageAlt="Toy poodle groomed with the Premium package"
             includes={[
