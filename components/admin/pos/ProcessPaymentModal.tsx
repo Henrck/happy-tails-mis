@@ -41,7 +41,7 @@ export default function ProcessPaymentModal({
           <div className="mt-5">
             <p className="text-sm font-semibold text-brand-pink">Payment Method</p>
             <div className="mt-2 flex gap-2">
-              {["Cash"].map((m) => (
+              {["Cash", "GCash", "Card"].map((m) => (
                 <button
                   key={m}
                   onClick={() => setMethod(m)}

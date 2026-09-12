@@ -6,13 +6,13 @@ export default function ProductCard({ product }: { product: Product }) {
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl bg-white shadow-sm">
-      <div className="relative aspect-[4/3] w-full shrink-0 bg-pink-50">
+      <div className="relative aspect-square w-full shrink-0 bg-pink-50 p-4">
         {product.image_url ? (
           <Image
             src={product.image_url}
             alt={product.name}
             fill
-            className="object-cover"
+            className="object-contain"
             unoptimized
           />
         ) : (

@@ -3,11 +3,12 @@
 // landing page (Home/Services/Products/About/Contact), but the Login
 // button is replaced with an avatar + dropdown (Sign Out), and a
 // second row of account-specific tabs sits below it.
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { fetchUnreadNotificationCount, subscribeToNotifications } from "@/lib/supabase/notifications";
 import type { Customer } from "@/lib/types/users";
 
 const topNavLinks = [
@@ -22,7 +23,7 @@ const accountTabs = [
   { href: "/account", label: "My Pets", icon: "paw" },
   { href: "/account/appointments", label: "Book Appointment", icon: "calendar" },
   { href: "/account/notifications", label: "Notification", icon: "bell" },
-  { href: "/account/history", label: "Appointment History", icon: "history" },
+  { href: "/account/appointments/history", label: "Appointment History", icon: "history" },
   { href: "/account/profile", label: "My Account", icon: "user" },
 ];
 
@@ -45,11 +46,26 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadUnreadCount = useCallback(async () => {
+    const { count } = await fetchUnreadNotificationCount(customer.id);
+    setUnreadCount(count);
+  }, [customer.id]);
+
+  useEffect(() => {
+    async function init() {
+      await loadUnreadCount();
+    }
+    init();
+    const unsubscribe = subscribeToNotifications(customer.id, loadUnreadCount);
+    return unsubscribe;
+  }, [customer.id, loadUnreadCount]);
 
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/sign-in");
+    router.push("/");
     router.refresh();
   }
 
@@ -106,12 +122,17 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                className={`relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive ? "border-brand-pink text-brand-pink" : "border-transparent text-zinc-500 hover:text-brand-pink"
                 }`}
               >
                 <TabIcon name={tab.icon} />
                 {tab.label}
+                {tab.icon === "bell" && unreadCount > 0 && (
+                  <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-pink px-1 text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}

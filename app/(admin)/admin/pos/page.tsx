@@ -8,6 +8,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fetchProducts, sellProduct } from "@/lib/supabase/products";
+import { recordSale } from "@/lib/supabase/sales";
 import type { Product, ProductCategory } from "@/lib/types/products";
 import PosCategoryTabs from "@/components/admin/pos/PosCategoryTabs";
 import ProductPosCard from "@/components/admin/pos/ProductPosCard";
@@ -33,7 +34,12 @@ export default function PointOfSalePage() {
     setLoading(false);
   }
 
-  useEffect(() => { loadProducts(); }, []);
+  useEffect(() => {
+    async function load() {
+      await loadProducts();
+    }
+    load();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -82,6 +88,18 @@ export default function PointOfSalePage() {
         setCheckoutError(`Couldn't complete sale: ${error}`);
         return;
       }
+    }
+
+    // Stock is already deducted at this point — the sale itself went
+    // through. If logging it fails, that's a real problem (it won't show
+    // up in Sales Reports) but it should NOT look like the sale failed,
+    // since it didn't; surface it as a distinct warning instead.
+    const { error: recordError } = await recordSale(
+      cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty, unitPrice: l.product.price })),
+      { method, amountPaid }
+    );
+    if (recordError) {
+      setCheckoutError(`Sale completed and stock was deducted, but it couldn't be logged to Sales Reports: ${recordError}`);
     }
 
     setPaymentOpen(false);

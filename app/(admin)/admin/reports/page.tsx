@@ -4,14 +4,17 @@
 // in another one. Sorting works by clicking any column header (asc ->
 // desc -> off). Export menu is UI-only for now — see note at the bottom
 // of this file.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Inter } from "next/font/google";
 import { sortRows, nextSortState, type SortDirection } from "@/lib/utils/sort";
 
-import { serviceReports, type ServiceReport } from "@/lib/data/service-reports-mock";
-import { inventoryReports } from "@/lib/data/inventory-reports-mock";
-import { transactionReports } from "@/lib/data/transaction-reports-mock";
-import { salesReports } from "@/lib/data/sales-reports-mock";
+import type { ServiceReport } from "@/lib/data/service-reports-mock";
+import type { InventoryReportRow } from "@/lib/data/inventory-reports-mock";
+import type { TransactionReportRow } from "@/lib/data/transaction-reports-mock";
+import type { SalesReportRow } from "@/lib/data/sales-reports-mock";
+import { fetchServiceAndTransactionReports } from "@/lib/supabase/reports";
+import { fetchInventoryReportRows } from "@/lib/supabase/inventory-reports";
+import { fetchSalesReportRows } from "@/lib/supabase/sales";
 
 import ReportsHeader from "@/components/admin/reports/ReportsHeader";
 import ReportTabs, { type ReportTab } from "@/components/admin/reports/ReportTabs";
@@ -43,6 +46,47 @@ const PAGE_SIZE_DEFAULT = 10;
 export default function ReportManagementPage() {
   const [tab, setTab] = useState<ReportTab>("service");
 
+  // --- Real data, fetched once on mount ---
+  // Service and Transaction reports are two views of the same real
+  // appointments data (see lib/supabase/reports.ts), fetched together so
+  // they can never disagree with each other. Inventory comes from the
+  // same products + product_batches the POS pages already use. Sales
+  // Reports now reads from the real sales/sale_items ledger (see
+  // lib/supabase/sales.ts + supabase/041_sales_ledger.sql) — POS
+  // checkout now writes to it on every completed sale.
+  const [serviceReports, setServiceReports] = useState<ServiceReport[]>([]);
+  const [transactionReports, setTransactionReports] = useState<TransactionReportRow[]>([]);
+  const [inventoryReports, setInventoryReports] = useState<InventoryReportRow[]>([]);
+  const [salesReports, setSalesReports] = useState<SalesReportRow[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  // Captured once per mount rather than calling Date.now() fresh inside
+  // the inventory useMemo below — React now treats mid-render calls to
+  // impure functions like Date.now() as an error, and "expiring within
+  // 30 days" doesn't need per-second freshness anyway.
+  const [nowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    async function load() {
+      setReportsLoading(true);
+      const [svcTxn, inv, sales] = await Promise.all([
+        fetchServiceAndTransactionReports(),
+        fetchInventoryReportRows(),
+        fetchSalesReportRows(),
+      ]);
+      if (svcTxn.error) setReportsError(svcTxn.error);
+      else if (inv.error) setReportsError(inv.error);
+      else if (sales.error) setReportsError(sales.error);
+      setServiceReports(svcTxn.service);
+      setTransactionReports(svcTxn.transaction);
+      setInventoryReports(inv.rows);
+      setSalesReports(sales.rows);
+      setReportsLoading(false);
+    }
+    load();
+  }, []);
+
+
   // --- Service Reports state ---
   const [serviceFilters, setServiceFilters] = useState(emptyServiceFilters);
   const [servicePage, setServicePage] = useState(0);
@@ -62,7 +106,7 @@ export default function ReportManagementPage() {
       return matchesSearch && matchesType && matchesStatus && matchesFrom && matchesTo;
     });
     return sortRows(matched, serviceSortKey, serviceSortDir);
-  }, [serviceFilters, serviceSortKey, serviceSortDir]);
+  }, [serviceFilters, serviceSortKey, serviceSortDir, serviceReports]);
 
   // --- Inventory Reports state ---
   const [inventoryFilters, setInventoryFilters] = useState(emptyInventoryFilters);
@@ -83,11 +127,11 @@ export default function ReportManagementPage() {
         (inventoryFilters.expiration === "no_expiration" && !r.expirationDate) ||
         (inventoryFilters.expiration === "expiring_soon" &&
           !!r.expirationDate &&
-          (new Date(r.expirationDate).getTime() - Date.now()) / 86400000 <= 30);
+          (new Date(r.expirationDate).getTime() - nowMs) / 86400000 <= 30);
       return matchesSearch && matchesCategory && matchesStatus && matchesUnit && matchesExpiration;
     });
     return sortRows(matched, inventorySortKey, inventorySortDir);
-  }, [inventoryFilters, inventorySortKey, inventorySortDir]);
+  }, [inventoryFilters, inventorySortKey, inventorySortDir, inventoryReports, nowMs]);
 
   // --- Transaction Reports state ---
   const [transactionFilters, setTransactionFilters] = useState(emptyTransactionFilters);
@@ -107,7 +151,7 @@ export default function ReportManagementPage() {
       return matchesSearch && matchesStatus && matchesType && matchesFrom && matchesTo;
     });
     return sortRows(matched, transactionSortKey, transactionSortDir);
-  }, [transactionFilters, transactionSortKey, transactionSortDir]);
+  }, [transactionFilters, transactionSortKey, transactionSortDir, transactionReports]);
 
   // --- Sales Reports state ---
   const [salesFilters, setSalesFilters] = useState(emptySalesFilters);
@@ -131,12 +175,21 @@ export default function ReportManagementPage() {
       // sort by it like any other field.
       .map((r) => ({ ...r, totalPrice: r.quantity * r.unitPrice }));
     return sortRows(matched, salesSortKey, salesSortDir);
-  }, [salesFilters, salesSortKey, salesSortDir]);
+  }, [salesFilters, salesSortKey, salesSortDir, salesReports]);
 
   return (
     <div className={`${inter.className} -m-6 md:-m-8 p-6 md:p-8 min-h-full bg-[#F8F9FC]`}>
       <ReportsHeader />
       <div className="mt-6"><ReportTabs active={tab} onChange={setTab} /></div>
+
+      {reportsError && (
+        <div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          Couldn&apos;t load report data: {reportsError}
+        </div>
+      )}
+      {reportsLoading && (
+        <p className="mt-5 text-sm text-zinc-400">Loading real report data…</p>
+      )}
 
       {tab === "service" && (
         <>
@@ -205,11 +258,10 @@ export default function ReportManagementPage() {
   );
 }
 
-// NOTE on "fetch all data from the database later" (Josh's instruction):
-// every filter/sort/pagination path above operates on the same in-memory
-// mock arrays used elsewhere in the project (service-reports-mock.ts,
-// inventory-reports-mock.ts, transaction-reports-mock.ts,
-// sales-reports-mock.ts). When real tables exist, each of the 4
-// `filtered*` useMemo blocks becomes a Supabase query instead — the
-// filter/sort/pagination UI and state management above don't need to
-// change shape, just what feeds them.
+// NOTE on real data (updated): all 4 tabs are now real. Service and
+// Transaction reports come from lib/supabase/reports.ts (appointments).
+// Inventory comes from lib/supabase/inventory-reports.ts (products +
+// product_batches). Sales comes from lib/supabase/sales.ts, reading the
+// new sales/sale_items ledger (supabase/041_sales_ledger.sql) — POS
+// checkout (app/(admin)/admin/pos/page.tsx) writes to it via recordSale()
+// right after stock is deducted for a completed sale.

@@ -9,7 +9,7 @@
 // service was actually booked" beyond the service_type label — Package,
 // Size, Kennel, and Add-ons were structurally missing, not just hidden.
 import { createClient } from "./client";
-import type { Appointment, AppointmentStatus, AppointmentServiceType } from "@/lib/types/appointments";
+import type { Appointment, AppointmentStatus } from "@/lib/types/appointments";
 
 export type AppointmentPetDetail = {
   id: string; // pet id
@@ -30,14 +30,30 @@ export type AppointmentRow = Appointment & {
   groomerNames: string[];
 };
 
+// Shape of one row as it actually comes back from the joined select()
+// below — typed so the mapping code doesn't need `any`.
+type RawAppointmentPetJoin = {
+  id: string;
+  pet_id: string;
+  groomer_id: string | null;
+  line_amount: number | null;
+  pets: { id: string; name: string; breed: string; size_label: string } | null;
+  groomers: { id: string; name: string } | null;
+  packages: { id: string; name: string } | null;
+  package_pricing: { id: string; size_label: string; size_detail: string | null } | null;
+  kennels: { id: string; size: string; number: number } | null;
+  appointment_addons: { addons: { name: string } | null }[] | null;
+};
+type RawAppointmentJoin = Appointment & { appointment_pets: RawAppointmentPetJoin[] | null };
+
 // Selects appointments joined all the way down to what was actually
 // booked per pet — package, size, kennel, groomer, and add-ons — not
 // just pet identity. This is the real fix for the missing service
 // info: the data genuinely wasn't being fetched before, so no amount
 // of UI work in the modal could have shown it.
-async function fetchAppointmentsRaw() {
+async function fetchAppointmentsRaw(customerId?: string) {
   const supabase = createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("appointments")
     .select(`
       *,
@@ -57,12 +73,16 @@ async function fetchAppointmentsRaw() {
     .order("scheduled_date", { ascending: false })
     .order("created_at", { ascending: false });
 
+  if (customerId) query = query.eq("customer_id", customerId);
+
+  const { data, error } = await query;
+
   if (error) return { rows: [] as AppointmentRow[], error: error.message };
 
-  const rows: AppointmentRow[] = (data ?? []).map((appt: any) => {
+  const rows: AppointmentRow[] = ((data ?? []) as RawAppointmentJoin[]).map((appt) => {
     const apPets = appt.appointment_pets ?? [];
-    const pets: AppointmentPetDetail[] = apPets.map((ap: any) => ({
-      id: ap.pets?.id,
+    const pets: AppointmentPetDetail[] = apPets.map((ap: RawAppointmentPetJoin) => ({
+      id: ap.pets?.id ?? "",
       name: ap.pets?.name ?? "—",
       breed: ap.pets?.breed ?? "—",
       size_label: ap.pets?.size_label ?? "—",
@@ -73,7 +93,7 @@ async function fetchAppointmentsRaw() {
         ? (ap.package_pricing.size_detail ?? ap.package_pricing.size_label)
         : null,
       kennelLabel: ap.kennels ? `${ap.kennels.size === "small" ? "Small" : "Big"} #${ap.kennels.number}` : null,
-      addonNames: (ap.appointment_addons ?? []).map((aa: any) => aa.addons?.name).filter(Boolean),
+      addonNames: (ap.appointment_addons ?? []).map((aa) => aa.addons?.name).filter((n): n is string => Boolean(n)),
       lineAmount: ap.line_amount ?? 0,
     }));
 
@@ -89,6 +109,12 @@ async function fetchAppointmentsRaw() {
 
 export async function fetchAppointments() {
   return fetchAppointmentsRaw();
+}
+
+// Same query, scoped to one customer's own bookings — powers
+// /account/appointments/history.
+export async function fetchAppointmentsByCustomer(customerId: string) {
+  return fetchAppointmentsRaw(customerId);
 }
 
 export async function fetchTodaysAppointmentCount() {
@@ -142,10 +168,18 @@ export async function updateAppointmentStatus(id: string, status: AppointmentSta
 // booked in another tab. Returns an unsubscribe function; the caller
 // MUST call it on unmount, or the subscription leaks and keeps running
 // after the page is gone.
+//
+// Channel name includes a random suffix: this now has two real
+// consumers (Appointment Management on the admin side, and a
+// customer's own Appointment History), and if both happen to be open
+// at once, two channels sharing one fixed topic name would hit the
+// same "cannot add postgres_changes callbacks after subscribe()" error
+// already fixed once in notifications.ts.
 export function subscribeToAppointments(onChange: () => void) {
   const supabase = createClient();
+  const uniqueSuffix = Math.random().toString(36).slice(2);
   const channel = supabase
-    .channel("appointments-realtime")
+    .channel(`appointments-realtime-${uniqueSuffix}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, onChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "appointment_pets" }, onChange)
     .subscribe();

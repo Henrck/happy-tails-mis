@@ -22,7 +22,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     setLogoutConfirmOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/sign-in");
+    router.push("/");
     router.refresh();
   }
 
