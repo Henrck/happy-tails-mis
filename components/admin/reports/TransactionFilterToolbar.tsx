@@ -1,5 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import type { TransactionReportRow } from "@/lib/data/transaction-reports-mock";
+import ExportMenu from "@/components/admin/reports/ExportMenu";
+import type { ExportColumn } from "@/lib/utils/report-export";
 
 export type TransactionFilterState = {
   search: string;
@@ -11,14 +14,28 @@ export type TransactionFilterState = {
 
 const serviceTypes = ["All Types", "Grooming", "Boarding", "Consultation"];
 
+const exportColumns: ExportColumn<TransactionReportRow>[] = [
+  { header: "Transaction ID", accessor: (r) => r.id },
+  { header: "Pet", accessor: (r) => r.petName },
+  { header: "Owner", accessor: (r) => r.ownerName },
+  { header: "Service", accessor: (r) => r.service },
+  { header: "Amount", accessor: (r) => r.amount },
+  { header: "Date", accessor: (r) => r.displayDate },
+  { header: "Status", accessor: (r) => r.status },
+];
+
 export default function TransactionFilterToolbar({
-  filters, onApply, onReset,
+  filters, onApply, onReset, rows,
 }: {
   filters: TransactionFilterState; onApply: (f: TransactionFilterState) => void; onReset: () => void;
+  rows: TransactionReportRow[];
 }) {
   const [draft, setDraft] = useState(filters);
-  const [exportOpen, setExportOpen] = useState(false);
-  useEffect(() => setDraft(filters), [filters]);
+  const [prevFilters, setPrevFilters] = useState(filters);
+  if (filters !== prevFilters) {
+    setPrevFilters(filters);
+    setDraft(filters);
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-[#E8E8E8] shadow-sm px-4 py-3 flex flex-wrap items-center gap-2.5">
@@ -48,19 +65,7 @@ export default function TransactionFilterToolbar({
       <button type="button" onClick={() => onApply(draft)} className="bg-[#FF5F9E] hover:bg-[#e0538c] text-white font-semibold text-sm px-5 py-2 rounded-lg transition-colors">Apply</button>
       <button type="button" onClick={onReset} className="border border-[#E8E8E8] text-zinc-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-zinc-50 transition-colors">Reset</button>
 
-      <div className="relative ml-auto">
-        <button type="button" onClick={() => setExportOpen((v) => !v)} className="flex items-center gap-1.5 border border-[#E8E8E8] text-zinc-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-zinc-50 transition-colors">
-          Export
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        {exportOpen && (
-          <div className="absolute right-0 top-full mt-1.5 w-36 bg-white rounded-lg shadow-lg border border-[#E8E8E8] py-1.5 z-20">
-            {["PDF", "Excel", "CSV", "Print"].map((opt) => (
-              <button type="button" key={opt} onClick={() => setExportOpen(false)} className="w-full text-left px-4 py-2 text-sm text-zinc-600 hover:bg-[#F8F9FC] transition-colors">{opt}</button>
-            ))}
-          </div>
-        )}
-      </div>
+      <ExportMenu title="Transaction Reports" columns={exportColumns} rows={rows} filename="transaction-reports" />
     </div>
   );
 }

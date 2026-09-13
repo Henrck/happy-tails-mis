@@ -1,8 +1,5 @@
 "use client";
-// Matches the uploaded dashboard image: same top nav as the public
-// landing page (Home/Services/Products/About/Contact), but the Login
-// button is replaced with an avatar + dropdown (Sign Out), and a
-// second row of account-specific tabs sits below it.
+
 import { useState, useEffect, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -35,8 +32,9 @@ function TabIcon({ name }: { name: string }) {
     history: "M3 3v6h6M3 12a9 9 0 1 0 3-6.7L3 9M12 7v5l4 2",
     user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4.5 3.5-7 8-7s8 2.5 8 7",
   };
+
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={paths[name]} />
     </svg>
   );
@@ -46,6 +44,7 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadUnreadCount = useCallback(async () => {
@@ -54,10 +53,7 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
   }, [customer.id]);
 
   useEffect(() => {
-    async function init() {
-      await loadUnreadCount();
-    }
-    init();
+    loadUnreadCount();
     const unsubscribe = subscribeToNotifications(customer.id, loadUnreadCount);
     return unsubscribe;
   }, [customer.id, loadUnreadCount]);
@@ -72,13 +68,22 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
   return (
     <div>
       <nav className="bg-brand-pink shadow-md">
-        <div className="flex items-center justify-between px-6 md:px-10 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/images/logo.png" alt="Happy Tails" width={36} height={36} className="rounded-full bg-white" />
-            <span className="text-white font-semibold text-lg italic">Happy Tails</span>
+        <div className="mx-auto flex min-h-[64px] items-center justify-between px-4 sm:px-6 md:px-10">
+          <Link href="/" className="flex min-w-0 items-center gap-2">
+            <Image
+              src="/images/logo.png"
+              alt="Happy Tails"
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-full bg-white"
+            />
+            <span className="truncate text-base font-semibold italic text-white sm:text-lg">
+              Happy Tails
+            </span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-8 text-white text-sm font-medium">
+          {/* Desktop navigation */}
+          <div className="hidden items-center gap-8 text-sm font-medium text-white md:flex">
             {topNavLinks.map((link) => (
               <Link key={link.label} href={link.href} className="hover:opacity-80">
                 {link.label}
@@ -86,56 +91,104 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
             ))}
           </div>
 
-          <div className="relative">
+          <div className="relative flex shrink-0 items-center gap-2">
+            {/* Mobile menu button */}
             <button
+              type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Account menu"
-              className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+              aria-label="Open navigation menu"
+              aria-expanded={menuOpen}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25 md:hidden"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <span className="sr-only">Menu</span>
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAccountOpen((v) => !v)}
+              aria-label="Account menu"
+              aria-expanded={accountOpen}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/30"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.5c-3.3 0-9.8 1.6-9.8 4.9v2.4h19.6v-2.4c0-3.3-6.5-4.9-9.8-4.9z" />
               </svg>
             </button>
 
-            {menuOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-pink-100 py-1 z-30" onMouseLeave={() => setMenuOpen(false)}>
-                <div className="px-4 py-2 border-b border-pink-50">
-                  <p className="text-sm font-semibold text-zinc-800 truncate">{customer.full_name}</p>
+            {accountOpen && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-56 overflow-hidden rounded-2xl border border-pink-100 bg-white py-1 shadow-xl sm:w-56">
+                <div className="border-b border-pink-50 px-4 py-3">
+                  <p className="truncate text-sm font-semibold text-zinc-800">{customer.full_name}</p>
                 </div>
-                <Link href="/account/profile" onClick={() => setMenuOpen(false)} className="block px-4 py-2 text-sm text-zinc-600 hover:bg-brand-tint">
+                <Link
+                  href="/account/profile"
+                  onClick={() => setAccountOpen(false)}
+                  className="block px-4 py-3 text-sm text-zinc-600 hover:bg-brand-tint"
+                >
                   My Account
                 </Link>
-                <button onClick={handleSignOut} className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50">
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50"
+                >
                   Sign Out
                 </button>
               </div>
             )}
           </div>
         </div>
+
+        {/* Mobile public navigation */}
+        {menuOpen && (
+          <div className="border-t border-white/15 px-4 pb-3 pt-2 md:hidden">
+            <div className="grid gap-1">
+              {topNavLinks.map((link) => (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-xl px-3 py-3 text-sm font-medium text-white hover:bg-white/10"
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </nav>
 
-      <div className="bg-white border-b border-pink-100">
-        <div className="max-w-6xl mx-auto px-4 md:px-6 flex items-center gap-1 overflow-x-auto">
-          {accountTabs.map((tab) => {
-            const isActive = pathname === tab.href;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`relative flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  isActive ? "border-brand-pink text-brand-pink" : "border-transparent text-zinc-500 hover:text-brand-pink"
-                }`}
-              >
-                <TabIcon name={tab.icon} />
-                {tab.label}
-                {tab.icon === "bell" && unreadCount > 0 && (
-                  <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-pink px-1 text-[10px] font-bold text-white">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+      {/* Account navigation: horizontal scroll on phones instead of wrapping */}
+      <div className="border-b border-pink-100 bg-white">
+        <div className="mx-auto max-w-6xl overflow-x-auto px-2 sm:px-4 md:px-6">
+          <div className="flex min-w-max items-center">
+            {accountTabs.map((tab) => {
+              const isActive = pathname === tab.href;
+
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={`relative flex min-h-[48px] shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors sm:px-4 sm:text-sm ${
+                    isActive
+                      ? "border-brand-pink text-brand-pink"
+                      : "border-transparent text-zinc-500 hover:text-brand-pink"
+                  }`}
+                >
+                  <TabIcon name={tab.icon} />
+                  <span>{tab.label}</span>
+                  {tab.icon === "bell" && unreadCount > 0 && (
+                    <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-pink px-1 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

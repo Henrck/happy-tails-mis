@@ -15,6 +15,7 @@ import ProductPosCard from "@/components/admin/pos/ProductPosCard";
 import CartPanel, { type CartLine } from "@/components/admin/pos/CartPanel";
 import ProcessPaymentModal from "@/components/admin/pos/ProcessPaymentModal";
 import ReturnExchangeModal from "@/components/admin/pos/ReturnExchangeModal";
+import SaleCompleteModal, { type CompletedSale } from "@/components/admin/pos/SaleCompleteModal";
 
 export default function PointOfSalePage() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function PointOfSalePage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
 
   async function loadProducts() {
     setLoading(true);
@@ -94,15 +96,29 @@ export default function PointOfSalePage() {
     // through. If logging it fails, that's a real problem (it won't show
     // up in Sales Reports) but it should NOT look like the sale failed,
     // since it didn't; surface it as a distinct warning instead.
-    const { error: recordError } = await recordSale(
+    const itemCount = cartLines.reduce((sum, l) => sum + l.qty, 0);
+    const { error: recordError, invoiceNumber } = await recordSale(
       cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty, unitPrice: l.product.price })),
       { method, amountPaid }
     );
-    if (recordError) {
-      setCheckoutError(`Sale completed and stock was deducted, but it couldn't be logged to Sales Reports: ${recordError}`);
-    }
 
     setPaymentOpen(false);
+
+    if (recordError) {
+      // Don't show the success modal on top of a logging failure — the
+      // warning below already explains the sale went through.
+      setCheckoutError(`Sale completed and stock was deducted, but it couldn't be logged to Sales Reports: ${recordError}`);
+    } else {
+      setCompletedSale({
+        invoiceNumber: invoiceNumber ?? "—",
+        method,
+        total: amountDue,
+        amountPaid,
+        change: amountPaid - amountDue,
+        itemCount,
+      });
+    }
+
     clearCart();
     loadProducts(); // refresh stock numbers/availability after the sale
   }
@@ -178,6 +194,10 @@ export default function PointOfSalePage() {
       )}
 
       {returnOpen && <ReturnExchangeModal onClose={() => setReturnOpen(false)} />}
+
+      {completedSale && (
+        <SaleCompleteModal sale={completedSale} onClose={() => setCompletedSale(null)} />
+      )}
     </div>
   );
 }

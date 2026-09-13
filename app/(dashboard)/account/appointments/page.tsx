@@ -1,20 +1,6 @@
 "use client";
 // Book Appointment wizard, customer-facing, supporting MULTIPLE
 // SERVICES in one booking session.
-//
-// AUTO-QUEUE: when both a dog and a cat are among the selected pets,
-// grooming legs are queued automatically (Dog Grooming, then Cat
-// Grooming) right after Pet Information — no manual Service Choice
-// screen for either, since which grooming each pet needs is already
-// obvious from its species. Service Choice only appears for the
-// single-species case (need to ask Grooming/Boarding/Ala Carte), or
-// via the "Add another service?" prompt for genuinely optional
-// additions like Boarding on top of grooming.
-//
-// SIDEBAR: while setting up a leg (Selection/Schedule), a side panel
-// shows exactly which pets are in THIS leg, each removable — removing
-// one drops it from this leg entirely (not deferred to a later leg;
-// that's a deliberate choice, not an oversight).
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -44,13 +30,11 @@ export default function BookAppointmentPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [step, setStep] = useState<Step>("pet-info");
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
-  const [queuedLegs, setQueuedLegs] = useState<BookingLeg[]>([]); // auto-queued legs waiting to be set up, in order
+  const [queuedLegs, setQueuedLegs] = useState<BookingLeg[]>([]);
   const [completedLegs, setCompletedLegs] = useState<BookingLeg[]>([]);
   const [currentLeg, setCurrentLeg] = useState<BookingLeg | null>(null);
-
   const [groomers, setGroomers] = useState<Groomer[]>([]);
   const [kennels, setKennels] = useState<Kennel[]>([]);
   const [boardingPricing, setBoardingPricing] = useState<PackagePricing[]>([]);
@@ -63,15 +47,11 @@ export default function BookAppointmentPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/sign-in"); return; }
-
       const { data: customerRow } = await supabase.from("customers").select("*").eq("id", user.id).single();
       if (!customerRow) { router.push("/sign-in"); return; }
       setCustomer(customerRow);
-
       const { pets: petRows } = await fetchPetsByCustomer(user.id);
       setPets(petRows);
 
@@ -86,7 +66,6 @@ export default function BookAppointmentPage() {
       setBoardingPricing(boardingPkgResult.pricing);
       setBoardingAddonPrices(boardingAddonResult.prices);
       setBoardingAddons(boardingAddonResult.addons);
-
       setLoading(false);
     }
     load();
@@ -112,9 +91,6 @@ export default function BookAppointmentPage() {
   const selectedSpecies = selectedPets.map((p) => p.species);
   const uniqueSelectedSpecies = Array.from(new Set(selectedSpecies));
 
-  // Kicks off whatever leg is next — either pulling the next auto-queued
-  // one, or (if the queue's empty) showing the manual Service Choice
-  // screen for the single-species / add-on case.
   function startNextLeg(queue: BookingLeg[]) {
     if (queue.length > 0) {
       const [next, ...rest] = queue;
@@ -129,10 +105,7 @@ export default function BookAppointmentPage() {
 
   function handlePetInfoNext() {
     if (uniqueSelectedSpecies.length === 2) {
-      // Both a dog and a cat selected — auto-queue both grooming legs,
-      // no manual service picker for either.
-      const legs = autoQueuedGroomingLegs(selectedPets);
-      startNextLeg(legs);
+      startNextLeg(autoQueuedGroomingLegs(selectedPets));
     } else {
       setStep("service");
     }
@@ -175,15 +148,8 @@ export default function BookAppointmentPage() {
     if (!currentLeg) return;
     setCompletedLegs((prev) => [...prev, currentLeg]);
     setCurrentLeg(null);
-    // If there are more auto-queued legs waiting (e.g. just finished
-    // Dog Grooming, Cat Grooming is next), move straight to it without
-    // showing the "add another?" prompt — that prompt is only for
-    // genuinely optional choices, not the already-decided queue.
-    if (queuedLegs.length > 0) {
-      startNextLeg(queuedLegs);
-    } else {
-      setStep("add-more");
-    }
+    if (queuedLegs.length > 0) startNextLeg(queuedLegs);
+    else setStep("add-more");
   }
 
   function handleEditLeg(legId: string) {
@@ -197,139 +163,76 @@ export default function BookAppointmentPage() {
 
   const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs);
 
-  if (loading || !customer) {
-    return <p className="text-center text-zinc-400 py-16">Loading…</p>;
-  }
+  if (loading || !customer) return <p className="py-10 text-center text-sm text-zinc-400 sm:py-16">Loading…</p>;
 
   const legPets = currentLeg ? pets.filter((p) => currentLeg.petIds.includes(p.id)) : [];
   const isGrooming = currentLeg?.serviceChoice === "dog_grooming" || currentLeg?.serviceChoice === "cat_grooming";
   const showSidebar = (step === "selection" || step === "schedule") && legPets.length > 0;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 items-start">
-      <div className="flex-1 min-w-0 bg-white rounded-3xl border border-pink-100 p-6 md:p-8">
+    <div className="flex w-full min-w-0 flex-col items-stretch gap-3 sm:gap-5 lg:flex-row lg:items-start lg:gap-6">
+      <div className="min-w-0 w-full flex-1 rounded-2xl border border-pink-100 bg-white p-3 sm:rounded-3xl sm:p-5 md:p-8">
         {step === "pet-info" && (
-          <BookingPetInformationStep
-            customer={customer}
-            pets={pets}
-            onPetsChange={setPets}
-            selectedIds={selectedPetIds}
-            onSelectionChange={setSelectedPetIds}
-            onBack={() => router.push("/account")}
-            onNext={handlePetInfoNext}
-          />
+          <BookingPetInformationStep customer={customer} pets={pets} onPetsChange={setPets}
+            selectedIds={selectedPetIds} onSelectionChange={setSelectedPetIds}
+            onBack={() => router.push("/account")} onNext={handlePetInfoNext} />
         )}
 
         {step === "service" && (
-          <ServiceChoiceStep
-            choice={currentLeg?.serviceChoice ?? null}
-            onChange={handleServiceChosen}
-            onBack={() => setStep("pet-info")}
-            onNext={() => setStep("selection")}
-            petSpecies={selectedSpecies}
-          />
+          <ServiceChoiceStep choice={currentLeg?.serviceChoice ?? null} onChange={handleServiceChosen}
+            onBack={() => setStep("pet-info")} onNext={() => setStep("selection")} petSpecies={selectedSpecies} />
         )}
 
         {step === "selection" && currentLeg?.serviceChoice === "boarding" && (
-          <BoardingSelectionStep
-            pets={legPets}
-            selections={currentLeg.petSelections}
-            onChange={handleLegSelectionChange}
-            scheduledDate={currentLeg.scheduledDate}
-            onBack={() => setStep("service")}
-            onNext={() => setStep("schedule")}
-          />
+          <BoardingSelectionStep pets={legPets} selections={currentLeg.petSelections}
+            onChange={handleLegSelectionChange} scheduledDate={currentLeg.scheduledDate}
+            onBack={() => setStep("service")} onNext={() => setStep("schedule")} />
         )}
 
         {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && (
-          <AlaCarteSelectionStep
-            pets={legPets}
-            selections={currentLeg.petSelections}
-            onChange={handleLegSelectionChange}
-            onBack={() => setStep("service")}
-            onNext={() => setStep("schedule")}
-          />
+          <AlaCarteSelectionStep pets={legPets} selections={currentLeg.petSelections}
+            onChange={handleLegSelectionChange} onBack={() => setStep("service")} onNext={() => setStep("schedule")} />
         )}
 
         {step === "selection" && isGrooming && currentLeg && (
-          <GroomingSelectionStep
-            serviceType={currentLeg.serviceChoice as "dog_grooming" | "cat_grooming"}
-            pets={legPets}
-            selections={currentLeg.petSelections}
-            onChange={handleLegSelectionChange}
-            onBack={() => {
-              // Going back from a grooming leg's Selection screen
-              // abandons that in-progress leg entirely, rather than
-              // leaving it dangling in memory unused — matches "Back"
-              // meaning "discard this leg's progress," consistent with
-              // how removing a pet from the sidebar also just drops
-              // things rather than trying to preserve partial state.
-              setCurrentLeg(null);
-              setStep(queuedLegs.length > 0 || completedLegs.length > 0 ? "add-more" : "pet-info");
-            }}
-            onNext={() => setStep("schedule")}
-          />
+          <GroomingSelectionStep serviceType={currentLeg.serviceChoice as "dog_grooming" | "cat_grooming"}
+            pets={legPets} selections={currentLeg.petSelections} onChange={handleLegSelectionChange}
+            onBack={() => { setCurrentLeg(null); setStep(queuedLegs.length > 0 || completedLegs.length > 0 ? "add-more" : "pet-info"); }}
+            onNext={() => setStep("schedule")} />
         )}
 
         {step === "schedule" && currentLeg?.serviceChoice === "boarding" && (
-          <BoardingScheduleStep
-            petSelections={currentLeg.petSelections}
-            kennels={kennels}
-            pricing={boardingPricing}
-            addonPrices={boardingAddonPrices}
-            scheduledDate={currentLeg.scheduledDate}
-            dropOffAt={currentLeg.dropOffAt}
-            pickUpAt={currentLeg.pickUpAt}
-            petBelongings={currentLeg.petBelongings}
+          <BoardingScheduleStep petSelections={currentLeg.petSelections} kennels={kennels}
+            pricing={boardingPricing} addonPrices={boardingAddonPrices} scheduledDate={currentLeg.scheduledDate}
+            dropOffAt={currentLeg.dropOffAt} pickUpAt={currentLeg.pickUpAt} petBelongings={currentLeg.petBelongings}
             specialRequests={currentLeg.specialRequests}
             onDateChange={(date) => setCurrentLeg((l) => l && { ...l, scheduledDate: date })}
             onDropOffChange={(iso) => setCurrentLeg((l) => l && { ...l, dropOffAt: iso })}
             onPickUpChange={(iso) => setCurrentLeg((l) => l && { ...l, pickUpAt: iso })}
             onBelongingsChange={(items) => setCurrentLeg((l) => l && { ...l, petBelongings: items })}
             onRequestsChange={(text) => setCurrentLeg((l) => l && { ...l, specialRequests: text })}
-            onSelectionsChange={handleLegSelectionChange}
-            onBack={() => setStep("selection")}
-            onConfirmed={handleLegScheduleConfirmed}
-          />
+            onSelectionsChange={handleLegSelectionChange} onBack={() => setStep("selection")}
+            onConfirmed={handleLegScheduleConfirmed} />
         )}
 
         {step === "schedule" && currentLeg && (currentLeg.serviceChoice === "dog_grooming" || currentLeg.serviceChoice === "cat_grooming" || currentLeg.serviceChoice === "ala_carte") && (
-          <GroomingScheduleStep
-            customer={customer}
-            ownerContact={customer.phone_number ?? ""}
-            petSelections={currentLeg.petSelections}
-            groomers={groomers}
-            scheduledDate={currentLeg.scheduledDate}
-            scheduledTime={currentLeg.scheduledTime}
-            specialRequests={currentLeg.specialRequests}
+          <GroomingScheduleStep customer={customer} ownerContact={customer.phone_number ?? ""}
+            petSelections={currentLeg.petSelections} groomers={groomers} scheduledDate={currentLeg.scheduledDate}
+            scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
             onDateChange={(date) => setCurrentLeg((l) => l && { ...l, scheduledDate: date })}
             onTimeChange={(time) => setCurrentLeg((l) => l && { ...l, scheduledTime: time })}
             onRequestsChange={(text) => setCurrentLeg((l) => l && { ...l, specialRequests: text })}
-            onBack={() => setStep("selection")}
-            onConfirmed={handleLegScheduleConfirmed}
-          />
+            onBack={() => setStep("selection")} onConfirmed={handleLegScheduleConfirmed} />
         )}
 
         {step === "add-more" && (
-          <AddAnotherServicePrompt
-            eligibleServices={eligibleForMore}
-            onAddService={handleAddAnother}
-            onDone={() => setStep("summary")}
-          />
+          <AddAnotherServicePrompt eligibleServices={eligibleForMore} onAddService={handleAddAnother} onDone={() => setStep("summary")} />
         )}
 
         {step === "summary" && (
-          <MultiServiceSummaryStep
-            customer={customer}
-            legs={completedLegs}
-            packagesByService={packagesByService}
-            sizesByService={sizesByService}
-            addonsByService={addonsByService}
-            groomers={groomers}
-            kennels={kennels}
-            onBack={() => setStep("add-more")}
-            onEditLeg={handleEditLeg}
-          />
+          <MultiServiceSummaryStep customer={customer} legs={completedLegs}
+            packagesByService={packagesByService} sizesByService={sizesByService} addonsByService={addonsByService}
+            groomers={groomers} kennels={kennels} onBack={() => setStep("add-more")} onEditLeg={handleEditLeg} />
         )}
       </div>
 

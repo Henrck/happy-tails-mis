@@ -1,37 +1,88 @@
+"use client";
+
 import Link from "next/link";
 import type { Pet } from "@/lib/types/appointments";
 
-const bannerColors: Record<string, string> = {
-  Dog: "from-sky-200 to-sky-100",
-  Cat: "from-pink-200 to-pink-100",
+const petArtwork: Record<string, string> = {
+  Dog: "/images/dashboard/pet-dog.jpg",
+  Cat: "/images/dashboard/pet-cat.jpg",
 };
 
 export default function DashboardPetCard({ pet }: { pet: Pet }) {
-  return (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm border border-pink-100">
-      <div className={`h-24 bg-gradient-to-br ${bannerColors[pet.species] ?? bannerColors.Dog} flex items-center justify-center`}>
-        <span className="text-5xl">{pet.species === "Cat" ? "🐈" : "🐕"}</span>
-      </div>
-      <div className="p-4">
-        <p className="font-bold text-zinc-800">{pet.name}</p>
-        <p className="text-sm text-zinc-500">{pet.breed} - {pet.size_label}</p>
+  const artwork = petArtwork[pet.species] ?? petArtwork.Dog;
+  const isCat = pet.species === "Cat";
 
-        <div className="mt-3 flex gap-2">
-          <Link
-            href={`/account/appointments?petId=${pet.id}`}
-            className="flex-1 flex items-center justify-center gap-1.5 border-2 border-brand-pink text-brand-pink text-xs font-semibold py-2 rounded-full hover:bg-brand-pink hover:text-white transition-colors"
+  return (
+    <article className="overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-sm transition-shadow hover:shadow-md">
+      {/* Species-specific artwork: dog cards always use the dog image,
+          cat cards always use the cat image. */}
+      <div
+        className={[
+          "relative h-[102px] w-full overflow-hidden sm:h-[112px]",
+          isCat ? "bg-pink-100" : "bg-sky-100",
+        ].join(" ")}
+      >
+        <img
+          src={artwork}
+          alt=""
+          aria-hidden="true"
+          className="h-full w-full object-contain object-center"
+        />
+      </div>
+
+      <div className="p-4 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-bold text-zinc-800">
+              {pet.name}
+            </h3>
+            <p className="mt-0.5 truncate text-sm text-zinc-500">
+              {pet.breed || "Breed not specified"}{" "}
+              {pet.size_label ? `- ${pet.size_label}` : ""}
+            </p>
+          </div>
+
+          <span
+            className={[
+              "shrink-0 text-base font-bold",
+              isCat ? "text-pink-500" : "text-sky-500",
+            ].join(" ")}
+            title={pet.sex ? String(pet.sex) : undefined}
+            aria-label={pet.sex ? String(pet.sex) : undefined}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4" /></svg>
+            {pet.sex === "Male" ? "♂" : pet.sex === "Female" ? "♀" : ""}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Link
+            href="/account/appointments"
+            className="flex min-h-10 items-center justify-center gap-1.5 rounded-full border-2 border-brand-pink px-3 py-2 text-xs font-semibold text-brand-pink transition-colors hover:bg-brand-pink hover:text-white"
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 5h16v16H4zM4 9h16M8 3v4M16 3v4" />
+            </svg>
             Book
           </Link>
+
           <Link
             href={`/account/pets/${pet.id}`}
-            className="flex-1 flex items-center justify-center bg-brand-pink hover:bg-brand-pink-dark text-white text-xs font-semibold py-2 rounded-full transition-colors"
+            className="flex min-h-10 items-center justify-center rounded-full bg-brand-pink px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-pink-dark"
           >
             View Profile
           </Link>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

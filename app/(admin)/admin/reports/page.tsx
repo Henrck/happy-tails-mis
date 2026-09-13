@@ -193,7 +193,7 @@ export default function ReportManagementPage() {
 
       {tab === "service" && (
         <>
-          <div className="mt-5"><FilterToolbar filters={serviceFilters} onApply={(f) => { setServiceFilters(f); setServicePage(0); }} onReset={() => { setServiceFilters(emptyServiceFilters); setServicePage(0); }} /></div>
+          <div className="mt-5"><FilterToolbar filters={serviceFilters} onApply={(f) => { setServiceFilters(f); setServicePage(0); }} onReset={() => { setServiceFilters(emptyServiceFilters); setServicePage(0); }} rows={filteredService} /></div>
           <div className="mt-5"><ReportStats reports={filteredService} /></div>
           <div className="mt-5">
             <ReportTable
@@ -210,7 +210,7 @@ export default function ReportManagementPage() {
 
       {tab === "inventory" && (
         <>
-          <div className="mt-5"><InventoryFilterToolbar filters={inventoryFilters} onApply={(f) => { setInventoryFilters(f); setInventoryPage(0); }} onReset={() => { setInventoryFilters(emptyInventoryFilters); setInventoryPage(0); }} /></div>
+          <div className="mt-5"><InventoryFilterToolbar filters={inventoryFilters} onApply={(f) => { setInventoryFilters(f); setInventoryPage(0); }} onReset={() => { setInventoryFilters(emptyInventoryFilters); setInventoryPage(0); }} rows={filteredInventory} /></div>
           <div className="mt-5">
             <InventoryReportTable
               rows={filteredInventory.slice(inventoryPage * inventoryPageSize, inventoryPage * inventoryPageSize + inventoryPageSize)}
@@ -225,7 +225,7 @@ export default function ReportManagementPage() {
 
       {tab === "transaction" && (
         <>
-          <div className="mt-5"><TransactionFilterToolbar filters={transactionFilters} onApply={(f) => { setTransactionFilters(f); setTransactionPage(0); }} onReset={() => { setTransactionFilters(emptyTransactionFilters); setTransactionPage(0); }} /></div>
+          <div className="mt-5"><TransactionFilterToolbar filters={transactionFilters} onApply={(f) => { setTransactionFilters(f); setTransactionPage(0); }} onReset={() => { setTransactionFilters(emptyTransactionFilters); setTransactionPage(0); }} rows={filteredTransactions} /></div>
           <div className="mt-5">
             <TransactionReportTable
               rows={filteredTransactions.slice(transactionPage * transactionPageSize, transactionPage * transactionPageSize + transactionPageSize)}
@@ -240,7 +240,7 @@ export default function ReportManagementPage() {
 
       {tab === "sales" && (
         <>
-          <div className="mt-5"><SalesFilterToolbar filters={salesFilters} onApply={(f) => { setSalesFilters(f); setSalesPage(0); }} onReset={() => { setSalesFilters(emptySalesFilters); setSalesPage(0); }} /></div>
+          <div className="mt-5"><SalesFilterToolbar filters={salesFilters} onApply={(f) => { setSalesFilters(f); setSalesPage(0); }} onReset={() => { setSalesFilters(emptySalesFilters); setSalesPage(0); }} rows={filteredSales} /></div>
           <div className="mt-5">
             <SalesReportTable
               rows={filteredSales.slice(salesPage * salesPageSize, salesPage * salesPageSize + salesPageSize)}

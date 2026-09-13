@@ -1,43 +1,27 @@
 "use client";
-// Second step: which service. CORRECTED from the first build — Ala
-// Carte is its own real, separate add-on category in Service Management
-// (fetchAddonsByCategory("Ala Carte")), confirmed to need no Dog/Cat/
-// Boarding sub-choice. So it's a genuine 4th sibling tile here, not a
-// toggle underneath Grooming/Boarding — selecting it skips straight to
-// a flat add-ons list in the Selection step, no package/size/groomer
-// involved at all.
-//
-// Optional species-based filtering: when petSpecies is provided (the
-// customer booking flow, where Pet Information now comes BEFORE this
-// step), a species-specific service shows if AT LEAST ONE selected pet
-// matches it — Dog Grooming shows if any dog is selected, Cat Grooming
-// shows if any cat is selected, and BOTH can show together for a mixed
-// selection. This is deliberately different from an earlier version
-// that hid grooming entirely on a mixed selection — the real
-// requirement is customers can multi-select pets across species and
-// set up each species' grooming as its own step (see BookingLeg),
-// not "only show what applies to everyone." Boarding and Ala Carte are
-// species-agnostic and always show. The walk-in flow doesn't pass this
-// prop at all — pets are chosen AFTER service there, so this behaves
-// exactly as before for that caller.
+
 import type { ServiceType } from "@/lib/types/services";
 import type { Species } from "@/lib/types/appointments";
 
 export type WalkInServiceChoice = ServiceType | "ala_carte";
 
-const services: { type: WalkInServiceChoice; label: string; icon: string; requiresSpecies?: Species }[] = [
-  { type: "dog_grooming", label: "Dog Grooming", icon: "🐕", requiresSpecies: "Dog" },
-  { type: "cat_grooming", label: "Cat Grooming", icon: "🐈", requiresSpecies: "Cat" },
-  { type: "boarding", label: "Boarding", icon: "🏠" },
-  { type: "ala_carte", label: "Ala Carte", icon: "🛍️" },
+type ServiceOption = {
+  type: WalkInServiceChoice;
+  label: string;
+  description: string;
+  icon: string;
+  requiresSpecies?: Species;
+};
+
+const services: ServiceOption[] = [
+  { type: "dog_grooming", label: "Dog Grooming", description: "Grooming and care for dogs.", icon: "🐕", requiresSpecies: "Dog" },
+  { type: "cat_grooming", label: "Cat Grooming", description: "Grooming and care for cats.", icon: "🐈", requiresSpecies: "Cat" },
+  { type: "boarding", label: "Boarding", description: "A safe and comfortable stay.", icon: "🏠" },
+  { type: "ala_carte", label: "Ala Carte", description: "Choose individual add-on services.", icon: "🛍️" },
 ];
 
 export default function ServiceChoiceStep({
-  choice,
-  onChange,
-  onBack,
-  onNext,
-  petSpecies,
+  choice, onChange, onBack, onNext, petSpecies,
 }: {
   choice: WalkInServiceChoice | null;
   onChange: (choice: WalkInServiceChoice) => void;
@@ -46,47 +30,71 @@ export default function ServiceChoiceStep({
   petSpecies?: Species[];
 }) {
   const uniqueSpecies = petSpecies ? Array.from(new Set(petSpecies)) : null;
-  const visibleServices = services.filter((s) => {
-    if (!s.requiresSpecies || !uniqueSpecies) return true;
-    // Shows if ANY selected pet is this service's species — not "only
-    // if every pet is," which is what made mixed selections hide both
-    // grooming options before. A dog+cat selection now correctly shows
-    // both Dog Grooming and Cat Grooming as separate choices.
-    return uniqueSpecies.includes(s.requiresSpecies);
+  const visibleServices = services.filter((service) => {
+    if (!service.requiresSpecies || !uniqueSpecies) return true;
+    return uniqueSpecies.includes(service.requiresSpecies);
   });
-  return (
-    <div className="max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold text-brand-pink text-center">Select Service</h2>
-      <p className="mt-1 text-sm text-zinc-500 text-center">What does the customer need today?</p>
 
-      <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {visibleServices.map((s) => (
-          <button
-            key={s.type}
-            onClick={() => onChange(s.type)}
-            className={`rounded-2xl border-2 p-5 flex flex-col items-center gap-2 transition-colors ${
-              choice === s.type ? "border-brand-pink bg-brand-tint" : "border-pink-100 bg-white hover:border-pink-200"
-            }`}
-          >
-            <span className="text-3xl">{s.icon}</span>
-            <span className="font-bold text-zinc-800 text-sm text-center">{s.label}</span>
-          </button>
-        ))}
+  return (
+    <div className="mx-auto w-full max-w-3xl">
+      <div className="text-center">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-pink-50 sm:h-11 sm:w-11">
+          <span className="text-lg sm:text-xl" aria-hidden="true">✨</span>
+        </div>
+        <h2 className="text-2xl font-extrabold tracking-tight text-brand-pink sm:text-[28px]">Select Service</h2>
+        <p className="mt-1 text-sm text-zinc-500 sm:text-[15px]">What does your pet need today?</p>
+      </div>
+
+      <div className={`mx-auto mt-6 grid w-full gap-3 sm:mt-8 sm:gap-4 ${
+        visibleServices.length === 3
+          ? "grid-cols-1 sm:max-w-[570px] sm:grid-cols-3"
+          : "grid-cols-1 min-[430px]:grid-cols-2 sm:max-w-[720px] sm:grid-cols-4"
+      }`}>
+        {visibleServices.map((service) => {
+          const selected = choice === service.type;
+          return (
+            <button
+              key={service.type}
+              type="button"
+              onClick={() => onChange(service.type)}
+              aria-pressed={selected}
+              className={[
+                "group relative flex min-h-[132px] w-full flex-col items-center justify-center rounded-2xl border-2 bg-white px-4 py-5 text-center",
+                "transition-all duration-200 active:scale-[0.99]",
+                selected
+                  ? "border-brand-pink bg-brand-tint shadow-[0_4px_14px_rgba(236,72,153,0.14)]"
+                  : "border-pink-100 hover:border-pink-300 hover:bg-pink-50/30",
+                "sm:min-h-[150px] sm:rounded-[18px] sm:px-4 sm:py-6",
+              ].join(" ")}
+            >
+              {selected && (
+                <span className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-brand-pink text-xs font-bold text-white sm:right-3 sm:top-3">
+                  ✓
+                </span>
+              )}
+              <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-pink-50 text-[28px] sm:mb-3 sm:h-12 sm:w-12 sm:text-[30px]" aria-hidden="true">
+                {service.icon}
+              </span>
+              <span className="text-sm font-bold text-zinc-800 sm:text-[15px]">{service.label}</span>
+              <span className="mt-1 max-w-[230px] text-xs leading-4 text-zinc-500 sm:max-w-[160px]">{service.description}</span>
+            </button>
+          );
+        })}
       </div>
 
       {choice === "ala_carte" && (
-        <p className="mt-4 text-xs text-zinc-400 text-center">Ala Carte skips packages — the customer picks individual add-on services directly.</p>
+        <p className="mx-auto mt-3 max-w-[600px] text-center text-xs text-zinc-400 sm:mt-4">
+          Ala Carte skips packages — you can choose individual add-on services directly.
+        </p>
       )}
 
-      <div className="mt-8 flex gap-3">
-        <button onClick={onBack} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold py-2.5 rounded-full hover:border-zinc-400 transition-colors">
+      <div className="mx-auto mt-6 grid w-full max-w-[720px] grid-cols-2 gap-2.5 sm:mt-8 sm:gap-3">
+        <button type="button" onClick={onBack}
+          className="min-h-11 rounded-full border-2 border-zinc-200 bg-white px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 sm:h-12 sm:px-6 sm:text-[15px]">
           Back
         </button>
-        <button
-          onClick={onNext}
-          disabled={!choice}
-          className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-full transition-colors"
-        >
+        <button type="button" onClick={onNext} disabled={!choice}
+          className="min-h-11 rounded-full bg-brand-pink px-4 py-2.5 text-sm font-semibold text-white shadow-[0_3px_8px_rgba(236,72,153,0.18)] hover:bg-brand-pink-dark disabled:cursor-not-allowed disabled:bg-pink-200 disabled:shadow-none sm:h-12 sm:px-6 sm:text-[15px]">
           Next
         </button>
       </div>
