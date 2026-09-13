@@ -2,6 +2,7 @@
 // Payment modal. Amount Paid is a plain typed number input (not a
 // calculator/numpad UI) — per Josh's note, this should be a flexible
 // system where the cashier just types the amount on a keyboard.
+// GCash and Card were removed per Josh's request — Cash only for now.
 import { useState } from "react";
 
 export default function ProcessPaymentModal({
@@ -14,7 +15,7 @@ export default function ProcessPaymentModal({
   onConfirm: (amountPaid: number, method: string) => void;
 }) {
   const [amountPaid, setAmountPaid] = useState("");
-  const [method, setMethod] = useState("Cash");
+  const method = "Cash";
 
   const paidNumber = parseFloat(amountPaid) || 0;
   const change = paidNumber - amountDue;
@@ -40,19 +41,9 @@ export default function ProcessPaymentModal({
 
           <div className="mt-5">
             <p className="text-sm font-semibold text-brand-pink">Payment Method</p>
-            <div className="mt-2 flex gap-2">
-              {["Cash", "GCash", "Card"].map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMethod(m)}
-                  className={`px-5 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-                    method === m ? "bg-brand-pink text-white" : "border border-brand-pink text-brand-pink"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
+            <p className="mt-2 inline-block px-5 py-1.5 rounded-full text-sm font-semibold bg-brand-pink text-white">
+              Cash
+            </p>
           </div>
 
           <div className="mt-4">

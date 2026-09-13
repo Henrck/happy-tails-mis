@@ -116,6 +116,7 @@ export default function PointOfSalePage() {
         amountPaid,
         change: amountPaid - amountDue,
         itemCount,
+        items: cartLines.map((l) => ({ name: l.product.name, qty: l.qty, unitPrice: l.product.price })),
       });
     }
 

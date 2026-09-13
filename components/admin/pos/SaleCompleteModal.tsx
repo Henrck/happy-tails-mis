@@ -1,8 +1,9 @@
 "use client";
-// Shown right after a POS sale is successfully recorded. Deliberately
-// lightweight (just invoice/payment summary, no printable receipt
-// layout) — per Josh's request this replaces the previous silent
-// close-and-clear-cart behavior with an actual confirmation.
+// Shown right after a POS sale is successfully recorded. Now also
+// offers Print Receipt (see lib/utils/receipt.ts) — Josh asked for the
+// receipt format to be set up; this is the trigger point for it.
+import { printReceipt, type ReceiptItem } from "@/lib/utils/receipt";
+
 export type CompletedSale = {
   invoiceNumber: string;
   method: string;
@@ -10,6 +11,7 @@ export type CompletedSale = {
   amountPaid: number;
   change: number;
   itemCount: number;
+  items: ReceiptItem[];
 };
 
 export default function SaleCompleteModal({
@@ -19,6 +21,17 @@ export default function SaleCompleteModal({
   sale: CompletedSale;
   onClose: () => void;
 }) {
+  function handlePrint() {
+    printReceipt({
+      invoiceNumber: sale.invoiceNumber,
+      items: sale.items,
+      total: sale.total,
+      amountPaid: sale.amountPaid,
+      change: sale.change,
+      method: sale.method,
+    });
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
       <div
@@ -58,10 +71,16 @@ export default function SaleCompleteModal({
           </div>
         </div>
 
-        <div className="px-6 pt-5 pb-6">
+        <div className="px-6 pt-5 pb-6 flex gap-3">
+          <button
+            onClick={handlePrint}
+            className="flex-1 border-2 border-brand-pink text-brand-pink font-semibold py-2.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors"
+          >
+            Print Receipt
+          </button>
           <button
             onClick={onClose}
-            className="w-full bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold py-2.5 rounded-full transition-colors"
+            className="flex-1 bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold py-2.5 rounded-full transition-colors"
           >
             Done
           </button>

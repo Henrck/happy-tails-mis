@@ -15,13 +15,14 @@ type RawPet={id:string;pet_id:string;groomer_id:string|null;kennel_id:string|nul
  appointment_addons:{addons:{name:string}|null}[]|null};
 type RawAppointment=Appointment&{appointment_pets:RawPet[]|null};
 
-async function fetchRaw(customerId?:string){
+async function fetchRaw(filter?:{customerId?:string;appointmentId?:string}){
  const s=createClient();let q=s.from("appointments").select(`*,appointment_pets(
  id,pet_id,groomer_id,kennel_id,line_amount,pets(id,name,breed,size_label),
  groomers(id,name),packages(id,name),package_pricing(id,package_id,size_label,size_detail,packages(name)),
  kennels(id,size,number),appointment_addons(addons(name)))`)
  .order("scheduled_date",{ascending:false}).order("created_at",{ascending:false});
- if(customerId)q=q.eq("customer_id",customerId);
+ if(filter?.customerId)q=q.eq("customer_id",filter.customerId);
+ if(filter?.appointmentId)q=q.eq("id",filter.appointmentId);
  const {data,error}=await q;if(error)return {rows:[] as AppointmentRow[],error:error.message};
  const rows=((data??[]) as unknown as RawAppointment[]).map(a=>{
   const pets=(a.appointment_pets??[]).map(p=>({
@@ -44,7 +45,15 @@ async function fetchRaw(customerId?:string){
  return {rows,error:null};
 }
 export async function fetchAppointments(){return fetchRaw()}
-export async function fetchAppointmentsByCustomer(id:string){return fetchRaw(id)}
+export async function fetchAppointmentsByCustomer(id:string){return fetchRaw({customerId:id})}
+// Used by the "View" button on ongoing Grooming/Boarding sessions — looks up
+// the one appointment (with its pets/addons/package info already joined by
+// fetchRaw) instead of pulling the whole appointments table just to find it.
+export async function fetchAppointmentDetail(appointmentId:string){
+ const {rows,error}=await fetchRaw({appointmentId});
+ if(error)return {row:null as AppointmentRow|null,error};
+ return {row:rows[0]??null,error:rows[0]?null:"Appointment not found."};
+}
 export async function fetchTodaysAppointmentCount(){
  const s=createClient(),today=new Date().toISOString().split("T")[0];
  const {count,error}=await s.from("appointments").select("id",{count:"exact",head:true}).eq("scheduled_date",today).neq("status","cancelled");
