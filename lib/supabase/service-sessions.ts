@@ -78,9 +78,33 @@ export async function checkInAppointment(id:string, assignments:{appointmentPetI
   if(assignments.some(x=>x.resourceType!==type))return {error:`This appointment requires ${type} assignment.`};
   const active=type==="groomer"?await fetchGroomingSessions():await fetchBoardingSessions();
   if(active.error)return {error:active.error};
-  const busy=new Set(type==="groomer"?active.sessions.map(x=>x.groomerId):active.sessions.map(x=>x.kennelId));
+  const busy = type === "groomer"
+    ? new Set(active.sessions.map(x => x.groomerId))
+    : new Set(active.sessions.map(x => x.kennelId));
   if(assignments.some(x=>busy.has(x.resourceId)))return {error:`A selected ${type} is already in use.`};
   if(new Set(assignments.map(x=>x.appointmentPetId)).size!==assignments.length)return {error:"Each pet can only have one assignment."};
+
+  if(type==="kennel"){
+    const ids=assignments.map(x=>x.appointmentPetId);
+    const {data:petRows,error:pe}=await s.from("appointment_pets")
+      .select("id,package_id,package_pricing_id,packages(name),package_pricing(package_id,size_label,size_detail,packages(name))")
+      .eq("appointment_id",id).in("id",ids);
+    if(pe)return {error:pe.message};
+    const rowById=new Map((petRows??[]).map((r:any)=>[r.id,r]));
+    const {data:kennelRows,error:ke}=await s.from("kennels").select("id,size").in("id",assignments.map(x=>x.resourceId));
+    if(ke)return {error:ke.message};
+    const kennelById=new Map((kennelRows??[]).map((k:any)=>[k.id,k]));
+    for(const x of assignments){
+      const row:any=rowById.get(x.appointmentPetId);
+      const kennel:any=kennelById.get(x.resourceId);
+      if(!row||!kennel)return {error:"The selected kennel or appointment pet could not be verified."};
+      const text=`${row.packages?.name??row.package_pricing?.packages?.name??""} ${row.package_pricing?.size_label??""} ${row.package_pricing?.size_detail??""}`.toLowerCase();
+      const required=text.includes("small")?"small":text.includes("big")?"big":null;
+      if(!required)return {error:"This boarding appointment does not have a saved kennel size. Please review the appointment booking."};
+      if(kennel.size!==required)return {error:`${row.packages?.name??row.package_pricing?.packages?.name??"This pet"} requires a ${required} kennel. Please select an available ${required} kennel.`};
+    }
+  }
+
   for(const x of assignments){
     const patch=type==="groomer"?{groomer_id:x.resourceId}:{kennel_id:x.resourceId};
     const {error}=await s.from("appointment_pets").update(patch).eq("id",x.appointmentPetId).eq("appointment_id",id);

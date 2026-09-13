@@ -4,13 +4,13 @@ import type {Appointment,AppointmentStatus} from "@/lib/types/appointments";
 export type AppointmentPetDetail={
  appointmentPetId:string; id:string; name:string; breed:string; size_label:string;
  groomerId:string|null; groomerName:string|null; packageName:string|null;
- packagePricingLabel:string|null; kennelLabel:string|null; addonNames:string[]; lineAmount:number;
+ packagePricingLabel:string|null; requestedKennelSize:"small"|"big"|null; kennelLabel:string|null; addonNames:string[]; lineAmount:number;
 };
 export type AppointmentRow=Appointment&{pets:AppointmentPetDetail[];groomerNames:string[]};
 type RawPet={id:string;pet_id:string;groomer_id:string|null;kennel_id:string|null;line_amount:number|null;
  pets:{id:string;name:string;breed:string;size_label:string}|null;
  groomers:{id:string;name:string}|null;packages:{id:string;name:string}|null;
- package_pricing:{id:string;size_label:string;size_detail:string|null}|null;
+ package_pricing:{id:string;package_id:string;size_label:string;size_detail:string|null;packages:{name:string}|null}|null;
  kennels:{id:string;size:string;number:number}|null;
  appointment_addons:{addons:{name:string}|null}[]|null};
 type RawAppointment=Appointment&{appointment_pets:RawPet[]|null};
@@ -18,7 +18,7 @@ type RawAppointment=Appointment&{appointment_pets:RawPet[]|null};
 async function fetchRaw(customerId?:string){
  const s=createClient();let q=s.from("appointments").select(`*,appointment_pets(
  id,pet_id,groomer_id,kennel_id,line_amount,pets(id,name,breed,size_label),
- groomers(id,name),packages(id,name),package_pricing(id,size_label,size_detail),
+ groomers(id,name),packages(id,name),package_pricing(id,package_id,size_label,size_detail,packages(name)),
  kennels(id,size,number),appointment_addons(addons(name)))`)
  .order("scheduled_date",{ascending:false}).order("created_at",{ascending:false});
  if(customerId)q=q.eq("customer_id",customerId);
@@ -29,6 +29,12 @@ async function fetchRaw(customerId?:string){
    size_label:p.pets?.size_label??"—",groomerId:p.groomer_id,groomerName:p.groomers?.name??null,
    packageName:p.packages?.name??null,
    packagePricingLabel:p.package_pricing?(p.package_pricing.size_detail??p.package_pricing.size_label):null,
+   requestedKennelSize: (()=>{
+    const text = `${p.packages?.name??p.package_pricing?.packages?.name??""} ${p.package_pricing?.size_label??""} ${p.package_pricing?.size_detail??""}`.toLowerCase();
+    if (text.includes("small")) return "small" as const;
+    if (text.includes("big")) return "big" as const;
+    return null;
+   })(),
    kennelLabel:p.kennels?`${p.kennels.size==="small"?"Small":"Big"} #${p.kennels.number}`:null,
    addonNames:(p.appointment_addons??[]).map(x=>x.addons?.name).filter((x):x is string=>Boolean(x)),
    lineAmount:p.line_amount??0

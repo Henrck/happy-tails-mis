@@ -14,7 +14,7 @@
 // on — fixed tiers are untouched (they're already a flat total for
 // that exact stay length, per the pricing card), only per-night rates
 // get multiplied.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { DraftPetSelection } from "@/lib/types/appointments";
 import type { PackagePricing, AddonPrice } from "@/lib/types/services";
 import type { Kennel } from "@/lib/types/pet-services";
@@ -74,7 +74,6 @@ export default function BoardingScheduleStep({
   onConfirmed: () => void;
 }) {
   const [dropOffTime, setDropOffTime] = useState("08:00");
-  const [manualPickUpDate, setManualPickUpDate] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
   const hasPerNightRate = petSelections.some((sel) => {
@@ -82,70 +81,64 @@ export default function BoardingScheduleStep({
     return rate?.is_per_night;
   });
 
-  function handleDropOffDateChange(dateStr: string, timeStr?: string) {
-    onDateChange(dateStr);
-    const effectiveTime = timeStr ?? dropOffTime;
-    const iso = `${dateStr}T${effectiveTime}:00`;
+  function nightsForSelection(sel: DraftPetSelection): number {
+    const rate = pricing.find((p) => p.id === sel.packagePricingId);
+    if (!rate) return 1;
+    if (rate.is_per_night) return Math.max(1, Number(sel.boardingNights || 7));
+    return Math.max(1, nightsFromFixedTier(rate.size_detail ?? "") ?? 1);
+  }
 
-    // REAL BUG FIXED: native date/time inputs can briefly report an
-    // empty or incomplete value while the person is still typing (e.g.
-    // clearing the time field to retype it) — that produced a
-    // malformed string here, which new Date() turned into an Invalid
-    // Date, and .toISOString() throws a hard RangeError on an invalid
-    // date rather than failing quietly. Guarding here means a
-    // transient incomplete value is just skipped for this keystroke —
-    // the very next valid one recalculates correctly, matching what
-    // was actually observed ("accurate once you finish typing").
+  function selectedNights(): number {
+    return petSelections.length ? Math.max(1, ...petSelections.map(nightsForSelection)) : 1;
+  }
+
+  function syncPickUpFromDropOff(dateStr: string, timeStr = dropOffTime) {
+    if (!dateStr) return;
+    const iso = `${dateStr}T${timeStr}:00`;
     const dropOff = new Date(iso);
     if (isNaN(dropOff.getTime())) return;
 
     onDropOffChange(iso);
-
-    if (!hasPerNightRate) {
-      let maxNights = 1;
-      for (const sel of petSelections) {
-        const rate = pricing.find((p) => p.id === sel.packagePricingId);
-        if (rate?.size_detail && !rate.is_per_night) {
-          const nights = nightsFromFixedTier(rate.size_detail);
-          if (nights && nights > maxNights) maxNights = nights;
-        }
-      }
-      const pickUp = new Date(dropOff);
-      pickUp.setDate(pickUp.getDate() + maxNights);
-      onPickUpChange(pickUp.toISOString());
-    }
+    const pickUp = new Date(dropOff);
+    pickUp.setDate(pickUp.getDate() + selectedNights());
+    onPickUpChange(pickUp.toISOString());
   }
+
+  function handleDropOffDateChange(dateStr: string, timeStr?: string) {
+    onDateChange(dateStr);
+    syncPickUpFromDropOff(dateStr, timeStr ?? dropOffTime);
+  }
+
+  // Keep pick-up synchronized when the customer comes back from the
+  // rate-selection step and changes the number of nights.
+  useEffect(() => {
+    if (!scheduledDate) return;
+
+    const time = dropOffAt
+      ? new Date(dropOffAt).toTimeString().slice(0, 5)
+      : dropOffTime;
+    const dropOff = new Date(`${scheduledDate}T${time}:00`);
+    if (isNaN(dropOff.getTime())) return;
+
+    const pickUp = new Date(dropOff);
+    pickUp.setDate(pickUp.getDate() + selectedNights());
+    const nextPickUp = pickUp.toISOString();
+
+    if (nextPickUp !== pickUpAt) {
+      onPickUpChange(nextPickUp);
+    }
+  }, [scheduledDate, dropOffAt, dropOffTime, pickUpAt, petSelections, pricing]);
 
   function toggleBelonging(item: string) {
     onBelongingsChange(petBelongings.includes(item) ? petBelongings.filter((b) => b !== item) : [...petBelongings, item]);
   }
 
   function handleConfirm() {
-    if (hasPerNightRate && manualPickUpDate) {
-      const dropOff = new Date(dropOffAt ?? "");
-      const pickUp = new Date(`${manualPickUpDate}T18:00:00`);
-
-      // Same guard as handleDropOffDateChange — dropOffAt could
-      // theoretically still be unset/invalid if this is reached in an
-      // unexpected order (the Confirm button is disabled until
-      // scheduledDate is set, but this is cheap insurance against a
-      // hard crash rather than trusting that disabled-state alone).
-      if (isNaN(dropOff.getTime()) || isNaN(pickUp.getTime())) {
-        setConfirmed(false);
-        return;
-      }
-
-      onPickUpChange(pickUp.toISOString());
-
-      const nights = Math.max(1, Math.round((pickUp.getTime() - dropOff.getTime()) / (1000 * 60 * 60 * 24)));
-      const updated = petSelections.map((sel) => {
-        const rate = pricing.find((p) => p.id === sel.packagePricingId);
-        if (!rate?.is_per_night) return sel;
-        const addonsTotal = sel.addonIds.reduce((sum, id) => sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0), 0);
-        return { ...sel, lineAmount: rate.price * nights + addonsTotal };
-      });
-      onSelectionsChange(updated);
+    if (!scheduledDate) {
+      setConfirmed(false);
+      return;
     }
+    syncPickUpFromDropOff(scheduledDate);
     setConfirmed(true);
   }
 
@@ -185,14 +178,15 @@ export default function BoardingScheduleStep({
         </div>
 
         <div>
-          <label className="text-sm font-semibold text-zinc-700">Pick Up Date / Time {hasPerNightRate ? "*" : ""}</label>
-          {hasPerNightRate ? (
-            <input type="date" value={manualPickUpDate} min={scheduledDate ?? undefined} onChange={(e) => setManualPickUpDate(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-          ) : (
-            <div className="mt-1 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500">
-              {pickUpAt ? formatDateLong(pickUpAt.split("T")[0]) : "Auto-set from duration"}
+          <label className="text-sm font-semibold text-zinc-700">Pick Up Date / Time</label>
+          <div className="mt-1 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-zinc-700">
+            <div className="font-semibold">
+              {pickUpAt ? formatDateLong(pickUpAt.split("T")[0]) : "Auto-calculated"}
             </div>
-          )}
+            <div className="mt-0.5 text-xs text-zinc-500">
+              {selectedNights()} night(s) based on the selected boarding rate
+            </div>
+          </div>
         </div>
       </div>
 
@@ -230,7 +224,7 @@ export default function BoardingScheduleStep({
         </button>
         <button
           onClick={handleConfirm}
-          disabled={!scheduledDate || (hasPerNightRate && !manualPickUpDate)}
+          disabled={!scheduledDate}
           className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-full transition-colors"
         >
           Next

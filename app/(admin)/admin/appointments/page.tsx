@@ -7,12 +7,14 @@ import AppointmentFilters,{type FilterState} from "@/components/admin/appointmen
 import AppointmentsTable from "@/components/admin/appointments/AppointmentsTable";
 import AppointmentDetailModal from "@/components/admin/appointments/AppointmentDetailModal";
 import Pagination from "@/components/admin/Pagination";
-const PAGE_SIZE=5;
+
+const PAGE_SIZE=10;
+
 export default function AdminAppointmentsPage(){
  const [appointments,setAppointments]=useState<AppointmentRow[]>([]),[loading,setLoading]=useState(true),[loadError,setLoadError]=useState<string|null>(null);
  const [filters,setFilters]=useState<FilterState>({search:"",status:"all",service:"all",scope:"today"}),[page,setPage]=useState(0),[selected,setSelected]=useState<AppointmentRow|null>(null);
  const [refreshKey,setRefreshKey]=useState(0),[live,setLive]=useState(false),timer=useRef<ReturnType<typeof setTimeout>|null>(null);
- const load=useCallback(async()=>{const r=await fetchAppointments();if(r.error){setLoadError(r.error);return}setLoadError(null);setAppointments(r.rows);setSelected(x=>x? r.rows.find(y=>y.id===x.id)??x:null)},[]);
+ const load=useCallback(async()=>{const r=await fetchAppointments();if(r.error){setLoadError(r.error);return}setLoadError(null);setAppointments(r.rows);setSelected(x=>x?r.rows.find(y=>y.id===x.id)??x:null)},[]);
  useEffect(()=>{setLoading(true);load().finally(()=>setLoading(false))},[load]);
  useEffect(()=>{const off=subscribeToAppointments(()=>{load();setRefreshKey(x=>x+1);setLive(true);if(timer.current)clearTimeout(timer.current);timer.current=setTimeout(()=>setLive(false),2000)});return()=>{off();if(timer.current)clearTimeout(timer.current)}},[load]);
  const filtered=appointments.filter(a=>{const q=filters.search.trim().toLowerCase();return(!q||a.owner_name.toLowerCase().includes(q)||a.id.toLowerCase().includes(q)||a.pets.some(p=>p.name.toLowerCase().includes(q)))&&(filters.status==="all"||a.status===filters.status)&&(filters.service==="all"||a.service_type===filters.service)&&(filters.scope==="all"||a.scheduled_date===new Date().toISOString().split("T")[0])});

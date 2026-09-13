@@ -1,11 +1,8 @@
-// Service Reports and Transaction Reports are two different views of the
-// SAME real data (appointments) — Service Reports just doesn't show the
-// amount column. Rather than two separate fetches/mappings that could
-// drift out of sync, this fetches once via the existing, already-correct
-// fetchAppointments() (same helper Appointment Management uses — reuses
-// its joins to pets/packages/kennels/groomers instead of duplicating
-// that query logic) and flattens to ONE row per pet per appointment,
-// matching the granularity the mock data always had.
+// Service Reports and Transaction Reports use the same real appointments data.
+// The report order is intentionally based on the appointment's CREATED_AT
+// timestamp so the newest input appears first, regardless of the scheduled
+// service date. This is different from appointment scheduling order.
+
 import { fetchAppointments, type AppointmentRow } from "./appointment-management";
 import type { AppointmentStatus } from "@/lib/types/appointments";
 import type { ServiceReport, ReportStatus } from "@/lib/data/service-reports-mock";
@@ -26,27 +23,62 @@ function mapStatus(status: AppointmentStatus): ReportStatus {
   }
 }
 
-function serviceLabel(appt: AppointmentRow, pet: AppointmentRow["pets"][number]): string {
+function serviceLabel(
+  appt: AppointmentRow,
+  pet: AppointmentRow["pets"][number]
+): string {
   if (pet.packageName) return pet.packageName;
   if (appt.service_type === "boarding") {
-    return pet.packagePricingLabel ? `Boarding – ${pet.packagePricingLabel}` : "Boarding";
+    return pet.packagePricingLabel
+      ? `Boarding – ${pet.packagePricingLabel}`
+      : "Boarding";
   }
-  // Fallback: humanize the raw service_type (e.g. "dog_grooming" -> "Dog Grooming")
-  return appt.service_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+  return appt.service_type
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function displayDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export async function fetchServiceAndTransactionReports() {
   const { rows, error } = await fetchAppointments();
-  if (error) return { service: [] as ServiceReport[], transaction: [] as TransactionReportRow[], error };
+
+  if (error) {
+    return {
+      service: [] as ServiceReport[],
+      transaction: [] as TransactionReportRow[],
+      error,
+    };
+  }
+
+  // IMPORTANT:
+  // fetchAppointments() is primarily ordered for appointment scheduling
+  // (scheduled date). Reports need a different priority: newest INPUT first.
+  //
+  // created_at is the actual time the appointment record was entered.
+  // Sorting here keeps the appointment-management table's existing ordering
+  // untouched while making Report Management prioritize the latest records.
+  const latestFirst = [...rows].sort((a, b) => {
+    const createdA = new Date(a.created_at).getTime();
+    const createdB = new Date(b.created_at).getTime();
+
+    if (createdB !== createdA) return createdB - createdA;
+
+    // Stable fallback if two records have the same created_at timestamp.
+    return b.scheduled_date.localeCompare(a.scheduled_date);
+  });
 
   const service: ServiceReport[] = [];
   const transaction: TransactionReportRow[] = [];
 
-  rows.forEach((appt) => {
+  latestFirst.forEach((appt) => {
     const status = mapStatus(appt.status);
     const owner = appt.owner_name || "—";
 
@@ -69,11 +101,6 @@ export async function fetchServiceAndTransactionReports() {
         petName: pet.name,
         ownerName: owner,
         service: service_,
-        // A multi-pet appointment's total_amount is split across its
-        // pets — line_amount is what THIS pet actually cost, which is
-        // the correct number for a per-row transaction report (summing
-        // it back up across all pets on an appointment reproduces
-        // total_amount exactly).
         amount: pet.lineAmount,
         date: appt.scheduled_date,
         displayDate: displayDate(appt.scheduled_date),

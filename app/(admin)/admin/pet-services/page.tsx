@@ -1,84 +1,239 @@
-// Pet Services landing — choose Grooming or Boarding management.
-// Matches Josh's reference: centered logo up top, two large circular pink
-// buttons with a white line-art icon and label.
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
+import { fetchGroomingSessions, fetchBoardingSessions } from "@/lib/supabase/service-sessions";
 
-const choices = [
-  {
-    href: "/admin/pet-services/grooming",
-    label: "Pet Grooming",
-    icon: (
-      <svg viewBox="0 0 100 100" className="w-24 h-24 md:w-28 md:h-28" fill="none" stroke="white" strokeWidth="2.5">
-        {/* dog head under running water */}
-        <path d="M35 40c0-9 7-16 16-16s16 7 16 16" strokeLinecap="round" />
-        <path d="M28 40h46l-4 20c-1 6-6 10-12 10H44c-6 0-11-4-12-10z" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="42" cy="50" r="2" fill="white" stroke="none" />
-        <circle cx="58" cy="50" r="2" fill="white" stroke="none" />
-        <path d="M45 58q6 4 10 0" strokeLinecap="round" />
-        {/* shower */}
-        <path d="M50 14v8" strokeLinecap="round" />
-        <circle cx="30" cy="22" r="2" fill="white" stroke="none" />
-        <circle cx="38" cy="18" r="2" fill="white" stroke="none" />
-        <circle cx="62" cy="18" r="2" fill="white" stroke="none" />
-        <circle cx="70" cy="22" r="2" fill="white" stroke="none" />
-        {/* suds at base */}
-        <circle cx="30" cy="76" r="5" />
-        <circle cx="40" cy="80" r="4" />
-        <circle cx="60" cy="80" r="4" />
-        <circle cx="70" cy="76" r="5" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/pet-services/boarding",
-    label: "Pet Boarding",
-    icon: (
-      <svg viewBox="0 0 100 100" className="w-24 h-24 md:w-28 md:h-28" fill="none" stroke="white" strokeWidth="2.5">
-        {/* house */}
-        <path d="M15 45L50 18l35 27" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M22 42v34a2 2 0 0 0 2 2h52a2 2 0 0 0 2-2V42" strokeLinecap="round" strokeLinejoin="round" />
-        {/* door with paw print */}
-        <rect x="40" y="55" width="20" height="23" rx="2" />
-        <circle cx="47" cy="63" r="1.6" fill="white" stroke="none" />
-        <circle cx="53" cy="63" r="1.6" fill="white" stroke="none" />
-        <circle cx="44" cy="67" r="1.6" fill="white" stroke="none" />
-        <circle cx="56" cy="67" r="1.6" fill="white" stroke="none" />
-        <path d="M44 73q6 4 12 0" strokeLinecap="round" />
-        {/* food/water bowls */}
-        <ellipse cx="70" cy="80" rx="7" ry="3" />
-        <ellipse cx="82" cy="80" rx="7" ry="3" />
-      </svg>
-    ),
-  },
-];
+function PawIcon({ className = "w-7 h-7" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="9" cy="9" r="4" />
+      <circle cx="23" cy="9" r="4" />
+      <circle cx="6" cy="18" r="3.5" />
+      <circle cx="26" cy="18" r="3.5" />
+      <path d="M16 13c-5 0-8 4-8 8 0 4 3 6 8 6s8-2 8-6c0-4-3-8-8-8Z" />
+    </svg>
+  );
+}
+
+function GroomingIcon() {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" className="w-9 h-9" aria-hidden="true">
+      <path d="M16 22 29 9l13 13" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M21 20v27h22V20" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M29 30h6M27 36h10M24 43h16" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M45 15c3 2 4 5 4 8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M49 11c3 2 5 5 5 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BoardingIcon() {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" className="w-9 h-9" aria-hidden="true">
+      <path d="M10 28 32 10l22 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M15 25v29h34V25" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M25 54V39h14v15" stroke="currentColor" strokeWidth="3" />
+      <path d="M32 29c-4 0-7 3-7 7h14c0-4-3-7-7-7Z" stroke="currentColor" strokeWidth="3" />
+      <circle cx="28" cy="27" r="2" fill="currentColor" />
+      <circle cx="36" cy="27" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "pink" | "blue" | "green";
+}) {
+  const toneClass =
+    tone === "pink"
+      ? "bg-pink-50 text-brand-pink"
+      : tone === "blue"
+        ? "bg-blue-50 text-blue-500"
+        : "bg-emerald-50 text-emerald-600";
+
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${toneClass}`}>
+        <PawIcon className="w-5 h-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-zinc-400 uppercase tracking-wide">{label}</p>
+        <p className="text-xl font-bold text-slate-800">{value}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function PetServicesPage() {
+  const [activeGroomers, setActiveGroomers] = useState(0);
+  const [ongoingGroomingSessions, setOngoingGroomingSessions] = useState(0);
+  const [kennels, setKennels] = useState(0);
+  const [occupiedKennels, setOccupiedKennels] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const loadStats = useCallback(async () => {
+    const [groomerResult, kennelResult, groomingResult, boardingResult] =
+      await Promise.all([
+        fetchGroomers(),
+        fetchKennels(),
+        fetchGroomingSessions(),
+        fetchBoardingSessions(),
+      ]);
+
+    if (!groomerResult.error) {
+      setActiveGroomers(
+        groomerResult.groomers.filter((g) => g.status === "active").length
+      );
+    }
+
+    if (!kennelResult.error) {
+      setKennels(kennelResult.kennels.length);
+    }
+
+    if (!groomingResult.error) {
+      setOngoingGroomingSessions(groomingResult.sessions.length);
+    }
+
+    if (!boardingResult.error) {
+      setOccupiedKennels(boardingResult.sessions.length);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadStats();
+
+    const interval = window.setInterval(loadStats, 30000);
+    return () => window.clearInterval(interval);
+  }, [loadStats]);
+
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-brand-pink">Pet Services</h1>
-      <div className="mt-1 border-b-2 border-brand-pink/40" />
+    <div className="min-h-full">
+      {/* Page heading */}
+      <div className="flex items-start gap-3">
+        <div className="mt-1 w-11 h-11 rounded-2xl bg-pink-100 text-brand-pink flex items-center justify-center shrink-0">
+          <PawIcon className="w-7 h-7" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-800 leading-tight">
+            Pet Services
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Manage grooming and boarding operations in one place.
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-10 flex flex-col items-center">
-        <Image
-          src="/images/footer-logo.png"
-          alt="Happy Tails Pet Grooming Cafe"
-          width={220}
-          height={220}
-          className="w-40 md:w-52 h-auto"
-        />
+      <div className="mt-5 border-b border-pink-200" />
 
-        <div className="mt-10 flex flex-col sm:flex-row gap-10 md:gap-16">
-          {choices.map((choice) => (
+      {/* Service cards */}
+      <div className="mt-7 grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <section className="rounded-3xl border border-pink-100 bg-white shadow-sm overflow-hidden">
+          <div className="h-2 bg-brand-pink" />
+
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-pink-50 text-brand-pink flex items-center justify-center">
+                <GroomingIcon />
+              </div>
+
+              <span className="text-xs font-semibold text-brand-pink bg-pink-50 px-3 py-1.5 rounded-full">
+                Grooming
+              </span>
+            </div>
+
+            <h2 className="mt-5 text-2xl font-bold text-slate-800">
+              Pet Grooming
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500 max-w-md">
+              Monitor active grooming sessions and manage the groomers
+              handling each pet.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-3 rounded-2xl bg-pink-50/70 border border-pink-100 p-4">
+              <Stat
+                label="Ongoing sessions"
+                value={ongoingGroomingSessions}
+                tone="pink"
+              />
+              <Stat label="Available groomers" value={Math.max(0, activeGroomers - ongoingGroomingSessions)} tone="pink" />
+            </div>
+
             <Link
-              key={choice.href}
-              href={choice.href}
-              className="w-56 h-56 md:w-64 md:h-64 rounded-full bg-brand-pink hover:bg-brand-pink-dark shadow-lg flex flex-col items-center justify-center gap-3 transition-colors"
+              href="/admin/pet-services/grooming"
+              className="mt-5 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-full bg-brand-pink text-white font-semibold text-sm hover:bg-brand-pink-dark transition-colors shadow-sm"
             >
-              {choice.icon}
-              <span className="text-white text-xl md:text-2xl font-bold">{choice.label}</span>
+              View Grooming
+              <span aria-hidden="true">→</span>
             </Link>
-          ))}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-blue-100 bg-white shadow-sm overflow-hidden">
+          <div className="h-2 bg-blue-500" />
+
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-500 flex items-center justify-center">
+                <BoardingIcon />
+              </div>
+
+              <span className="text-xs font-semibold text-blue-500 bg-blue-50 px-3 py-1.5 rounded-full">
+                Boarding
+              </span>
+            </div>
+
+            <h2 className="mt-5 text-2xl font-bold text-slate-800">
+              Pet Boarding
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-500 max-w-md">
+              Monitor kennel capacity and manage boarding spaces for pets
+              currently staying at Happy Tails.
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-3 rounded-2xl bg-blue-50/70 border border-blue-100 p-4">
+              <Stat label="Total kennels" value={kennels} tone="blue" />
+              <Stat label="Occupied" value={occupiedKennels} tone="blue" />
+              <Stat
+                label="Available"
+                value={Math.max(0, kennels - occupiedKennels)}
+                tone="green"
+              />
+            </div>
+
+            <Link
+              href="/admin/pet-services/boarding"
+              className="mt-5 inline-flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-full bg-blue-500 text-white font-semibold text-sm hover:bg-blue-600 transition-colors shadow-sm"
+            >
+              View Boarding
+              <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        </section>
+      </div>
+
+      {/* Small operational summary */}
+      <div className="mt-5 rounded-2xl border border-zinc-200 bg-white px-5 py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <p className="font-semibold text-slate-800">Service overview</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {loading ? "Updating service information…" : "Information refreshes automatically."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-emerald-600 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            Connected
+          </div>
         </div>
       </div>
     </div>

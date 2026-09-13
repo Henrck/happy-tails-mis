@@ -1,0 +1,61 @@
+# Inventory refinement — low-stock priority
+
+In `app/(admin)/admin/inventory/page.tsx`, replace the existing
+`filteredProducts` useMemo with the following:
+
+```tsx
+const filteredProducts = useMemo(() => {
+  const q = search.trim().toLowerCase();
+
+  const matched = visibleProducts.filter(
+    (p) =>
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      p.product_code.toLowerCase().includes(q)
+  );
+
+  const enriched = matched.map((p) => {
+    const total = batches
+      .filter((b) => b.product_id === p.id)
+      .reduce((sum, b) => sum + b.quantity, 0);
+
+    return {
+      ...p,
+      totalStock: total,
+      statusLabel: total <= p.min_stock ? "Low Stock" : "In Stock",
+    };
+  });
+
+  // Default priority:
+  // Low Stock first, then In Stock.
+  // Clicking a table column keeps the existing explicit sort behavior.
+  if (!productsSortKey) {
+    return [...enriched].sort((a, b) => {
+      const aPriority = a.statusLabel === "Low Stock" ? 0 : 1;
+      const bPriority = b.statusLabel === "Low Stock" ? 0 : 1;
+
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  return sortRows(
+    enriched,
+    productsSortKey,
+    productsSortDirection
+  );
+}, [
+  visibleProducts,
+  search,
+  batches,
+  productsSortKey,
+  productsSortDirection,
+]);
+```
+
+This keeps the current stock calculation and pagination. It only changes
+the default product-table ordering so products requiring attention appear
+at the top.

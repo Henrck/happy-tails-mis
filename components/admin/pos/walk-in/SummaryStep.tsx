@@ -1,11 +1,8 @@
+// Summary + Save — final walk-in review.
+// Boarding now shows the requested kennel SIZE only. The actual kennel
+// number is assigned in the Appointment module during check-in.
 "use client";
-// Summary + Save — the final step. Matches the two reference images
-// (grooming and boarding "Check your Appointment" / "Confirm
-// Transaction" screens): owner info, pet info, schedule, services, total
-// amount, and the special-requests text already carried from Scheduling.
-// "Complete" actually calls createAppointment() for real — this is
-// where the whole wizard's draft state finally becomes a real database
-// row, for the first time in the whole flow.
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAppointment } from "@/lib/supabase/appointments";
@@ -16,12 +13,21 @@ import type { Groomer, Kennel } from "@/lib/types/pet-services";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function formatTime12h(time: string | null): string {
@@ -38,7 +44,6 @@ export default function SummaryStep({
   sizes,
   addons,
   groomers,
-  kennels,
   onBack,
   onDone,
 }: {
@@ -57,10 +62,14 @@ export default function SummaryStep({
   const [saved, setSaved] = useState(false);
 
   const isBoarding = draft.serviceChoice === "boarding";
-  const totalAmount = draft.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
+  const totalAmount = draft.petSelections.reduce(
+    (sum, sel) => sum + sel.lineAmount,
+    0
+  );
 
   async function handleComplete() {
     if (!draft.serviceChoice || !draft.scheduledDate) return;
+
     setSaving(true);
     setError(null);
 
@@ -79,19 +88,26 @@ export default function SummaryStep({
     });
 
     setSaving(false);
-    if (err) { setError(err); return; }
+
+    if (err) {
+      setError(err);
+      return;
+    }
+
     setSaved(true);
   }
 
   if (saved) {
     return (
-      <div className="max-w-md mx-auto text-center py-16">
-        <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-emerald-600"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <div className="mx-auto max-w-md py-16 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-emerald-600">
+            <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </div>
         <h2 className="mt-4 text-xl font-bold text-zinc-800">Booking Complete</h2>
         <p className="mt-1 text-sm text-zinc-500">The appointment has been saved.</p>
-        <button onClick={() => router.push("/admin/pos")} className="mt-6 w-full bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold py-2.5 rounded-full transition-colors">
+        <button onClick={() => router.push("/admin/pos")} className="mt-6 w-full rounded-full bg-brand-pink py-2.5 font-semibold text-white hover:bg-brand-pink-dark">
           Back to POS
         </button>
       </div>
@@ -99,14 +115,18 @@ export default function SummaryStep({
   }
 
   return (
-    <div className="max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold text-brand-pink text-center">{isBoarding ? "Check your Appointment" : "Confirm Transaction"}</h2>
-      <p className="mt-1 text-sm text-zinc-500 text-center">Review your order, agree to terms.</p>
+    <div className="mx-auto max-w-xl">
+      <h2 className="text-center text-2xl font-bold text-brand-pink">
+        {isBoarding ? "Check your Appointment" : "Confirm Transaction"}
+      </h2>
+      <p className="mt-1 text-center text-sm text-zinc-500">
+        Review your order, agree to terms.
+      </p>
 
       <div className="mt-5 rounded-2xl border-2 border-pink-100 p-5">
         <h3 className="text-lg font-bold text-brand-pink">Appointment Details</h3>
 
-        <div className="mt-3 pb-3 border-b border-dashed border-pink-200">
+        <div className="mt-3 border-b border-dashed border-pink-200 pb-3">
           <p className="text-xs font-bold text-brand-pink">Owner Information</p>
           <p className="mt-1 text-sm text-zinc-600">Name: {draft.ownerName || "—"}</p>
           <p className="text-sm text-zinc-600">Contact No: {draft.ownerContact || "—"}</p>
@@ -117,33 +137,50 @@ export default function SummaryStep({
           const pkg = packages.find((p) => p.id === sel.packageId);
           const size = sizes.find((s) => s.id === sel.sizeId);
           const groomer = groomers.find((g) => g.id === sel.groomerId);
-          const kennel = kennels.find((k) => k.id === sel.kennelId);
-          const petAddons = sel.addonIds.map((id) => addons.find((a) => a.id === id)?.name).filter(Boolean);
+          const petAddons = sel.addonIds
+            .map((id) => addons.find((a) => a.id === id)?.name)
+            .filter(Boolean);
 
           return (
-            <div key={sel.pet.id} className="py-3 border-b border-dashed border-pink-200 last:border-b-0">
+            <div key={sel.pet.id} className="border-b border-dashed border-pink-200 py-3 last:border-b-0">
               <p className="text-xs font-bold text-brand-pink">Pet Information</p>
               <p className="mt-1 text-sm text-zinc-600">Name: {sel.pet.name}</p>
               <p className="text-sm text-zinc-600">Breed: {sel.pet.breed}</p>
               <p className="text-sm text-zinc-600">Size: {sel.pet.size_label}</p>
 
               <p className="mt-2 text-xs font-bold text-brand-pink">Services</p>
+
               {isBoarding ? (
-                <p className="text-sm text-zinc-600">Kennel: {kennel ? `${kennel.size === "small" ? "Small" : "Big"} #${kennel.number}` : "—"}</p>
+                <p className="text-sm text-zinc-600">
+                  Kennel Size:{" "}
+                  {sel.boardingKennelSize === "small"
+                    ? "Small"
+                    : sel.boardingKennelSize === "big"
+                      ? "Big"
+                      : "—"}
+                </p>
               ) : (
                 <>
-                  <p className="text-sm text-zinc-600">Package: {pkg?.name ?? (sel.packageId ? "—" : "Ala Carte")}</p>
+                  <p className="text-sm text-zinc-600">
+                    Package: {pkg?.name ?? (sel.packageId ? "—" : "Ala Carte")}
+                  </p>
                   {size && <p className="text-sm text-zinc-600">Size: {size.label}</p>}
                   {groomer && <p className="text-sm text-zinc-600">Groomer: {groomer.name}</p>}
                 </>
               )}
-              {petAddons.length > 0 && <p className="text-sm text-zinc-600">Add-ons: {petAddons.join(", ")}</p>}
-              <p className="text-sm font-semibold text-zinc-800 mt-1">Line total: ₱{sel.lineAmount.toLocaleString()}</p>
+
+              {petAddons.length > 0 && (
+                <p className="text-sm text-zinc-600">Add-ons: {petAddons.join(", ")}</p>
+              )}
+
+              <p className="mt-1 text-sm font-semibold text-zinc-800">
+                Line total: ₱{sel.lineAmount.toLocaleString()}
+              </p>
             </div>
           );
         })}
 
-        <div className="pt-3 border-b border-dashed border-pink-200 pb-3">
+        <div className="border-b border-dashed border-pink-200 pb-3 pt-3">
           <p className="text-xs font-bold text-brand-pink">Schedule Appointment</p>
           {isBoarding ? (
             <>
@@ -160,27 +197,35 @@ export default function SummaryStep({
         </div>
 
         <div className="pt-3">
-          <p className="text-lg font-bold text-brand-pink">Total Amount: ₱{totalAmount.toLocaleString()}</p>
+          <p className="text-lg font-bold text-brand-pink">
+            Total Amount: ₱{totalAmount.toLocaleString()}
+          </p>
         </div>
 
         {draft.specialRequests && (
           <div className="mt-3 rounded-lg border border-pink-100 px-3 py-2">
-            <p className="text-xs font-semibold text-zinc-500">Special Requests / Medical Conditions / Allergies / Feeding Instruction</p>
+            <p className="text-xs font-semibold text-zinc-500">
+              Special Requests / Medical Conditions / Allergies / Feeding Instruction
+            </p>
             <p className="mt-0.5 text-sm text-zinc-700">{draft.specialRequests}</p>
           </div>
         )}
       </div>
 
-      {error && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="mt-6 flex gap-3">
-        <button onClick={onBack} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold py-2.5 rounded-full hover:border-zinc-400 transition-colors">
+        <button onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 hover:border-zinc-400">
           Back
         </button>
         <button
           onClick={handleComplete}
           disabled={saving}
-          className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-50 text-white font-semibold py-2.5 rounded-full transition-colors"
+          className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-50"
         >
           {saving ? "Saving…" : "Complete Appointment"}
         </button>

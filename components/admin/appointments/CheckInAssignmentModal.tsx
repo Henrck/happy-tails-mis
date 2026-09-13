@@ -19,6 +19,8 @@ export default function CheckInAssignmentModal({appointment,onClose,onSuccess}:{
    setError(r.error);setLoading(false);
  })()},[boarding]);
 
+ const kennelOptions=(pet:{requestedKennelSize:"small"|"big"|null})=>
+   pet.requestedKennelSize ? kennels.filter(k=>k.size===pet.requestedKennelSize) : [];
  const complete=appointment.pets.length>0&&appointment.pets.every(p=>chosen[p.appointmentPetId]);
  async function save(){
    if(!complete){setError("Assign a resource to every pet before checking in.");return}
@@ -43,9 +45,11 @@ export default function CheckInAssignmentModal({appointment,onClose,onSuccess}:{
       <span className="text-[11px] bg-pink-50 text-brand-pink px-2 py-1 rounded-full">{boarding?"Boarding":"Grooming"}</span></div>
       <select value={chosen[p.appointmentPetId]??""} onChange={e=>setChosen({...chosen,[p.appointmentPetId]:e.target.value})} className="w-full rounded-xl border border-pink-200 px-3 py-2.5 text-sm">
        <option value="">Select {boarding?"a kennel":"a groomer"}</option>
-       {boarding?kennels.map(k=><option key={k.id} value={k.id}>{k.size==="small"?"Small":"Big"} Kennel #{k.number}</option>)
+       {boarding?kennelOptions(p).map(k=><option key={k.id} value={k.id}>{k.size==="small"?"Small":"Big"} Kennel #{k.number}</option>)
        :groomers.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
       </select>
+      {boarding && !p.requestedKennelSize && <p className="mt-2 text-xs text-red-500">No kennel size is recorded for this appointment.</p>}
+      {boarding && p.requestedKennelSize && kennelOptions(p).length===0 && <p className="mt-2 text-xs text-yellow-700">No available {p.requestedKennelSize} kennels for this appointment.</p>}
      </div>)}</div>
      {error&&<p className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600">{error}</p>}
      {((boarding&&!kennels.length)||(!boarding&&!groomers.length))&&<p className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-700">No available {boarding?"kennels":"groomers"} right now.</p>}

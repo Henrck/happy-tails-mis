@@ -1,14 +1,8 @@
 "use client";
-// Boarding Selection: inclusions reminder, kennel assignment per pet
-// (with real capacity checking so 2 small dogs can share, but a large
-// dog can't be crammed in with anyone), duration/rate per kennel size in
-// use, then boarding add-ons.
+
 import { useState, useEffect, useCallback } from "react";
 import { fetchPackagesFull, fetchAddonsByCategory } from "@/lib/supabase/services";
-import { fetchKennels } from "@/lib/supabase/pet-services";
-import { canFitInKennel, fetchKennelOccupants } from "@/lib/supabase/appointments";
 import type { Package, PackagePricing, Addon, AddonPrice } from "@/lib/types/services";
-import type { Kennel } from "@/lib/types/pet-services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 
 const INCLUSIONS = [
@@ -19,11 +13,17 @@ const INCLUSIONS = [
   "Free bath & blow dry (for boarding of at least 4 nights)",
 ];
 
+type BoardingKennelSize = "small" | "big";
+
+function labelForSize(size: BoardingKennelSize) {
+  return size === "small" ? "Small Kennel" : "Big Kennel";
+}
+
 export default function BoardingSelectionStep({
   pets,
   selections,
   onChange,
-  scheduledDate,
+  scheduledDate: _scheduledDate,
   onBack,
   onNext,
 }: {
@@ -34,23 +34,33 @@ export default function BoardingSelectionStep({
   onBack: () => void;
   onNext: () => void;
 }) {
-  const [kennels, setKennels] = useState<Kennel[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [pricing, setPricing] = useState<PackagePricing[]>([]);
   const [addons, setAddons] = useState<Addon[]>([]);
   const [addonPrices, setAddonPrices] = useState<AddonPrice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [kennelError, setKennelError] = useState<string | null>(null);
-  const [durationRateId, setDurationRateId] = useState<Record<"small" | "big", string | null>>({ small: null, big: null });
+  const [durationRateId, setDurationRateId] = useState<
+    Record<BoardingKennelSize, string | null>
+  >({ small: null, big: null });
+  const [customNights, setCustomNights] = useState<Record<string, number>>({});
+
+  function isSevenDaysOrMore(rate: PackagePricing) {
+    const label = `${rate.size_label ?? ""} ${rate.size_detail ?? ""}`.toLowerCase();
+    return label.includes("7") || label.includes("week");
+  }
+
+  function getNights(petId: string) {
+    return Math.max(7, Number(customNights[petId] || 7));
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [kennelResult, pkgResult, addonResult] = await Promise.all([
-      fetchKennels(),
+
+    const [pkgResult, addonResult] = await Promise.all([
       fetchPackagesFull("boarding"),
       fetchAddonsByCategory("Boarding Add-ons"),
     ]);
-    setKennels(kennelResult.kennels);
+
     setPackages(pkgResult.packages);
     setPricing(pkgResult.pricing);
     setAddons(addonResult.addons.filter((a) => a.is_active));
@@ -58,192 +68,485 @@ export default function BoardingSelectionStep({
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Restore selected duration/rate when returning to this step.
+  useEffect(() => {
+    const restored: Record<BoardingKennelSize, string | null> = {
+      small: null,
+      big: null,
+    };
+
+    for (const selection of selections) {
+      if (!selection.packagePricingId) continue;
+
+      const rate = pricing.find((p) => p.id === selection.packagePricingId);
+      const pkg = rate ? packages.find((p) => p.id === rate.package_id) : null;
+      if (!pkg) continue;
+
+      const lower = pkg.name.toLowerCase();
+      if (lower.includes("small")) restored.small = rate.id;
+      if (lower.includes("big")) restored.big = rate.id;
+    }
+
+    // selections is updated by computeTotals(), so this effect can run again
+    // even when the restored rate IDs have not actually changed. Do not call
+    // setState with a new object unless the values are different; otherwise
+    // React can enter a render -> effect -> setState loop.
+    setDurationRateId((previous) => {
+      if (
+        previous.small === restored.small &&
+        previous.big === restored.big
+      ) {
+        return previous;
+      }
+      return restored;
+    });
+  }, [selections, pricing, packages]);
 
   function selectionFor(pet: Pet) {
     return selections.find((s) => s.pet.id === pet.id);
   }
 
-  function updateSelection(pet: Pet, patch: Partial<DraftPetSelection>) {
+  function updateSelection(
+    pet: Pet,
+    patch: Partial<DraftPetSelection>
+  ) {
     const existing = selectionFor(pet);
-    const base: DraftPetSelection = existing ?? { pet, packageId: null, packagePricingId: null, sizeId: null, kennelId: null, groomerId: null, addonIds: [], lineAmount: 0 };
-    onChange([...selections.filter((s) => s.pet.id !== pet.id), { ...base, ...patch }]);
+
+    const base: DraftPetSelection =
+      existing ?? {
+        pet,
+        packageId: null,
+        packagePricingId: null,
+        sizeId: null,
+        kennelId: null,
+        groomerId: null,
+        addonIds: [],
+        lineAmount: 0,
+      };
+
+    onChange([
+      ...selections.filter((s) => s.pet.id !== pet.id),
+      { ...base, ...patch },
+    ]);
   }
 
-  // A kennel can hold more than one pet from THIS booking (the whole
-  // point of the sharing rule) — so "who's assigned to kennel X" is
-  // computed live from the other pets in this same draft, not just
-  // real DB occupancy (which only matters for pets NOT in this booking).
-  async function tryAssignKennel(pet: Pet, kennel: Kennel) {
-    setKennelError(null);
-    const petsAlreadyInThisKennel = selections
-      .filter((s) => s.kennelId === kennel.id && s.pet.id !== pet.id)
-      .map((s) => ({ size_label: s.pet.size_label }));
+  function selectKennelSize(
+    pet: Pet,
+    size: BoardingKennelSize
+  ) {
+    const current = selectionFor(pet);
 
-    let existingOccupants = petsAlreadyInThisKennel;
-    if (scheduledDate) {
-      const { occupants } = await fetchKennelOccupants(kennel.id, scheduledDate);
-      existingOccupants = [...existingOccupants, ...occupants];
-    }
+    // A real kennel number is deliberately NOT selected here.
+    // The appointment module assigns the actual kennel at check-in.
+    const selectedRateId = durationRateId[size];
+    const selectedPackage = packages.find((pkg) =>
+      pkg.name.toLowerCase().includes(size === "small" ? "small" : "big")
+    );
 
-    const result = canFitInKennel(kennel.size, existingOccupants, pet.size_label);
-    if (!result.fits) {
-      setKennelError(`${pet.name} can't be assigned to Kennel ${kennel.number}: ${result.reason}`);
-      return;
+    updateSelection(pet, {
+      kennelId: null,
+      boardingKennelSize: size,
+      packageId: selectedPackage?.id ?? null,
+      packagePricingId: selectedRateId,
+    });
+
+    if (selectedRateId) {
+      const rate = pricing.find((p) => p.id === selectedRateId);
+      if (rate) {
+        const addonsTotal =
+          current?.addonIds.reduce(
+            (sum, id) =>
+              sum +
+              (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+            0
+          ) ?? 0;
+
+        updateSelection(pet, {
+          kennelId: null,
+          boardingKennelSize: size,
+          packageId: selectedPackage?.id ?? null,
+          packagePricingId: selectedRateId,
+          lineAmount:
+            (rate.is_per_night && isSevenDaysOrMore(rate)
+              ? rate.price * getNights(sel.pet.id)
+              : rate.price) + addonsTotal,
+        });
+      }
     }
-    updateSelection(pet, { kennelId: kennel.id });
   }
 
-  const kennelSizesInUse = Array.from(
-    new Set(selections.filter((s) => s.kennelId).map((s) => kennels.find((k) => k.id === s.kennelId)?.size).filter(Boolean))
-  ) as ("small" | "big")[];
+  function pricingFor(size: BoardingKennelSize) {
+    const pkg = packages.find((p) =>
+      p.name.toLowerCase().includes(size === "small" ? "small" : "big")
+    );
 
-  // REAL BUG FIXED: this used to filter by checking if size_label
-  // contained the word "small"/"big" — but size_label actually holds
-  // the DURATION text ("1 Night", "3 Days & 2 Nights", etc.), never the
-  // kennel size. Kennel size is distinguished by which PACKAGE the
-  // pricing row belongs to (a real "Small Kennel" package and a real
-  // "Big Kennel" package, confirmed directly against the live data),
-  // not by anything in size_label. That's why duration/rate never
-  // showed for either kennel size, in either the walk-in or customer
-  // flow — both used this same component, and the filter could never
-  // have matched anything, regardless of which kennel was picked.
-  function pricingFor(size: "small" | "big"): PackagePricing[] {
-    const pkg = packages.find((p) => p.name.toLowerCase().includes(size === "small" ? "small" : "big"));
     if (!pkg) return [];
     return pricing.filter((p) => p.package_id === pkg.id);
   }
 
   function computeTotals() {
     const updated = selections.map((sel) => {
-      let total = 0;
-      const kennel = kennels.find((k) => k.id === sel.kennelId);
-      const rateId = kennel ? durationRateId[kennel.size] : null;
+      const size = sel.boardingKennelSize;
+      const rateId = size ? durationRateId[size] : null;
       const rate = pricing.find((p) => p.id === rateId);
-      if (rate) total += rate.price;
-      for (const addonId of sel.addonIds) {
-        const priceRow = addonPrices.find((p) => p.addon_id === addonId);
-        if (priceRow) total += priceRow.price;
+
+      if (!rate) {
+        return {
+          ...sel,
+          kennelId: null,
+          packagePricingId: null,
+          lineAmount: sel.addonIds.reduce(
+            (sum, id) =>
+              sum +
+              (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+            0
+          ),
+        };
       }
-      // REAL BUG FIXED: this used to store rateId into packageId,
-      // which has a real foreign key to packages.id — a
-      // package_pricing.id saved there violated that constraint the
-      // moment a real boarding booking tried to save
-      // (appointment_pets_package_id_fkey). Now uses the real
-      // packagePricingId field added for exactly this (034), and
-      // packageId stays correctly null for boarding, same as it
-      // already is for Ala Carte.
-      return { ...sel, packagePricingId: rateId, lineAmount: total };
+
+      const addonsTotal = sel.addonIds.reduce(
+        (sum, id) =>
+          sum +
+          (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+        0
+      );
+
+      return {
+        ...sel,
+        kennelId: null,
+        packageId: rate.package_id,
+        packagePricingId: rate.id,
+        lineAmount:
+          (rate.is_per_night && isSevenDaysOrMore(rate)
+            ? rate.price * getNights(sel.pet.id)
+            : rate.price) + addonsTotal,
+      };
     });
+
     onChange(updated);
   }
 
-  useEffect(() => { computeTotals(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [durationRateId]);
+  useEffect(() => {
+    if (pricing.length > 0) {
+      computeTotals();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [durationRateId, customNights, pricing.length, addonPrices.length]);
+
+  function selectRate(
+    pet: Pet,
+    size: BoardingKennelSize,
+    rate: PackagePricing
+  ) {
+    setDurationRateId((prev) => ({ ...prev, [size]: rate.id }));
+
+    const sel = selectionFor(pet);
+    const addonsTotal =
+      sel?.addonIds.reduce(
+        (sum, id) =>
+          sum +
+          (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+        0
+      ) ?? 0;
+
+    updateSelection(pet, {
+      kennelId: null,
+      boardingKennelSize: size,
+      packageId: rate.package_id,
+      packagePricingId: rate.id,
+      lineAmount: rate.price + addonsTotal,
+    });
+  }
 
   function toggleAddon(pet: Pet, addonId: string) {
     const sel = selectionFor(pet);
     if (!sel) return;
-    const addonIds = sel.addonIds.includes(addonId) ? sel.addonIds.filter((id) => id !== addonId) : [...sel.addonIds, addonId];
+
+    const addonIds = sel.addonIds.includes(addonId)
+      ? sel.addonIds.filter((id) => id !== addonId)
+      : [...sel.addonIds, addonId];
+
     updateSelection(pet, { addonIds });
   }
 
-  const allPetsHaveKennel = pets.every((p) => selectionFor(p)?.kennelId);
-  const allRatesChosen = kennelSizesInUse.every((size) => durationRateId[size]);
+  const allPetsHaveKennelSize = pets.every(
+    (pet) => selectionFor(pet)?.boardingKennelSize
+  );
 
-  if (loading) return <p className="text-center text-zinc-400 py-16">Loading kennels…</p>;
+  const allRatesChosen = pets.every((pet) => {
+    const size = selectionFor(pet)?.boardingKennelSize;
+    return !!size && !!durationRateId[size];
+  });
+
+  if (loading) {
+    return (
+      <p className="py-16 text-center text-zinc-400">
+        Loading boarding options…
+      </p>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold text-brand-pink text-center">Pet Hotel / Boarding</h2>
-      <p className="mt-1 text-sm text-zinc-500 text-center">Select a kennel for each pet, then choose duration and rate.</p>
+    <div className="mx-auto max-w-3xl">
+      <h2 className="text-center text-2xl font-bold text-brand-pink">
+        Pet Hotel / Boarding
+      </h2>
+      <p className="mt-1 text-center text-sm text-zinc-500">
+        Choose the kennel size for each pet, then select the boarding duration.
+      </p>
 
       <div className="mt-5 rounded-2xl border-2 border-pink-100 p-4">
-        <p className="font-bold text-brand-pink text-sm">🏠 Pet Hotel Inclusions</p>
+        <p className="text-sm font-bold text-brand-pink">
+          🏠 Pet Hotel Inclusions
+        </p>
         <ul className="mt-2 space-y-1">
           {INCLUSIONS.map((inc) => (
-            <li key={inc} className="flex items-center gap-1.5 text-xs text-zinc-600">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-brand-pink shrink-0"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <li
+              key={inc}
+              className="flex items-center gap-1.5 text-xs text-zinc-600"
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                className="shrink-0 text-brand-pink"
+              >
+                <path
+                  d="M5 13l4 4L19 7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
               {inc}
             </li>
           ))}
         </ul>
       </div>
 
-      {kennelError && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{kennelError}</p>}
+      <div className="mt-5 rounded-xl bg-sky-50 px-4 py-3 text-xs text-sky-700">
+        <strong>Kennel assignment:</strong> You only need to choose a Small or
+        Big kennel here. The specific kennel number will be assigned by staff
+        in the Appointment module when your pet checks in.
+      </div>
 
-      <p className="mt-6 font-bold text-zinc-800">Assign Kennels</p>
+      <p className="mt-6 font-bold text-zinc-800">
+        Kennel Size
+      </p>
+
       <div className="mt-2 space-y-3">
         {pets.map((pet) => {
           const sel = selectionFor(pet);
-          const assignedKennel = kennels.find((k) => k.id === sel?.kennelId);
+          const selectedSize = sel?.boardingKennelSize;
+
           return (
-            <div key={pet.id} className="bg-white rounded-xl border border-pink-100 p-3">
-              <p className="text-sm font-semibold text-zinc-800">{pet.name} <span className="font-normal text-zinc-400">({pet.size_label})</span></p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {kennels.map((k) => (
-                  <button
-                    key={k.id}
-                    onClick={() => tryAssignKennel(pet, k)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold border-2 transition-colors ${
-                      sel?.kennelId === k.id ? "bg-brand-pink border-brand-pink text-white" : "border-pink-200 text-zinc-600 hover:border-brand-pink"
-                    }`}
-                  >
-                    {k.size === "small" ? "Small" : "Big"} #{k.number}
-                  </button>
-                ))}
+            <div
+              key={pet.id}
+              className="rounded-xl border border-pink-100 bg-white p-4"
+            >
+              <p className="text-sm font-semibold text-zinc-800">
+                {pet.name}
+                <span className="font-normal text-zinc-400">
+                  {" "}
+                  ({pet.size_label})
+                </span>
+              </p>
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {(["small", "big"] as BoardingKennelSize[]).map((size) => {
+                  const active = selectedSize === size;
+
+                  return (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => selectKennelSize(pet, size)}
+                      className={[
+                        "rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-colors",
+                        active
+                          ? "border-brand-pink bg-brand-pink text-white"
+                          : "border-pink-200 bg-white text-zinc-700 hover:border-brand-pink hover:bg-pink-50",
+                      ].join(" ")}
+                    >
+                      {labelForSize(size)}
+                    </button>
+                  );
+                })}
               </div>
-              {assignedKennel && <p className="mt-1.5 text-xs text-emerald-600">Assigned: {assignedKennel.size === "small" ? "Small" : "Big"} Kennel #{assignedKennel.number}</p>}
+
+              {selectedSize && (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold text-zinc-500">
+                    {labelForSize(selectedSize)} duration
+                  </p>
+
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {pricingFor(selectedSize).map((rate) => {
+                      const active = durationRateId[selectedSize] === rate.id;
+
+                      return (
+                        <button
+                          key={rate.id}
+                          type="button"
+                          onClick={() => selectRate(pet, selectedSize, rate)}
+                          className={[
+                            "rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-colors",
+                            active
+                              ? "border-brand-pink bg-brand-pink text-white"
+                              : "border-pink-200 text-zinc-700 hover:border-brand-pink",
+                          ].join(" ")}
+                        >
+                          {rate.size_detail ?? rate.size_label} — ₱
+                          {rate.price.toLocaleString()}
+                          {rate.is_per_night ? " / night" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {durationRateId[selectedSize] &&
+                    pricingFor(selectedSize).some(
+                      (rate) =>
+                        rate.id === durationRateId[selectedSize] &&
+                        isSevenDaysOrMore(rate)
+                    ) && (
+                      <div className="mt-3 rounded-xl bg-pink-50 p-3">
+                        <label
+                          htmlFor={`boarding-nights-${pet.id}`}
+                          className="block text-xs font-semibold text-zinc-700"
+                        >
+                          Number of nights
+                        </label>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            id={`boarding-nights-${pet.id}`}
+                            type="number"
+                            min={7}
+                            step={1}
+                            value={getNights(pet.id)}
+                            onChange={(event) => {
+                              const nights = Math.max(
+                                7,
+                                Number(event.target.value) || 7
+                              );
+                              setCustomNights((prev) => ({
+                                ...prev,
+                                [pet.id]: nights,
+                              }));
+
+                              const current = selectionFor(pet);
+                              const selectedRate = pricing.find(
+                                (rate) =>
+                                  rate.id === durationRateId[selectedSize]
+                              );
+
+                              if (selectedRate) {
+                                const addonsTotal =
+                                  current?.addonIds.reduce(
+                                    (sum, id) =>
+                                      sum +
+                                      (addonPrices.find(
+                                        (p) => p.addon_id === id
+                                      )?.price ?? 0),
+                                    0
+                                  ) ?? 0;
+
+                                updateSelection(pet, {
+                                  kennelId: null,
+                                  boardingKennelSize: selectedSize,
+                                  packagePricingId: selectedRate.id,
+                                  lineAmount:
+                                    selectedRate.price * nights +
+                                    addonsTotal,
+                                });
+                              }
+                            }}
+                            className="w-28 rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-brand-pink focus:ring-2 focus:ring-pink-100"
+                          />
+                          <span className="text-xs text-zinc-500">
+                            nights × ₱{selectedSize
+                              ? (
+                                  pricing.find(
+                                    (rate) =>
+                                      rate.id === durationRateId[selectedSize]
+                                  )?.price ?? 550
+                                ).toLocaleString()
+                              : "550"}
+                            {" "}per night
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-zinc-400">
+                          7 nights = ₱{(
+                            (pricing.find(
+                              (rate) =>
+                                rate.id === durationRateId[selectedSize]
+                            )?.price ?? 550) * getNights(pet.id)
+                          ).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
 
-      {kennelSizesInUse.length > 0 && (
+      {addons.length > 0 && allPetsHaveKennelSize && (
         <>
-          <p className="mt-6 font-bold text-zinc-800">Duration & Rate</p>
-          <div className="mt-2 space-y-3">
-            {kennelSizesInUse.map((size) => (
-              <div key={size}>
-                <p className="text-sm font-semibold text-zinc-600">{size === "small" ? "Small Kennel" : "Big Kennel"} rate</p>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {pricingFor(size).map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setDurationRateId((prev) => ({ ...prev, [size]: p.id }))}
-                      className={`px-4 py-2 rounded-lg border-2 text-xs font-semibold transition-colors ${
-                        durationRateId[size] === p.id ? "bg-brand-pink border-brand-pink text-white" : "border-pink-200 text-zinc-700 hover:border-brand-pink"
-                      }`}
-                    >
-                      {p.size_detail ?? p.size_label} — ₱{p.price.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+          <p className="mt-6 font-bold text-zinc-800">
+            Add-Ons{" "}
+            <span className="text-sm font-normal text-zinc-400">
+              (Optional)
+            </span>
+          </p>
 
-      {addons.length > 0 && allPetsHaveKennel && (
-        <>
-          <p className="mt-6 font-bold text-zinc-800">Add-Ons <span className="font-normal text-zinc-400 text-sm">(Optional)</span></p>
           {pets.map((pet) => {
             const sel = selectionFor(pet);
+
             return (
               <div key={pet.id} className="mt-2">
-                <p className="text-xs font-semibold text-zinc-500">{pet.name}</p>
-                <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <p className="text-xs font-semibold text-zinc-500">
+                  {pet.name}
+                </p>
+
+                <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {addons.map((addon) => {
-                    const priceRow = addonPrices.find((p) => p.addon_id === addon.id);
+                    const priceRow = addonPrices.find(
+                      (p) => p.addon_id === addon.id
+                    );
                     const selected = sel?.addonIds.includes(addon.id);
+
                     return (
                       <button
                         key={addon.id}
+                        type="button"
                         onClick={() => toggleAddon(pet, addon.id)}
-                        className={`text-left rounded-xl border-2 px-3 py-2 text-xs transition-colors ${selected ? "bg-brand-pink border-brand-pink text-white" : "border-pink-100 text-zinc-700 hover:border-pink-200"}`}
+                        className={[
+                          "rounded-xl border-2 px-3 py-2 text-left text-xs transition-colors",
+                          selected
+                            ? "border-brand-pink bg-brand-pink text-white"
+                            : "border-pink-100 text-zinc-700 hover:border-pink-200",
+                        ].join(" ")}
                       >
                         <p className="font-semibold">{addon.name}</p>
-                        {priceRow && <p className={selected ? "text-white/80" : "text-zinc-400"}>+₱{priceRow.price}</p>}
+                        {priceRow && (
+                          <p
+                            className={
+                              selected
+                                ? "text-white/80"
+                                : "text-zinc-400"
+                            }
+                          >
+                            +₱{priceRow.price}
+                          </p>
+                        )}
                       </button>
                     );
                   })}
@@ -255,13 +558,22 @@ export default function BoardingSelectionStep({
       )}
 
       <div className="mt-8 flex gap-3">
-        <button onClick={onBack} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold py-2.5 rounded-full hover:border-zinc-400 transition-colors">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 transition-colors hover:border-zinc-400"
+        >
           Back
         </button>
+
         <button
-          onClick={() => { computeTotals(); onNext(); }}
-          disabled={!allPetsHaveKennel || !allRatesChosen}
-          className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-full transition-colors"
+          type="button"
+          onClick={() => {
+            computeTotals();
+            onNext();
+          }}
+          disabled={!allPetsHaveKennelSize || !allRatesChosen}
+          className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white transition-colors hover:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
           Next
         </button>
