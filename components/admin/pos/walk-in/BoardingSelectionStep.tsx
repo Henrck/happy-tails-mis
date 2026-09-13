@@ -83,7 +83,9 @@ export default function BoardingSelectionStep({
       if (!selection.packagePricingId) continue;
 
       const rate = pricing.find((p) => p.id === selection.packagePricingId);
-      const pkg = rate ? packages.find((p) => p.id === rate.package_id) : null;
+      if (!rate) continue;
+
+      const pkg = packages.find((p) => p.id === rate.package_id);
       if (!pkg) continue;
 
       const lower = pkg.name.toLowerCase();
@@ -172,7 +174,7 @@ export default function BoardingSelectionStep({
           packagePricingId: selectedRateId,
           lineAmount:
             (rate.is_per_night && isSevenDaysOrMore(rate)
-              ? rate.price * getNights(sel.pet.id)
+              ? rate.price * getNights(pet.id)
               : rate.price) + addonsTotal,
         });
       }
@@ -221,9 +223,9 @@ export default function BoardingSelectionStep({
         packageId: rate.package_id,
         packagePricingId: rate.id,
         lineAmount:
-          (rate.is_per_night && isSevenDaysOrMore(rate)
-            ? rate.price * getNights(sel.pet.id)
-            : rate.price) + addonsTotal,
+  (rate.is_per_night && isSevenDaysOrMore(rate)
+    ? rate.price * getNights(sel.pet.id)
+    : rate.price) + addonsTotal,
       };
     });
 

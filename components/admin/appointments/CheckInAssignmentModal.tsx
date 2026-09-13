@@ -15,7 +15,7 @@ export default function CheckInAssignmentModal({appointment,onClose,onSuccess}:{
 
  useEffect(()=>{(async()=>{
    const r=boarding?await fetchAvailableKennels():await fetchAvailableGroomers();
-   if(boarding)setKennels(r.kennels);else setGroomers(r.groomers);
+   if("kennels" in r)setKennels(r.kennels);else setGroomers(r.groomers);
    setError(r.error);setLoading(false);
  })()},[boarding]);
 

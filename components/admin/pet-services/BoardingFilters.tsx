@@ -4,7 +4,7 @@ import type { BoardingStage } from "@/lib/data/boarding-kennels-mock";
 
 export type BoardingFilterState = {
   search: string;
-  status: BoardingStage | "all";
+  status: BoardingStage | "all" | "available" | "in_progress";
 };
 
 export default function BoardingFilters({

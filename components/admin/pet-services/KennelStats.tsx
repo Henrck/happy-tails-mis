@@ -1,6 +1,12 @@
-import type { Kennel } from "@/lib/data/boarding-kennels-mock";
+type KennelStatSession = {
+  stage: "booked" | "checked_in" | "checked_out" | "cancelled";
+};
 
-export default function KennelStats({ kennels }: { kennels: Kennel[] }) {
+type KennelStatItem = {
+  session: KennelStatSession | null;
+};
+
+export default function KennelStats({ kennels }: { kennels: KennelStatItem[] }) {
   const total = kennels.length;
   const inProgress = kennels.filter((k) => k.session?.stage === "checked_in").length;
   const scheduled = kennels.filter((k) => k.session?.stage === "booked").length;

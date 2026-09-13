@@ -1,5 +1,6 @@
 import { createClient } from "./client";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
+import type { BoardingStage } from "@/lib/data/boarding-kennels-mock";
 
 export type GroomingSessionRow = {
   appointmentId:string; appointmentPetId:string; petId:string; petName:string; breed:string;
@@ -8,7 +9,7 @@ export type GroomingSessionRow = {
 export type BoardingSessionRow = {
   appointmentId:string; appointmentPetId:string; petId:string; petName:string; breed:string;
   ownerName:string; dropOffAt:string|null; pickUpAt:string|null; kennelId:string;
-  kennelSize:"small"|"big"; kennelNumber:number;
+  kennelSize:"small"|"big"; kennelNumber:number; stage:BoardingStage;
 };
 
 export async function fetchGroomingSessions() {
@@ -35,7 +36,7 @@ export async function fetchBoardingSessions() {
     id, pet_id, kennel_id,
     appointments!inner(id,owner_name,drop_off_at,pick_up_at,status,service_type),
     pets(id,name,breed), kennels(id,size,number)
-  `).not("kennel_id","is",null).eq("appointments.status","checked_in")
+  `).not("kennel_id","is",null).in("appointments.status",["confirmed","checked_in"])
    .eq("appointments.service_type","boarding");
   if(error)return {sessions:[] as BoardingSessionRow[],error:error.message};
   const rows=(data??[]) as any[];
@@ -44,7 +45,8 @@ export async function fetchBoardingSessions() {
     petName:r.pets?.name??"Unknown pet", breed:r.pets?.breed??"—", ownerName:r.appointments.owner_name,
     dropOffAt:r.appointments.drop_off_at, pickUpAt:r.appointments.pick_up_at,
     kennelId:r.kennels?.id??r.kennel_id, kennelSize:r.kennels?.size??"small",
-    kennelNumber:r.kennels?.number??0
+    kennelNumber:r.kennels?.number??0,
+    stage:r.appointments.status === "confirmed" ? "booked" : "checked_in"
   })) as BoardingSessionRow[],error:null};
 }
 
@@ -78,9 +80,24 @@ export async function checkInAppointment(id:string, assignments:{appointmentPetI
   if(assignments.some(x=>x.resourceType!==type))return {error:`This appointment requires ${type} assignment.`};
   const active=type==="groomer"?await fetchGroomingSessions():await fetchBoardingSessions();
   if(active.error)return {error:active.error};
-  const busy = type === "groomer"
-    ? new Set(active.sessions.map(x => x.groomerId))
-    : new Set(active.sessions.map(x => x.kennelId));
+  const busy =
+  type === "groomer"
+    ? new Set(
+        active.sessions
+          .filter(
+            (x): x is GroomingSessionRow =>
+              x.appointmentId !== id && "groomerId" in x
+          )
+          .map((x) => x.groomerId)
+      )
+    : new Set(
+        active.sessions
+          .filter(
+            (x): x is BoardingSessionRow =>
+              x.appointmentId !== id && "kennelId" in x
+          )
+          .map((x) => x.kennelId)
+      );
   if(assignments.some(x=>busy.has(x.resourceId)))return {error:`A selected ${type} is already in use.`};
   if(new Set(assignments.map(x=>x.appointmentPetId)).size!==assignments.length)return {error:"Each pet can only have one assignment."};
 
