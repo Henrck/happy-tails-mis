@@ -11,7 +11,11 @@ export type SiteSettingKey =
   | "grooming_diamond_image"
   | "grooming_premium_image"
   | "boarding_small_kennel_image"
-  | "boarding_big_kennel_image";
+  | "boarding_big_kennel_image"
+  | "pet_avatar_dog_male"
+  | "pet_avatar_dog_female"
+  | "pet_avatar_cat_male"
+  | "pet_avatar_cat_female";
 
 export type SiteSetting = {
   key: SiteSettingKey;
@@ -35,4 +39,8 @@ export const SITE_SETTING_LABELS: Record<SiteSettingKey, string> = {
   grooming_premium_image: "Grooming — Premium Photo",
   boarding_small_kennel_image: "Boarding — Small Kennel Photo",
   boarding_big_kennel_image: "Boarding — Big Kennel Photo",
+  pet_avatar_dog_male: "Pet Avatar — Dog (Male)",
+  pet_avatar_dog_female: "Pet Avatar — Dog (Female)",
+  pet_avatar_cat_male: "Pet Avatar — Cat (Male)",
+  pet_avatar_cat_female: "Pet Avatar — Cat (Female)",
 };

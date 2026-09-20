@@ -13,6 +13,7 @@ import {
   type BoardingSessionRow,
 } from "@/lib/supabase/service-sessions";
 import type { Kennel, KennelSize } from "@/lib/types/pet-services";
+import { completeAppointmentPet } from "@/lib/supabase/appointment-management";
 import KennelStats from "@/components/admin/pet-services/KennelStats";
 import BoardingFilters, {
   type BoardingFilterState,
@@ -20,6 +21,7 @@ import BoardingFilters, {
 import BoardingHistoryModal from "@/components/admin/pet-services/BoardingHistoryModal";
 import OpsKennelCard from "@/components/admin/operations/OpsKennelCard";
 import AddKennelModal from "@/components/admin/operations/AddKennelModal";
+import SessionDetailsModal from "@/components/admin/pet-services/SessionDetailsModal";
 
 export default function BoardingManagementPage() {
   const router = useRouter();
@@ -36,6 +38,15 @@ export default function BoardingManagementPage() {
 
   const [history, setHistory] = useState(false);
   const [add, setAdd] = useState(false);
+  const [viewing, setViewing] = useState<BoardingSessionRow | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
+
+  async function handleComplete(appointmentPetId: string) {
+    setCompletingId(appointmentPetId);
+    const { error } = await completeAppointmentPet(appointmentPetId, "kennel");
+    if (error) setError(error);
+    setCompletingId(null);
+  }
 
   const load = useCallback(async () => {
     const [k, s] = await Promise.all([
@@ -198,21 +209,24 @@ export default function BoardingManagementPage() {
                 </div>
 
                 <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                  {cards(size).map((k) => (
-                    <OpsKennelCard
-                      key={k.id}
-                      kennel={k}
-                      session={
-                        sessions.find(
-                          (s) => s.kennelId === k.id
-                        ) ?? null
-                      }
-                      onView={() => {}}
-                      onRemove={() =>
-                        removeK(k.id)
-                      }
-                    />
-                  ))}
+                  {cards(size).map((k) => {
+                    const s = sessions.find((s) => s.kennelId === k.id) ?? null;
+                    return (
+                      <OpsKennelCard
+                        key={k.id}
+                        kennel={k}
+                        session={s}
+                        onView={() => setViewing(s)}
+                        onRemove={() =>
+                          removeK(k.id)
+                        }
+                        onComplete={() => {
+                          if (s) handleComplete(s.appointmentPetId);
+                        }}
+                        completing={s ? completingId === s.appointmentPetId : false}
+                      />
+                    );
+                  })}
 
                   {cards(size).length === 0 && (
                     <p className="col-span-full text-center text-zinc-400 py-6">
@@ -238,6 +252,14 @@ export default function BoardingManagementPage() {
           nextNumber={next}
           onClose={() => setAdd(false)}
           onAdd={addK}
+        />
+      )}
+
+      {viewing && (
+        <SessionDetailsModal
+          appointmentId={viewing.appointmentId}
+          appointmentPetId={viewing.appointmentPetId}
+          onClose={() => setViewing(null)}
         />
       )}
     </div>

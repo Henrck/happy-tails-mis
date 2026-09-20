@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchAppointmentsByCustomer, subscribeToAppointments, type AppointmentRow } from "@/lib/supabase/appointment-management";
 import type { AppointmentStatus, AppointmentServiceType } from "@/lib/types/appointments";
+import CustomerAppointmentDetailModal from "@/components/dashboard/CustomerAppointmentDetailModal";
 
 const STATUS_STYLES: Record<AppointmentStatus, string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -45,10 +46,19 @@ export default function AppointmentHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterTab>("all");
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   const loadAppointments = useCallback(async (id: string) => {
     const { rows } = await fetchAppointmentsByCustomer(id);
-    setAppointments(rows);
+    // Explicit client-side sort so "latest first" is guaranteed
+    // regardless of the shared data layer's default ordering (which is
+    // also used by the admin Appointment Management screen and
+    // shouldn't be changed just for this page). "Latest" here means
+    // most recently booked, not furthest-in-the-future scheduled date.
+    const sorted = [...rows].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    setAppointments(sorted);
   }, []);
 
   useEffect(() => {
@@ -149,11 +159,23 @@ export default function AppointmentHistoryPage() {
                 <span className="text-xs text-zinc-400">
                   {appt.pets.length} {appt.pets.length === 1 ? "pet" : "pets"}
                 </span>
-                <span className="font-bold text-brand-pink">₱{appt.total_amount.toFixed(2)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-brand-pink">₱{appt.total_amount.toFixed(2)}</span>
+                  <button
+                    onClick={() => setViewingId(appt.id)}
+                    className="text-xs font-semibold border-2 border-brand-pink text-brand-pink px-4 py-1 rounded-full hover:bg-brand-pink hover:text-white transition-colors"
+                  >
+                    View
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {viewingId && (
+        <CustomerAppointmentDetailModal appointmentId={viewingId} onClose={() => setViewingId(null)} />
       )}
     </div>
   );

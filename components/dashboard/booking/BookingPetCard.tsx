@@ -1,27 +1,6 @@
 import type { Pet } from "@/lib/types/appointments";
-
-const petArtwork: Record<string, string> = {
-  "Dog-Male": "/images/pets/dog-male.jpg",
-  "Dog-Female": "/images/pets/dog-female.jpg",
-  "Cat-Male": "/images/pets/cat-male.jpg",
-  "Cat-Female": "/images/pets/cat-female.jpg",
-};
-
-const genericArtwork: Record<string, string> = {
-  Dog: "/images/pets/pet-dog.jpg",
-  Cat: "/images/pets/pet-cat.jpg",
-};
-
-function getPetArtwork(pet: Pet) {
-  const species = pet.species === "Cat" ? "Cat" : "Dog";
-  // Sex is only ever "Male" | "Female" | null on the real type — no
-  // guessing needed. When it's genuinely not recorded, fall back to the
-  // generic species artwork instead of silently assuming "Male".
-  if (pet.sex === "Male" || pet.sex === "Female") {
-    return petArtwork[`${species}-${pet.sex}`];
-  }
-  return genericArtwork[species];
-}
+import { usePetAvatarSettings } from "@/lib/hooks/usePetAvatarSettings";
+import { resolvePetAvatar } from "@/lib/utils/pet-avatar";
 
 function GenderMark({ pet }: { pet: Pet }) {
   const sex = String((pet as Pet & { sex?: string }).sex ?? "").toLowerCase();
@@ -49,6 +28,8 @@ export default function BookingPetCard({
   onViewProfile: () => void;
 }) {
   const species = pet.species === "Cat" ? "Cat" : "Dog";
+  const avatarSettings = usePetAvatarSettings();
+  const artwork = resolvePetAvatar(avatarSettings, pet.species, pet.sex);
 
   return (
     <article
@@ -71,7 +52,7 @@ export default function BookingPetCard({
         ].join(" ")}
       >
         <img
-          src={getPetArtwork(pet)}
+          src={artwork}
           alt=""
           className="block h-full w-full object-contain object-center"
         />

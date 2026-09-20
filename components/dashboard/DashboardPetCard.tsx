@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import type { Pet } from "@/lib/types/appointments";
-
-const petArtwork: Record<string, string> = {
-  Dog: "/images/dashboard/pet-dog.jpg",
-  Cat: "/images/dashboard/pet-cat.jpg",
-};
+import { usePetAvatarSettings } from "@/lib/hooks/usePetAvatarSettings";
+import { resolvePetAvatar } from "@/lib/utils/pet-avatar";
 
 export default function DashboardPetCard({ pet }: { pet: Pet }) {
-  const artwork = petArtwork[pet.species] ?? petArtwork.Dog;
+  const avatarSettings = usePetAvatarSettings();
+  const artwork = resolvePetAvatar(avatarSettings, pet.species, pet.sex);
   const isCat = pet.species === "Cat";
 
   return (

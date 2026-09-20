@@ -275,7 +275,7 @@ export default function MyPetsPage() {
           </p>
 
           <Link
-            href="/account/appointments/new"
+            href="/account/appointments"
             className="mt-4 inline-flex rounded-full bg-brand-pink px-5 py-2 text-sm font-semibold text-white hover:bg-brand-pink-dark"
           >
             Book Appointment
@@ -361,7 +361,7 @@ export default function MyPetsPage() {
               </p>
 
               <Link
-                href="/account/appointments/new"
+                href="/account/appointments"
                 className="mt-3 rounded-full bg-brand-pink px-5 py-2 text-xs font-semibold text-white hover:bg-brand-pink-dark"
               >
                 Book an Appointment
@@ -416,7 +416,7 @@ export default function MyPetsPage() {
             </Link>
 
             <Link
-              href="/account/settings"
+              href="/account/profile"
               className="group flex min-h-20 items-center gap-3 rounded-xl bg-pink-50 px-3 py-3 transition-colors hover:bg-pink-100"
             >
               <span className="text-brand-pink">

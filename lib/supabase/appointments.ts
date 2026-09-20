@@ -60,7 +60,17 @@ export async function updatePet(id: string, fields: {
   name: string; species: Species; breed: string; size_label: string; age: number | null; sex: Sex | null;
 }) {
   const supabase = createClient();
-  return supabase.from("pets").update(fields).eq("id", id);
+  // .update() with no matching rows (e.g. blocked by RLS) returns
+  // error: null and data: [] — NOT an error — so a plain
+  // `supabase.from("pets").update(...).eq("id", id)` looks successful
+  // even when it silently saved nothing. Selecting the updated row back
+  // lets the caller actually detect that case.
+  const { data, error } = await supabase.from("pets").update(fields).eq("id", id).select();
+  if (error) return { data, error };
+  if (!data || data.length === 0) {
+    return { data, error: { message: "Update didn't apply — you may not have permission to edit this pet." } };
+  }
+  return { data, error: null };
 }
 
 export async function addPet(pet: {

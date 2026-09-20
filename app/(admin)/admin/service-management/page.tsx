@@ -1,11 +1,13 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory,
   togglePackageActive, toggleSizeActive, toggleAddonActive,
 } from "@/lib/supabase/services";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
+import type { SiteSetting, SiteSettingKey } from "@/lib/supabase/site-settings";
+import { PET_AVATAR_KEYS } from "@/lib/utils/pet-avatar";
 
 import ServiceTabs from "@/components/admin/services/ServiceTabs";
 import PackageCard from "@/components/admin/services/PackageCard";
@@ -14,6 +16,7 @@ import AddOnsSection from "@/components/admin/services/AddOnsSection";
 import PackageFormModal from "@/components/admin/services/PackageFormModal";
 import SizeFormModal from "@/components/admin/services/SizeFormModal";
 import AddOnFormModal from "@/components/admin/services/AddOnFormModal";
+import PetAvatarsManager from "@/components/admin/services/PetAvatarsManager";
 
 export default function ServiceManagementPage() {
   const [tab, setTab] = useState<ServiceType>("dog_grooming");
@@ -33,6 +36,15 @@ export default function ServiceManagementPage() {
   const [packageModal, setPackageModal] = useState<{ mode: "add" | "edit"; pkg?: Package } | null>(null);
   const [sizeModal, setSizeModal] = useState<{ mode: "add" | "edit"; size?: PetSize } | null>(null);
   const [addonModal, setAddonModal] = useState<{ mode: "add" | "edit"; addon?: Addon; categoryId: string } | null>(null);
+
+  // Pet Avatars configuration — same upload mechanism as Website
+  // Management (site-images storage bucket + site_settings row per key).
+  const [avatarSettings, setAvatarSettings] = useState<SiteSetting[]>([]);
+  const [manageAvatars, setManageAvatars] = useState(false);
+  const [avatarUploadTarget, setAvatarUploadTarget] = useState<SiteSettingKey | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   const addonCategoryName = tab === "boarding" ? "Boarding Add-ons" : "Grooming Add-ons";
 
@@ -60,6 +72,84 @@ export default function ServiceManagementPage() {
   }, [tab, addonCategoryName]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase.from("site_settings").select("*").in("key", PET_AVATAR_KEYS);
+      if (!cancelled) setAvatarSettings((data as SiteSetting[]) ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function openAvatarUploadFor(key: SiteSettingKey) {
+    setAvatarUploadTarget(key);
+    window.setTimeout(() => avatarFileInputRef.current?.click(), 0);
+  }
+
+  async function handleAvatarFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const key = avatarUploadTarget;
+    e.target.value = "";
+    if (!file || !key) return;
+
+    setAvatarUploading(true);
+    setAvatarError(null);
+
+    try {
+      const supabase = createClient();
+      const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => {
+          URL.revokeObjectURL(img.src);
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(img.src);
+          reject(new Error("The selected file is not a valid image."));
+        };
+        img.src = URL.createObjectURL(file);
+      });
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${key}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from("site-images").upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+      });
+      if (uploadError) throw uploadError;
+
+      const newUrl = supabase.storage.from("site-images").getPublicUrl(path).data.publicUrl;
+      const { error: updateError } = await supabase
+        .from("site_settings")
+        .update({
+          image_url: newUrl,
+          image_width: dimensions.width,
+          image_height: dimensions.height,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("key", key);
+
+      if (updateError) throw updateError;
+
+      setAvatarSettings((prev) =>
+        prev.map((s) =>
+          s.key === key
+            ? { ...s, image_url: newUrl, image_width: dimensions.width, image_height: dimensions.height }
+            : s
+        )
+      );
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Image upload failed.");
+    } finally {
+      setAvatarUploading(false);
+      setAvatarUploadTarget(null);
+    }
+  }
 
   const filteredPackages = packages.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()));
 
@@ -101,7 +191,21 @@ export default function ServiceManagementPage() {
           </svg>
           <input type="text" placeholder="Search packages" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-full border border-pink-200 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
         </div>
+        <button
+          onClick={() => setManageAvatars(true)}
+          className="flex items-center gap-1.5 border-2 border-brand-pink text-brand-pink font-semibold text-sm px-4 py-2 rounded-full hover:bg-brand-pink hover:text-white transition-colors whitespace-nowrap"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          Configure Pet Avatars
+        </button>
+        <input ref={avatarFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
       </div>
+
+      {avatarUploading && <p className="mt-2 text-sm font-semibold text-brand-pink">Uploading...</p>}
+      {avatarError && <p className="mt-2 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{avatarError}</p>}
 
       <h1 className="mt-6 text-2xl font-bold text-brand-pink">Service Management</h1>
 
@@ -215,6 +319,17 @@ export default function ServiceManagementPage() {
           existingPrices={addonModal.addon ? [...addonPrices, ...aLaCartePrices].filter((p) => p.addon_id === addonModal.addon!.id) : undefined}
           onClose={() => setAddonModal(null)}
           onSaved={() => { setAddonModal(null); loadData(); }}
+        />
+      )}
+
+      {manageAvatars && (
+        <PetAvatarsManager
+          settings={avatarSettings}
+          onEdit={(key) => {
+            setManageAvatars(false);
+            openAvatarUploadFor(key);
+          }}
+          onClose={() => setManageAvatars(false)}
         />
       )}
     </div>
