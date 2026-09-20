@@ -22,6 +22,7 @@ import BoardingHistoryModal from "@/components/admin/pet-services/BoardingHistor
 import OpsKennelCard from "@/components/admin/operations/OpsKennelCard";
 import AddKennelModal from "@/components/admin/operations/AddKennelModal";
 import SessionDetailsModal from "@/components/admin/pet-services/SessionDetailsModal";
+import SessionCompletedModal from "@/components/admin/pet-services/SessionCompletedModal";
 
 export default function BoardingManagementPage() {
   const router = useRouter();
@@ -40,11 +41,17 @@ export default function BoardingManagementPage() {
   const [add, setAdd] = useState(false);
   const [viewing, setViewing] = useState<BoardingSessionRow | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [completedName, setCompletedName] = useState<string | null>(null);
 
-  async function handleComplete(appointmentPetId: string) {
+  async function handleComplete(appointmentPetId: string, petName: string) {
     setCompletingId(appointmentPetId);
     const { error } = await completeAppointmentPet(appointmentPetId, "kennel");
-    if (error) setError(error);
+    if (error) {
+      setError(error);
+    } else {
+      setSessions((prev) => prev.filter((s) => s.appointmentPetId !== appointmentPetId));
+      setCompletedName(petName);
+    }
     setCompletingId(null);
   }
 
@@ -221,7 +228,7 @@ export default function BoardingManagementPage() {
                           removeK(k.id)
                         }
                         onComplete={() => {
-                          if (s) handleComplete(s.appointmentPetId);
+                          if (s) handleComplete(s.appointmentPetId, s.petName);
                         }}
                         completing={s ? completingId === s.appointmentPetId : false}
                       />
@@ -261,6 +268,10 @@ export default function BoardingManagementPage() {
           appointmentPetId={viewing.appointmentPetId}
           onClose={() => setViewing(null)}
         />
+      )}
+
+      {completedName && (
+        <SessionCompletedModal petName={completedName} onClose={() => setCompletedName(null)} />
       )}
     </div>
   );

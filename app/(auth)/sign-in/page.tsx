@@ -6,16 +6,21 @@
 // 030), then signs in normally with that email. On success, checks the
 // user's role in `profiles` and redirects: superadmin -> /admin,
 // everyone else -> /account.
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { resolveEmailForLogin } from "@/lib/supabase/customer-auth";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get("deactivated") === "1"
+      ? "This account has been deactivated. Please contact support."
+      : null
+  );
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,6 +49,23 @@ export default function SignInPage() {
       .select("role")
       .eq("id", data.user.id)
       .single();
+
+    // Deactivated accounts could still authenticate against Supabase
+    // Auth just fine (a status column doesn't touch the actual password
+    // check) — this is what actually stops a deactivated user from
+    // getting in, rather than just showing a status label in admin.
+    const [{ data: customerRow }, { data: staffRow }] = await Promise.all([
+      supabase.from("customers").select("status").eq("id", data.user.id).maybeSingle(),
+      supabase.from("staff_profiles").select("status").eq("id", data.user.id).maybeSingle(),
+    ]);
+    const status = customerRow?.status ?? staffRow?.status ?? "active";
+
+    if (status !== "active") {
+      await supabase.auth.signOut();
+      setError("This account has been deactivated. Please contact support.");
+      setLoading(false);
+      return;
+    }
 
     if (profileError || !profile) {
       router.push("/account");
@@ -113,5 +135,13 @@ export default function SignInPage() {
         <a href="/sign-up" className="hover:text-brand-pink">Create an account</a>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
   );
 }

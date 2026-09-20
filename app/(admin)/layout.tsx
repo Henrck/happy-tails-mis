@@ -5,6 +5,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
+import AccountStatusWatcher from "@/components/AccountStatusWatcher";
 
 export default async function AdminLayout({
   children,
@@ -31,5 +32,19 @@ export default async function AdminLayout({
     redirect("/account");
   }
 
-  return <AdminShell>{children}</AdminShell>;
+  // Not every superadmin necessarily has a staff_profiles row (the
+  // owner account may predate that table) — only watch if one exists,
+  // since there's nothing to deactivate otherwise.
+  const { data: staffRow } = await supabase
+    .from("staff_profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return (
+    <>
+      {staffRow && <AccountStatusWatcher userId={user.id} table="staff_profiles" />}
+      <AdminShell>{children}</AdminShell>
+    </>
+  );
 }
