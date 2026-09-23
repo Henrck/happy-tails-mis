@@ -23,6 +23,11 @@ const STORE_HOURS_TEXT = "Hours: Monday – Sunday, 9:00 AM – 6:00 PM  |  📍
 
 const BELONGING_OPTIONS = ["Pet Bed", "Toys", "Cat Litter", "Leash/Collar", "Others"];
 
+// Legacy fallback only — package_pricing.nights (see
+// 047_package_pricing_nights.sql) is now the real source of truth.
+// This regex-based guess stays only so a boarding pricing row created
+// before that migration (nights = null, never re-saved through the
+// updated admin form) doesn't regress all the way to a hard "1".
 function nightsFromFixedTier(detail: string): number | null {
   const normalized = detail.toLowerCase();
   if (normalized.includes("1 night") && !normalized.includes("&")) return 1;
@@ -85,7 +90,8 @@ export default function BoardingScheduleStep({
     const rate = pricing.find((p) => p.id === sel.packagePricingId);
     if (!rate) return 1;
     if (rate.is_per_night) return Math.max(1, Number(sel.boardingNights || 7));
-    return Math.max(1, nightsFromFixedTier(rate.size_detail ?? "") ?? 1);
+    if (rate.nights) return Math.max(1, rate.nights);
+    return Math.max(1, nightsFromFixedTier(rate.size_detail ?? rate.size_label ?? "") ?? 1);
   }
 
   function selectedNights(): number {

@@ -8,7 +8,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Package, PackageInclusion, PackagePricing, PetSize, ServiceType } from "@/lib/types/services";
 
-type PriceDraft = { size_id: string | null; size_label: string; price: string; is_per_night: boolean };
+type PriceDraft = { size_id: string | null; size_label: string; price: string; is_per_night: boolean; nights: string };
 
 export default function PackageFormModal({
   serviceType,
@@ -40,12 +40,12 @@ export default function PackageFormModal({
         .filter((s) => s.is_active)
         .map((s) => {
           const found = existingPricing?.find((p) => p.size_id === s.id);
-          return { size_id: s.id, size_label: s.label, price: found ? String(found.price) : "", is_per_night: false };
+          return { size_id: s.id, size_label: s.label, price: found ? String(found.price) : "", is_per_night: false, nights: "" };
         });
     }
     return existingPricing?.length
-      ? existingPricing.map((p) => ({ size_id: null, size_label: p.size_label, price: String(p.price), is_per_night: p.is_per_night }))
-      : [{ size_id: null, size_label: "", price: "", is_per_night: false }];
+      ? existingPricing.map((p) => ({ size_id: null, size_label: p.size_label, price: String(p.price), is_per_night: p.is_per_night, nights: p.nights ? String(p.nights) : "" }))
+      : [{ size_id: null, size_label: "", price: "", is_per_night: false, nights: "" }];
   });
 
   function updateInclusion(i: number, val: string) {
@@ -62,7 +62,7 @@ export default function PackageFormModal({
     setPrices((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
   }
   function addDurationRow() {
-    setPrices((prev) => [...prev, { size_id: null, size_label: "", price: "", is_per_night: false }]);
+    setPrices((prev) => [...prev, { size_id: null, size_label: "", price: "", is_per_night: false, nights: "" }]);
   }
   function removeDurationRow(i: number) {
     setPrices((prev) => prev.filter((_, idx) => idx !== i));
@@ -105,6 +105,7 @@ export default function PackageFormModal({
           size_label: p.size_label,
           price: parseFloat(p.price) || 0,
           is_per_night: p.is_per_night,
+          nights: p.is_per_night ? null : (parseInt(p.nights) || null),
         }))
       );
     }
@@ -147,7 +148,10 @@ export default function PackageFormModal({
                   {isSizeBased ? (
                     <span className="flex-1 text-sm text-zinc-700 px-1">{p.size_label}</span>
                   ) : (
-                    <input value={p.size_label} onChange={(e) => updatePrice(i, "size_label", e.target.value)} placeholder="e.g. 1 Night" className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
+                    <input value={p.size_label} onChange={(e) => updatePrice(i, "size_label", e.target.value)} placeholder="e.g. 4 Days & 3 Nights" className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
+                  )}
+                  {!isSizeBased && !p.is_per_night && (
+                    <input type="number" min="1" value={p.nights} onChange={(e) => updatePrice(i, "nights", e.target.value)} placeholder="Nights" title="Number of nights this tier covers — used to auto-calculate the pick-up date" className="w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
                   )}
                   <input type="number" value={p.price} onChange={(e) => updatePrice(i, "price", e.target.value)} placeholder="₱0" className="w-24 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
                   {!isSizeBased && <button onClick={() => removeDurationRow(i)} className="text-red-400 hover:text-red-600 px-1">✕</button>}

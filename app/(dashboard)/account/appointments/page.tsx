@@ -185,6 +185,9 @@ export default function BookAppointmentPage() {
 
         {step === "selection" && currentLeg?.serviceChoice === "boarding" && (
           <BoardingSelectionStep pets={legPets} selections={currentLeg.petSelections}
+            alreadyGroomedPetIds={completedLegs
+              .filter((leg) => leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming")
+              .flatMap((leg) => leg.petIds)}
             onChange={handleLegSelectionChange} scheduledDate={currentLeg.scheduledDate}
             onBack={() => setStep("service")} onNext={() => setStep("schedule")} />
         )}

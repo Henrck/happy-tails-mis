@@ -75,16 +75,37 @@ export default function GroomingSelectionStep({
     onChange([...selections.filter((s) => s.pet.id !== activePet.id), updated]);
   }
 
+  // Was: return the FIRST row found for this package, where any row
+  // with size_id === null matched regardless of which size was
+  // actually selected. If a package had both a flat-rate row and real
+  // per-size rows, whichever sorted first from the query decided the
+  // price for every size — this is why every size could show the same
+  // fixed price rather than its own. Now: always prefer an exact
+  // size-specific match; only fall back to a flat-rate row if no
+  // size-specific row exists for this package at all.
   function findPricingRow(
     packageId: string,
     sizeId: string,
     sizeLabel: string | undefined
   ): PackagePricing | undefined {
-    return pricing.find((p) => {
-      if (p.package_id !== packageId) return false;
-      if (p.size_id === null) return true;
-      return p.size_id === sizeId || p.size_label === sizeLabel;
-    });
+    const rowsForPackage = pricing.filter((p) => p.package_id === packageId);
+    return (
+      rowsForPackage.find((p) => p.size_id === sizeId || (sizeLabel && p.size_label === sizeLabel)) ??
+      rowsForPackage.find((p) => p.size_id === null)
+    );
+  }
+
+  // Same tiering for add-on prices: prefer a row matching this size
+  // exactly, but fall back to any row for that add-on rather than
+  // silently showing nothing when the size label doesn't match exactly
+  // (e.g. admin-entered label casing/spacing not lining up with the
+  // pet size label).
+  function findAddonPriceRow(addonId: string, sizeLabel: string | undefined): AddonPrice | undefined {
+    const rowsForAddon = addonPrices.filter((p) => p.addon_id === addonId);
+    return (
+      rowsForAddon.find((p) => sizeLabel && p.size_label === sizeLabel) ??
+      rowsForAddon[0]
+    );
   }
 
   function computeLineAmount(sel: DraftPetSelection): number {
@@ -98,9 +119,7 @@ export default function GroomingSelectionStep({
 
     for (const addonId of sel.addonIds) {
       const size = sizes.find((s) => s.id === sel.sizeId);
-      const priceRow = addonPrices.find(
-        (p) => p.addon_id === addonId && p.size_label === size?.label
-      );
+      const priceRow = findAddonPriceRow(addonId, size?.label);
       if (priceRow) total += priceRow.price;
     }
 
@@ -296,10 +315,7 @@ export default function GroomingSelectionStep({
                   const size = sizes.find(
                     (s) => s.id === activeSelection?.sizeId
                   );
-                  const priceRow = addonPrices.find(
-                    (p) =>
-                      p.addon_id === addon.id && p.size_label === size?.label
-                  );
+                  const priceRow = findAddonPriceRow(addon.id, size?.label);
                   const selected = activeSelection?.addonIds.includes(addon.id);
 
                   return (

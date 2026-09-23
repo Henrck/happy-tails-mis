@@ -26,6 +26,7 @@ export default function BoardingSelectionStep({
   scheduledDate: _scheduledDate,
   onBack,
   onNext,
+  alreadyGroomedPetIds,
 }: {
   pets: Pet[];
   selections: DraftPetSelection[];
@@ -33,6 +34,12 @@ export default function BoardingSelectionStep({
   scheduledDate: string | null;
   onBack: () => void;
   onNext: () => void;
+  // Pets that already have a completed grooming leg earlier in this
+  // same multi-service booking — a "Full Grooming" boarding add-on
+  // would just be double-booking a service they've already gotten, so
+  // it's hidden for those pets specifically (other pets in the same
+  // boarding leg who weren't groomed still see it normally).
+  alreadyGroomedPetIds?: string[];
 }) {
   const [packages, setPackages] = useState<Package[]>([]);
   const [pricing, setPricing] = useState<PackagePricing[]>([]);
@@ -511,15 +518,22 @@ export default function BoardingSelectionStep({
 
           {pets.map((pet) => {
             const sel = selectionFor(pet);
+            const alreadyGroomed = alreadyGroomedPetIds?.includes(pet.id);
+            const petAddons = alreadyGroomed
+              ? addons.filter((a) => !a.name.toLowerCase().includes("groom"))
+              : addons;
 
             return (
               <div key={pet.id} className="mt-2">
                 <p className="text-xs font-semibold text-zinc-500">
                   {pet.name}
                 </p>
+                {alreadyGroomed && addons.length !== petAddons.length && (
+                  <p className="text-[11px] text-zinc-400">Already availed grooming in this booking.</p>
+                )}
 
                 <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {addons.map((addon) => {
+                  {petAddons.map((addon) => {
                     const priceRow = addonPrices.find(
                       (p) => p.addon_id === addon.id
                     );

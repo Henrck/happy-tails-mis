@@ -15,7 +15,13 @@ export async function fetchPackagesFull(serviceType: ServiceType) {
   const packageIds = packages.map((p) => p.id);
   const [{ data: inclusions }, { data: pricing }] = await Promise.all([
     supabase.from("package_inclusions").select("*").in("package_id", packageIds).order("sort_order"),
-    supabase.from("package_pricing").select("*").in("package_id", packageIds),
+    // .order("id") here isn't cosmetic — without it Postgres doesn't
+    // guarantee row order across repeated identical queries, and this
+    // gets re-fetched every time BoardingSelectionStep mounts (e.g.
+    // every time the customer clicks Back into it). An unstable order
+    // meant the duration-rate buttons could visibly reshuffle each time
+    // — that's the "buttons glitching on back" bug.
+    supabase.from("package_pricing").select("*").in("package_id", packageIds).order("id"),
   ]);
 
   return {
@@ -44,7 +50,7 @@ export async function fetchAddonsByCategory(categoryName: string) {
   const { data: addons } = await supabase.from("addons").select("*").eq("category_id", category.id).order("sort_order");
   const addonIds = (addons ?? []).map((a) => a.id);
   const { data: prices } = addonIds.length
-    ? await supabase.from("addon_prices").select("*").in("addon_id", addonIds)
+    ? await supabase.from("addon_prices").select("*").in("addon_id", addonIds).order("id")
     : { data: [] };
 
   return { addons: (addons ?? []) as Addon[], prices: (prices ?? []) as AddonPrice[], error: null };
