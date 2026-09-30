@@ -1,219 +1,406 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 type Step = "email" | "code" | "password";
 
-const PASSWORD_RULES = [
-  { label: "At least 8 characters", test: (value: string) => value.length >= 8 },
-  { label: "At least one uppercase letter", test: (value: string) => /[A-Z]/.test(value) },
-  { label: "At least one lowercase letter", test: (value: string) => /[a-z]/.test(value) },
-  { label: "At least one special character", test: (value: string) => /[^A-Za-z0-9]/.test(value) },
-];
+const RESEND_COOLDOWN_SECONDS = 60;
 
-function PasswordRules({ password }: { password: string }) {
-  return (
-    <ul className="mt-2 space-y-1.5 text-xs">
-      {PASSWORD_RULES.map((rule) => {
-        const valid = rule.test(password);
-        return (
-          <li key={rule.label} className={valid ? "text-emerald-600" : "text-zinc-400"}>
-            <span aria-hidden="true" className="mr-1.5">{valid ? "✓" : "•"}</span>
-            {rule.label}
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-async function readJson(response: Response) {
-  return response.json().catch(() => ({})) as Promise<{ error?: string; message?: string; ok?: boolean }>;
+function validatePassword(password: string) {
+  return {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
 }
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [resendSeconds, setResendSeconds] = useState(0);
+  const [passwordChanged, setPasswordChanged] = useState(false);
 
-  const passwordValid = PASSWORD_RULES.every((rule) => rule.test(password));
-  const passwordsMatch = password === confirmation;
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
 
-  function clearFeedback() {
-    setError(null);
-    setMessage(null);
+    const timer = window.setInterval(() => {
+      setResendSeconds((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [resendSeconds]);
+
+  const passwordRules = validatePassword(password);
+  const passwordValid = Object.values(passwordRules).every(Boolean);
+  const passwordsMatch =
+    password.length > 0 && password === confirmPassword;
+
+  function clearStatus() {
+    setError("");
+    setMessage("");
   }
 
-  async function sendCode(e: React.FormEvent) {
-    e.preventDefault();
-    clearFeedback();
-    setLoading(true);
+  async function sendCode(event?: FormEvent) {
+    event?.preventDefault();
+    clearStatus();
 
-    try {
-      const normalizedEmail = email.trim().toLowerCase();
-      const response = await fetch("/api/auth/forgot-password/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail }),
-      });
-      const result = await readJson(response);
+    const normalizedEmail = email.trim().toLowerCase();
 
-      if (!response.ok) {
-        setError(result.error ?? "We couldn't send a verification code.");
-        return;
-      }
-
-      setEmail(normalizedEmail);
-      setStep("code");
-      setMessage(result.message ?? "A verification code has been sent to your email.");
-    } catch {
-      setError("We couldn't connect to the password reset service. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function verifyCode(e: React.FormEvent) {
-    e.preventDefault();
-    clearFeedback();
-
-    if (!/^\d{6}$/.test(code)) {
-      setError("Enter the 6-digit verification code from your email.");
+    if (!normalizedEmail) {
+      setError("Please enter your email address.");
       return;
     }
 
     setLoading(true);
-    try {
-      const response = await fetch("/api/auth/forgot-password/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
-      });
-      const result = await readJson(response);
 
-      if (!response.ok) {
-        setError(result.error ?? "That code is invalid or has expired.");
-        return;
-      }
+    const { error: resetError } =
+      await supabase.auth.resetPasswordForEmail(normalizedEmail);
 
-      setStep("password");
-      setMessage("Email verified. You can now create a new password.");
-    } catch {
-      setError("We couldn't verify the code. Please try again.");
-    } finally {
-      setLoading(false);
+    setLoading(false);
+
+    if (resetError) {
+      setError(resetError.message);
+      return;
     }
+
+    setEmail(normalizedEmail);
+    setCode("");
+    setResendSeconds(RESEND_COOLDOWN_SECONDS);
+    setMessage("If an account exists for this email, a verification code has been sent.");
+    setStep("code");
   }
 
-  async function updatePassword(e: React.FormEvent) {
-    e.preventDefault();
-    clearFeedback();
+  async function verifyCode(event: FormEvent) {
+    event.preventDefault();
+    clearStatus();
+
+    const normalizedCode = code.replace(/\D/g, "");
+
+    if (!/^\d{8}$/.test(normalizedCode)) {
+      setError("Enter the 8-digit verification code.");
+      return;
+    }
+
+    setLoading(true);
+
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email,
+      token: normalizedCode,
+      type: "recovery",
+    });
+
+    setLoading(false);
+
+    if (verifyError) {
+      setError(verifyError.message);
+      return;
+    }
+
+    setMessage("Code verified. You can now create a new password.");
+    setPassword("");
+    setConfirmPassword("");
+    setStep("password");
+  }
+
+  async function updatePassword(event: FormEvent) {
+    event.preventDefault();
+    clearStatus();
 
     if (!passwordValid) {
-      setError("Please meet all password requirements.");
+      setError("Your new password does not meet all requirements.");
       return;
     }
+
     if (!passwordsMatch) {
-      setError("The passwords do not match.");
+      setError("Passwords do not match.");
       return;
     }
 
     setLoading(true);
-    try {
-      const response = await fetch("/api/auth/forgot-password/reset", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      const result = await readJson(response);
 
-      if (!response.ok) {
-        setError(result.error ?? "We couldn't change your password.");
-        return;
-      }
+    const { error: updateError } = await supabase.auth.updateUser({
+      password,
+    });
 
-      setMessage(result.message ?? "Your password has been changed successfully. You can now sign in.");
-      setStep("email");
-      setCode("");
-      setPassword("");
-      setConfirmation("");
-    } catch {
-      setError("We couldn't change your password. Please try again.");
-    } finally {
+    if (updateError) {
       setLoading(false);
+      setError(updateError.message);
+      return;
     }
+
+    await supabase.auth.signOut();
+
+    setLoading(false);
+    setPassword("");
+    setConfirmPassword("");
+    setCode("");
+    setPasswordChanged(true);
+  }
+
+  function handleCodeChange(value: string) {
+    setCode(value.replace(/\D/g, "").slice(0, 8));
   }
 
   return (
-    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
-      {step === "email" && (
-        <>
-          <h1 className="text-center text-2xl font-bold text-zinc-900">Reset Your Password</h1>
-          <p className="mt-2 text-center text-sm text-zinc-500">Enter your email and we&apos;ll send you a 6-digit verification code.</p>
-          <form onSubmit={sendCode} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="reset-email" className="block text-sm font-medium text-zinc-700">Email</label>
-              <input id="reset-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" placeholder="you@example.com" />
-            </div>
-            {message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={loading} className="w-full rounded-full bg-brand-pink py-2.5 font-semibold text-white transition-colors hover:bg-brand-pink-dark disabled:opacity-60">{loading ? "Sending code..." : "Send Verification Code"}</button>
-            <div className="text-center text-sm text-zinc-500"><a href="/sign-in" className="hover:text-brand-pink">Back to Sign In</a></div>
-          </form>
-        </>
-      )}
+    <main className="min-h-screen min-h-[100dvh] px-4 py-8 sm:px-6">
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-md items-center justify-center">
+        <section className="w-full rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+          <div className="mb-7 text-center">
+            <h1 className="text-2xl font-semibold text-gray-900">
+              Forgot Password
+            </h1>
+            <p className="mt-2 text-sm text-gray-500">
+              {step === "email" &&
+                "Enter your email and we'll send you a verification code."}
+              {step === "code" &&
+                "Enter the 8-digit code sent to your email."}
+              {step === "password" &&
+                "Create your new password and confirm it below."}
+            </p>
+          </div>
 
-      {step === "code" && (
-        <>
-          <h1 className="text-center text-2xl font-bold text-zinc-900">Verify Your Email</h1>
-          <p className="mt-2 text-center text-sm text-zinc-500">Enter the 6-digit code sent to <strong className="break-all text-zinc-700">{email}</strong>.</p>
-          <form onSubmit={verifyCode} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="reset-code" className="block text-sm font-medium text-zinc-700">Verification Code</label>
-              <input id="reset-code" type="text" inputMode="numeric" autoComplete="one-time-code" required maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-3 text-center text-xl tracking-[0.35em] focus:outline-none focus:ring-2 focus:ring-brand-pink" placeholder="000000" />
+          {message && (
+            <div
+              role="status"
+              className="mb-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+            >
+              {message}
             </div>
-            {message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={loading || code.length !== 6} className="w-full rounded-full bg-brand-pink py-2.5 font-semibold text-white transition-colors hover:bg-brand-pink-dark disabled:opacity-60">{loading ? "Verifying..." : "Verify Code"}</button>
-            <button type="button" onClick={() => { setStep("email"); setCode(""); clearFeedback(); }} className="w-full text-sm text-zinc-500 transition-colors hover:text-brand-pink">Request a new code</button>
-          </form>
-        </>
-      )}
+          )}
 
-      {step === "password" && (
-        <>
-          <h1 className="text-center text-2xl font-bold text-zinc-900">Create New Password</h1>
-          <p className="mt-2 text-center text-sm text-zinc-500">Your email has been verified. Choose a new password for your account.</p>
-          <form onSubmit={updatePassword} className="mt-6 space-y-4">
-            <div>
-              <label htmlFor="new-password" className="block text-sm font-medium text-zinc-700">New Password</label>
-              <div className="relative mt-1">
-                <input id="new-password" type={showPassword ? "text" : "password"} required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute inset-y-0 right-0 flex w-14 items-center justify-center text-xs text-zinc-500 hover:text-zinc-800" aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button>
-              </div>
-              <PasswordRules password={password} />
+          {error && (
+            <div
+              role="alert"
+              className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {error}
             </div>
-            <div>
-              <label htmlFor="confirm-password" className="block text-sm font-medium text-zinc-700">Confirm New Password</label>
-              <div className="relative mt-1">
-                <input id="confirm-password" type={showConfirmation ? "text" : "password"} required autoComplete="new-password" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} className="w-full rounded-lg border border-zinc-300 px-3 py-2.5 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                <button type="button" onClick={() => setShowConfirmation((value) => !value)} className="absolute inset-y-0 right-0 flex w-14 items-center justify-center text-xs text-zinc-500 hover:text-zinc-800" aria-label={showConfirmation ? "Hide password confirmation" : "Show password confirmation"}>{showConfirmation ? "Hide" : "Show"}</button>
+          )}
+
+          {step === "email" && (
+            <form onSubmit={sendCode} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  Email address
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+                  disabled={loading}
+                  required
+                />
               </div>
-              {confirmation && <p className={`mt-1 text-xs ${passwordsMatch ? "text-emerald-600" : "text-red-600"}`}>{passwordsMatch ? "Passwords match." : "Passwords do not match."}</p>}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-lg bg-pink-600 px-4 py-3 font-medium text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Sending code..." : "Send verification code"}
+              </button>
+            </form>
+          )}
+
+          {step === "code" && (
+            <form onSubmit={verifyCode} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="code"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  Verification code
+                </label>
+                <input
+                  id="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={8}
+                  value={code}
+                  onChange={(event) => handleCodeChange(event.target.value)}
+                  placeholder="00000000"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-4 text-center text-2xl font-semibold tracking-[0.3em] text-gray-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+                  disabled={loading}
+                  required
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Check your Gmail inbox for the 8-digit code.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || code.length !== 8}
+                className="w-full rounded-lg bg-pink-600 px-4 py-3 font-medium text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Verifying..." : "Verify code"}
+              </button>
+
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearStatus();
+                    setStep("email");
+                  }}
+                  className="text-gray-600 hover:text-gray-900"
+                  disabled={loading}
+                >
+                  Change email
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => sendCode()}
+                  disabled={loading || resendSeconds > 0}
+                  className="font-medium text-pink-600 hover:text-pink-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                >
+                  {resendSeconds > 0
+                    ? `Resend in ${resendSeconds}s`
+                    : "Resend code"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {passwordChanged && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="password-changed-title"
+            >
+              <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl sm:p-8">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                  <svg
+                    aria-hidden="true"
+                    className="h-7 w-7 text-green-600"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </div>
+
+                <h2
+                  id="password-changed-title"
+                  className="text-xl font-semibold text-gray-900"
+                >
+                  Password completely changed
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-gray-500">
+                  Your password has been successfully updated. You can now sign
+                  in using your new password.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => router.replace("/sign-in")}
+                  className="mt-6 w-full rounded-lg bg-pink-600 px-4 py-3 font-medium text-white transition hover:bg-pink-700"
+                >
+                  Continue to Sign In
+                </button>
+              </div>
             </div>
-            {message && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
-            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-            <button type="submit" disabled={loading || !passwordValid || !passwordsMatch} className="w-full rounded-full bg-brand-pink py-2.5 font-semibold text-white transition-colors hover:bg-brand-pink-dark disabled:opacity-60">{loading ? "Updating Password..." : "Change Password"}</button>
-          </form>
-        </>
-      )}
-    </div>
+          )}
+
+          {step === "password" && (
+            <form onSubmit={updatePassword} className="space-y-5">
+              <div>
+                <label
+                  htmlFor="password"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  New password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+                  disabled={loading}
+                  required
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="confirm-password"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  Confirm new password
+                </label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  placeholder="Confirm new password"
+                  className="w-full rounded-lg border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
+                  disabled={loading}
+                  required
+                />
+              </div>
+
+              <div className="rounded-lg bg-gray-50 p-4 text-sm">
+                <p className="mb-2 font-medium text-gray-700">
+                  Password requirements
+                </p>
+                <ul className="space-y-1 text-gray-500">
+                  <li className={passwordRules.length ? "text-green-600" : ""}>
+                    • At least 8 characters
+                  </li>
+                  <li className={passwordRules.uppercase ? "text-green-600" : ""}>
+                    • At least one uppercase letter
+                  </li>
+                  <li className={passwordRules.lowercase ? "text-green-600" : ""}>
+                    • At least one lowercase letter
+                  </li>
+                  <li className={passwordRules.special ? "text-green-600" : ""}>
+                    • At least one special character
+                  </li>
+                </ul>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !passwordValid || !passwordsMatch}
+                className="w-full rounded-lg bg-pink-600 px-4 py-3 font-medium text-white transition hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "Changing password..." : "Change password"}
+              </button>
+            </form>
+          )}
+        </section>
+      </div>
+    </main>
   );
 }
