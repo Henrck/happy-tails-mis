@@ -140,7 +140,7 @@ function ProfilePageInner() {
               <div>
                 <h2 className="text-xl font-bold text-zinc-900">{profile.full_name || "Superadmin"}</h2>
                 <span className="mt-1 inline-block text-xs font-semibold px-3 py-1 rounded-full bg-brand-tint text-brand-pink">
-                  {profile.role === "superadmin" ? "Super Admin" : profile.role}
+                  {profile.role === "superadmin" ? "Super Admin" : profile.role === "admin" ? "Staff" : profile.role}
                 </span>
               </div>
               {!editMode && (

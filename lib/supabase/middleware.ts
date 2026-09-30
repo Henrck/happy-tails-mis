@@ -1,10 +1,6 @@
 // Called by the root proxy.ts on every request to /account/* or /admin/*.
-// Refreshes the session, then checks:
-//   - not logged in at all -> redirect to /sign-in
-//   - logged in but visiting /admin without the "superadmin" role ->
-//     redirect away (to /account). Note: "admin" (staff) role exists in
-//     the schema but has no dashboard access built yet — only superadmin
-//     passes this check for now, by design.
+// Refreshes the session and enforces authentication, account status, and
+// role access for the admin workspace.
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -45,14 +41,6 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Deactivating an account (Customer or Staff Detail modal in User
-  // Management) previously only flipped a status column — nothing
-  // actually enforced it, so a deactivated user could still sign in
-  // and use every route normally. This runs on every /account and
-  // /admin request, so it catches both a fresh sign-in attempt and an
-  // already-logged-in session's next navigation. The corresponding
-  // *live* kick-out (no navigation needed) is handled client-side by
-  // AccountStatusWatcher, since middleware only runs on new requests.
   if (user && (isAdminRoute || isAccountRoute)) {
     const [{ data: customerRow }, { data: staffRow }] = await Promise.all([
       supabase.from("customers").select("status").eq("id", user.id).maybeSingle(),
@@ -76,7 +64,7 @@ export async function updateSession(request: NextRequest) {
       .eq("id", user.id)
       .single();
 
-    if (profile?.role !== "superadmin") {
+    if (profile?.role !== "superadmin" && profile?.role !== "admin") {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/account";
       return NextResponse.redirect(redirectUrl);

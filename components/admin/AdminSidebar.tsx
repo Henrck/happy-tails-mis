@@ -24,10 +24,10 @@ const navItems = [
   { href: "/admin/pos", label: "Point of Sale", icon: "cart" },
   { href: "/admin/inventory", label: "Inventory", icon: "box" },
   { href: "/admin/pet-records", label: "Pet's Record", icon: "file" },
-  { href: "/admin/service-management", label: "Service Management", icon: "sliders" },
-  { href: "/admin/website-management", label: "Website Management", icon: "globe" },
+  { href: "/admin/service-management", label: "Service Management", icon: "sliders", superadminOnly: true },
+  { href: "/admin/website-management", label: "Website Management", icon: "globe", superadminOnly: true },
   { href: "/admin/reports", label: "Report Management", icon: "chart" },
-  { href: "/admin/users", label: "User Management", icon: "users" },
+  { href: "/admin/users", label: "User Management", icon: "users", superadminOnly: true },
   { href: "/admin/profile", label: "Profile", icon: "user" },
 ];
 
@@ -56,12 +56,16 @@ export default function AdminSidebar({
   open,
   onToggle,
   onLogout,
+  role,
 }: {
   open: boolean;
   onToggle: () => void;
   onLogout: () => void;
+  role?: string;
 }) {
   const pathname = usePathname();
+  const isStaff = role === "admin";
+  const visibleItems = isStaff ? navItems.filter((item) => !item.superadminOnly) : navItems;
 
   return (
     <aside className={`h-screen sticky top-0 bg-brand-pink text-white flex flex-col shrink-0 transition-all duration-300 overflow-hidden ${open ? "w-56" : "w-16"}`}>
@@ -70,7 +74,9 @@ export default function AdminSidebar({
           {open && (
             <div className="flex items-center gap-2 min-w-0">
               <Image src="/images/logo.png" alt="Happy Tails" width={36} height={36} className="w-9 h-auto shrink-0" />
-              <span className="text-sm font-bold truncate">Admin</span>
+              <div className="min-w-0">
+                <span className="text-sm font-bold truncate block">{isStaff ? "Staff" : "Admin"}</span>
+              </div>
             </div>
           )}
           <button
@@ -85,7 +91,7 @@ export default function AdminSidebar({
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2">
-          {navItems.map((item) => {
+          {visibleItems.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link

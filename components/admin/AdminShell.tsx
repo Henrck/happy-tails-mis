@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client";
 import AdminSidebar from "./AdminSidebar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
-export default function AdminShell({ children }: { children: React.ReactNode }) {
+export default function AdminShell({ children, role }: { children: React.ReactNode; role?: string }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} onLogout={() => setLogoutConfirmOpen(true)} />
+      <AdminSidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} onLogout={() => setLogoutConfirmOpen(true)} role={role} />
 
       <main className="flex-1 min-w-0 bg-[#FDF1F7] p-6 md:p-8 overflow-y-auto">
         {children}

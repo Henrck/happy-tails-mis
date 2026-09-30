@@ -1,11 +1,5 @@
 "use client";
-// Real sign-in form. Accepts either a username or an email in one
-// field — Supabase Auth itself only understands email, so a typed
-// username gets resolved to its real email first (via the narrow
-// email_for_username RPC, safe to call before login — see migration
-// 030), then signs in normally with that email. On success, checks the
-// user's role in `profiles` and redirects: superadmin -> /admin,
-// everyone else -> /account.
+
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -36,7 +30,10 @@ function SignInForm() {
     }
 
     const supabase = createClient();
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (signInError || !data.user) {
       setError(signInError?.message ?? "Something went wrong signing in.");
@@ -50,10 +47,6 @@ function SignInForm() {
       .eq("id", data.user.id)
       .single();
 
-    // Deactivated accounts could still authenticate against Supabase
-    // Auth just fine (a status column doesn't touch the actual password
-    // check) — this is what actually stops a deactivated user from
-    // getting in, rather than just showing a status label in admin.
     const [{ data: customerRow }, { data: staffRow }] = await Promise.all([
       supabase.from("customers").select("status").eq("id", data.user.id).maybeSingle(),
       supabase.from("staff_profiles").select("status").eq("id", data.user.id).maybeSingle(),
@@ -69,10 +62,17 @@ function SignInForm() {
 
     if (profileError || !profile) {
       router.push("/account");
+      router.refresh();
       return;
     }
 
-    router.push(profile.role === "superadmin" ? "/admin" : "/account");
+    // Staff accounts are created with the `admin` role and use the same
+    // admin workspace as the superadmin. Superadmin keeps its existing route.
+    if (profile.role === "superadmin" || profile.role === "admin") {
+      router.push("/admin");
+    } else {
+      router.push("/account");
+    }
     router.refresh();
   }
 

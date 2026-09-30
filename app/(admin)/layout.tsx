@@ -1,7 +1,5 @@
-// Layout for everything under /admin. The proxy (middleware) already
-// blocks non-superadmins at the network edge, but we check again here, on
-// the server, before rendering anything — two independent checks for
-// something this sensitive is intentional, not redundant.
+// Layout for everything under /admin.
+// Both superadmins and staff accounts (role = admin) can enter the admin workspace.
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
@@ -28,13 +26,10 @@ export default async function AdminLayout({
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "superadmin") {
+  if (profile?.role !== "superadmin" && profile?.role !== "admin") {
     redirect("/account");
   }
 
-  // Not every superadmin necessarily has a staff_profiles row (the
-  // owner account may predate that table) — only watch if one exists,
-  // since there's nothing to deactivate otherwise.
   const { data: staffRow } = await supabase
     .from("staff_profiles")
     .select("id")
