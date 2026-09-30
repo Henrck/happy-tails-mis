@@ -1,22 +1,14 @@
 @import "tailwindcss";
 
-html {
-  scroll-behavior: smooth;
-  scroll-padding-top: 4rem;
-}
+html { scroll-behavior: smooth; scroll-padding-top: 4rem; }
+section[id], footer[id] { scroll-margin-top: 4rem; }
 
-section[id], footer[id] {
-  scroll-margin-top: 4rem;
-}
-
-/* Shared brand system — Sonnet 5-inspired Happy Tails palette. */
 :root {
   --color-brand-pink: #F53D93;
   --color-brand-pink-dark: #D42B7C;
   --color-brand-pink-light: #FBA8CE;
   --color-brand-tint: #FDF1F7;
   --color-brand-cyan: #7DD3FC;
-
   --background: #ffffff;
   --foreground: #171717;
 }
@@ -37,96 +29,43 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
+  overflow-x: hidden;
 }
 
-h1, h2, h3, h4 {
-  font-family: var(--font-heading), sans-serif;
-  font-weight: 600;
-}
+h1, h2, h3, h4 { font-family: var(--font-heading), sans-serif; font-weight: 600; }
 
 @layer components {
   .site-container {
     width: 100%;
     max-width: 72rem;
-    margin-left: auto;
-    margin-right: auto;
-    padding-left: 1.25rem;
-    padding-right: 1.25rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .site-container { padding-inline: 1.5rem; }
   }
 
   @media (min-width: 768px) {
-    .site-container {
-      padding-left: 2rem;
-      padding-right: 2rem;
-    }
+    .site-container { padding-inline: 2rem; }
   }
 
-  /*
-   * Landing-page sizing:
-   * - every direct section gets the same anchor offset;
-   * - short sections are given at least one viewport of breathing room;
-   * - long sections are allowed to grow naturally rather than clipping
-   *   descriptions or pricing rows.
-   */
-  main > section {
-    scroll-margin-top: 4rem;
-    box-sizing: border-box;
+  @media (min-width: 1280px) {
+    .site-container { padding-inline: 2.5rem; }
   }
-}
 
-
-/* ============================================================
-   LANDING PAGE VIEWPORT FORMAT
-   Desktop reference: 1920 × 1080.
-   The section uses the actual browser viewport so it remains fitted
-   when Windows/browser scaling makes the CSS viewport smaller.
-   Tablet/mobile use natural content height.
-   ============================================================ */
-
-@media (min-width: 1024px) {
   main > section {
     width: 100%;
-    min-height: calc(100dvh - 4rem);
     box-sizing: border-box;
     scroll-margin-top: 4rem;
   }
-
-  /* Keep content sections vertically balanced without forcing a fixed
-     1080 CSS-pixel height that can extend below the user's screen. */
-  main > section:not(#home) {
-    min-height: calc(100dvh - 4rem);
-  }
-
-  main > section#services,
-  main > section:not(#home):not(#services):not(#about) {
-    display: flex;
-    align-items: center;
-  }
-
-  main > section#services > .site-container,
-  main > section:not(#home):not(#services):not(#about) > .site-container {
-    width: 100%;
-  }
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
-  main > section {
-    width: 100%;
-    min-height: calc(100dvh - 4rem);
-    height: auto;
-    max-height: none;
-    overflow: visible;
-    scroll-margin-top: 4rem;
-  }
-}
-
-@media (max-width: 767px) {
-  main > section {
-    width: 100%;
-    min-height: 0;
-    height: auto;
-    max-height: none;
-    overflow: visible;
-    scroll-margin-top: 4rem;
-  }
+/*
+ * Landing pages should grow with their content. Do not force every section
+ * to viewport height: pricing, service cards, benefits and galleries can be
+ * taller than the viewport, especially on tablets and phones.
+ */
+@media (max-width: 1023px) {
+  main > section { min-height: 0; height: auto; max-height: none; overflow: visible; }
 }
