@@ -1,12 +1,9 @@
 "use client";
-// Point of Sale — REAL version. Fetches active products from Supabase
-// instead of a hardcoded mock array (this is what fixes "discontinuing
-// in Inventory still shows in POS" — they now read the exact same
-// table). Process Payment now actually deducts real stock via the FEFO
-// function, for every line item — this never happened before this
-// rewrite; checkout and Inventory were completely disconnected.
+// Point of Sale — normal sales operations remain available to staff.
+// POS Configuration is visible and accessible only to superadmins.
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { fetchProducts, sellProduct } from "@/lib/supabase/products";
 import { recordSale } from "@/lib/supabase/sales";
 import type { Product, ProductCategory } from "@/lib/types/products";
@@ -28,6 +25,7 @@ export default function PointOfSalePage() {
   const [returnOpen, setReturnOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
 
   async function loadProducts() {
     setLoading(true);
@@ -38,6 +36,18 @@ export default function PointOfSalePage() {
 
   useEffect(() => {
     async function load() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        setIsSuperadmin(profile?.role === "superadmin");
+      }
+
       await loadProducts();
     }
     load();
@@ -80,10 +90,6 @@ export default function PointOfSalePage() {
   async function handleConfirmPayment(amountPaid: number, method: string) {
     setCheckoutError(null);
 
-    // Deduct real stock (FEFO) for every line item. If any line fails
-    // (not enough stock — e.g. someone else already sold the last few
-    // units), stop and show the error rather than silently completing
-    // a sale that oversells what's actually on the shelf.
     for (const line of cartLines) {
       const { error } = await sellProduct(line.product.id, line.qty);
       if (error) {
@@ -92,10 +98,6 @@ export default function PointOfSalePage() {
       }
     }
 
-    // Stock is already deducted at this point — the sale itself went
-    // through. If logging it fails, that's a real problem (it won't show
-    // up in Sales Reports) but it should NOT look like the sale failed,
-    // since it didn't; surface it as a distinct warning instead.
     const itemCount = cartLines.reduce((sum, l) => sum + l.qty, 0);
     const { error: recordError, invoiceNumber } = await recordSale(
       cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty, unitPrice: l.product.price })),
@@ -105,8 +107,6 @@ export default function PointOfSalePage() {
     setPaymentOpen(false);
 
     if (recordError) {
-      // Don't show the success modal on top of a logging failure — the
-      // warning below already explains the sale went through.
       setCheckoutError(`Sale completed and stock was deducted, but it couldn't be logged to Sales Reports: ${recordError}`);
     } else {
       setCompletedSale({
@@ -121,7 +121,7 @@ export default function PointOfSalePage() {
     }
 
     clearCart();
-    loadProducts(); // refresh stock numbers/availability after the sale
+    loadProducts();
   }
 
   return (
@@ -129,16 +129,18 @@ export default function PointOfSalePage() {
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-3xl font-bold text-brand-pink">Point of Sales</h1>
-          <button
-            onClick={() => router.push("/admin/pos/configuration")}
-            className="flex items-center gap-1.5 border-2 border-brand-pink text-brand-pink font-semibold text-sm px-4 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors whitespace-nowrap"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Configuration
-          </button>
+          {isSuperadmin && (
+            <button
+              onClick={() => router.push("/admin/pos/configuration")}
+              className="flex items-center gap-1.5 border-2 border-brand-pink text-brand-pink font-semibold text-sm px-4 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors whitespace-nowrap"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0 .33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+              Configuration
+            </button>
+          )}
         </div>
 
         {checkoutError && (

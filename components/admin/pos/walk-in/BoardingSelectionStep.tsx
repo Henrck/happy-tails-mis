@@ -19,6 +19,37 @@ function labelForSize(size: BoardingKennelSize) {
   return size === "small" ? "Small Kennel" : "Big Kennel";
 }
 
+/**
+ * Boarding rates do not have a dedicated sort_order field, so the safest
+ * ordering is the actual stay duration. Fixed tiers use `nights`; the
+ * open-ended per-night tier is always placed after the fixed tiers.
+ */
+function rateSortValue(rate: PackagePricing): number {
+  if (rate.is_per_night) return Number.MAX_SAFE_INTEGER;
+  if (typeof rate.nights === "number" && rate.nights > 0) return rate.nights;
+
+  const text = `${rate.size_detail ?? ""} ${rate.size_label ?? ""}`.toLowerCase();
+  const match = text.match(/(\d+)\s*nights?/);
+  if (match) return Number(match[1]);
+
+  return Number.MAX_SAFE_INTEGER - 1;
+}
+
+function sortBoardingRates(rates: PackagePricing[]): PackagePricing[] {
+  return [...rates].sort((a, b) => {
+    const nightsDiff = rateSortValue(a) - rateSortValue(b);
+    if (nightsDiff !== 0) return nightsDiff;
+
+    if (a.is_per_night !== b.is_per_night) return a.is_per_night ? 1 : -1;
+    return a.price - b.price;
+  });
+}
+
+function isSevenDaysOrMore(rate: PackagePricing) {
+  const label = `${rate.size_label ?? ""} ${rate.size_detail ?? ""}`.toLowerCase();
+  return rate.is_per_night || label.includes("7") || label.includes("week");
+}
+
 export default function BoardingSelectionStep({
   pets,
   selections,
@@ -34,11 +65,6 @@ export default function BoardingSelectionStep({
   scheduledDate: string | null;
   onBack: () => void;
   onNext: () => void;
-  // Pets that already have a completed grooming leg earlier in this
-  // same multi-service booking — a "Full Grooming" boarding add-on
-  // would just be double-booking a service they've already gotten, so
-  // it's hidden for those pets specifically (other pets in the same
-  // boarding leg who weren't groomed still see it normally).
   alreadyGroomedPetIds?: string[];
 }) {
   const [packages, setPackages] = useState<Package[]>([]);
@@ -50,11 +76,6 @@ export default function BoardingSelectionStep({
     Record<BoardingKennelSize, string | null>
   >({ small: null, big: null });
   const [customNights, setCustomNights] = useState<Record<string, number>>({});
-
-  function isSevenDaysOrMore(rate: PackagePricing) {
-    const label = `${rate.size_label ?? ""} ${rate.size_detail ?? ""}`.toLowerCase();
-    return label.includes("7") || label.includes("week");
-  }
 
   function getNights(petId: string) {
     return Math.max(7, Number(customNights[petId] || 7));
@@ -79,8 +100,12 @@ export default function BoardingSelectionStep({
     loadData();
   }, [loadData]);
 
-  // Restore selected duration/rate when returning to this step.
+  // Restore the user's previous rates when the wizard returns to this step.
+  // Only initialize/repair missing selections; don't continuously overwrite
+  // a rate while the user is actively changing it.
   useEffect(() => {
+    if (!pricing.length || !packages.length) return;
+
     const restored: Record<BoardingKennelSize, string | null> = {
       small: null,
       big: null,
@@ -96,27 +121,40 @@ export default function BoardingSelectionStep({
       if (!pkg) continue;
 
       const lower = pkg.name.toLowerCase();
-      if (lower.includes("small")) restored.small = rate.id;
-      if (lower.includes("big")) restored.big = rate.id;
+      if (lower.includes("small") && !restored.small) restored.small = rate.id;
+      if (lower.includes("big") && !restored.big) restored.big = rate.id;
     }
 
-    // selections is updated by computeTotals(), so this effect can run again
-    // even when the restored rate IDs have not actually changed. Do not call
-    // setState with a new object unless the values are different; otherwise
-    // React can enter a render -> effect -> setState loop.
-    setDurationRateId((previous) => {
-      if (
-        previous.small === restored.small &&
-        previous.big === restored.big
-      ) {
-        return previous;
-      }
-      return restored;
-    });
-  }, [selections, pricing, packages]);
+    setDurationRateId((previous) => ({
+      small: previous.small ?? restored.small,
+      big: previous.big ?? restored.big,
+    }));
+  }, [pricing, packages, selections]);
 
   function selectionFor(pet: Pet) {
     return selections.find((s) => s.pet.id === pet.id);
+  }
+
+  function addonTotalFor(selection: DraftPetSelection | undefined) {
+    return (
+      selection?.addonIds.reduce(
+        (sum, id) =>
+          sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+        0
+      ) ?? 0
+    );
+  }
+
+  function lineAmountFor(
+    rate: PackagePricing,
+    petId: string,
+    addonTotal: number
+  ) {
+    const base = rate.is_per_night
+      ? rate.price * getNights(petId)
+      : rate.price;
+
+    return base + addonTotal;
   }
 
   function updateSelection(
@@ -147,45 +185,27 @@ export default function BoardingSelectionStep({
     pet: Pet,
     size: BoardingKennelSize
   ) {
-    const current = selectionFor(pet);
-
-    // A real kennel number is deliberately NOT selected here.
-    // The appointment module assigns the actual kennel at check-in.
     const selectedRateId = durationRateId[size];
+    const selectedRate = selectedRateId
+      ? pricing.find((rate) => rate.id === selectedRateId)
+      : null;
+
     const selectedPackage = packages.find((pkg) =>
       pkg.name.toLowerCase().includes(size === "small" ? "small" : "big")
     );
 
-    updateSelection(pet, {
+    const current = selectionFor(pet);
+    const patch: Partial<DraftPetSelection> = {
       kennelId: null,
       boardingKennelSize: size,
       packageId: selectedPackage?.id ?? null,
-      packagePricingId: selectedRateId,
-    });
+      packagePricingId: selectedRate?.id ?? null,
+      lineAmount: selectedRate
+        ? lineAmountFor(selectedRate, pet.id, addonTotalFor(current))
+        : addonTotalFor(current),
+    };
 
-    if (selectedRateId) {
-      const rate = pricing.find((p) => p.id === selectedRateId);
-      if (rate) {
-        const addonsTotal =
-          current?.addonIds.reduce(
-            (sum, id) =>
-              sum +
-              (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
-            0
-          ) ?? 0;
-
-        updateSelection(pet, {
-          kennelId: null,
-          boardingKennelSize: size,
-          packageId: selectedPackage?.id ?? null,
-          packagePricingId: selectedRateId,
-          lineAmount:
-            (rate.is_per_night && isSevenDaysOrMore(rate)
-              ? rate.price * getNights(pet.id)
-              : rate.price) + addonsTotal,
-        });
-      }
-    }
+    updateSelection(pet, patch);
   }
 
   function pricingFor(size: BoardingKennelSize) {
@@ -194,57 +214,8 @@ export default function BoardingSelectionStep({
     );
 
     if (!pkg) return [];
-    return pricing.filter((p) => p.package_id === pkg.id);
+    return sortBoardingRates(pricing.filter((p) => p.package_id === pkg.id));
   }
-
-  function computeTotals() {
-    const updated = selections.map((sel) => {
-      const size = sel.boardingKennelSize;
-      const rateId = size ? durationRateId[size] : null;
-      const rate = pricing.find((p) => p.id === rateId);
-
-      if (!rate) {
-        return {
-          ...sel,
-          kennelId: null,
-          packagePricingId: null,
-          lineAmount: sel.addonIds.reduce(
-            (sum, id) =>
-              sum +
-              (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
-            0
-          ),
-        };
-      }
-
-      const addonsTotal = sel.addonIds.reduce(
-        (sum, id) =>
-          sum +
-          (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
-        0
-      );
-
-      return {
-        ...sel,
-        kennelId: null,
-        packageId: rate.package_id,
-        packagePricingId: rate.id,
-        lineAmount:
-  (rate.is_per_night && isSevenDaysOrMore(rate)
-    ? rate.price * getNights(sel.pet.id)
-    : rate.price) + addonsTotal,
-      };
-    });
-
-    onChange(updated);
-  }
-
-  useEffect(() => {
-    if (pricing.length > 0) {
-      computeTotals();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durationRateId, customNights, pricing.length, addonPrices.length]);
 
   function selectRate(
     pet: Pet,
@@ -253,22 +224,40 @@ export default function BoardingSelectionStep({
   ) {
     setDurationRateId((prev) => ({ ...prev, [size]: rate.id }));
 
-    const sel = selectionFor(pet);
-    const addonsTotal =
-      sel?.addonIds.reduce(
-        (sum, id) =>
-          sum +
-          (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
-        0
-      ) ?? 0;
+    const current = selectionFor(pet);
 
     updateSelection(pet, {
       kennelId: null,
       boardingKennelSize: size,
       packageId: rate.package_id,
       packagePricingId: rate.id,
-      lineAmount: rate.price + addonsTotal,
+      lineAmount: lineAmountFor(rate, pet.id, addonTotalFor(current)),
     });
+  }
+
+  function setNights(pet: Pet, value: string) {
+    const nights = Math.max(7, Number(value) || 7);
+
+    setCustomNights((prev) => ({
+      ...prev,
+      [pet.id]: nights,
+    }));
+
+    const current = selectionFor(pet);
+    const size = current?.boardingKennelSize;
+    const rateId = size ? durationRateId[size] : current?.packagePricingId;
+    const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
+
+    if (rate) {
+      updateSelection(pet, {
+        kennelId: null,
+        boardingKennelSize: size,
+        packageId: rate.package_id,
+        packagePricingId: rate.id,
+        boardingNights: nights,
+        lineAmount: lineAmountFor(rate, pet.id, addonTotalFor(current)),
+      });
+    }
   }
 
   function toggleAddon(pet: Pet, addonId: string) {
@@ -279,11 +268,55 @@ export default function BoardingSelectionStep({
       ? sel.addonIds.filter((id) => id !== addonId)
       : [...sel.addonIds, addonId];
 
-    updateSelection(pet, { addonIds });
+    const size = sel.boardingKennelSize;
+    const rateId = size ? durationRateId[size] : sel.packagePricingId;
+    const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
+
+    updateSelection(pet, {
+      addonIds,
+      lineAmount: rate
+        ? lineAmountFor(rate, pet.id, addonIds.reduce(
+            (sum, id) =>
+              sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+            0
+          ))
+        : addonIds.reduce(
+            (sum, id) =>
+              sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0),
+            0
+          ),
+    });
+  }
+
+  function computeTotals() {
+    const updated = selections.map((sel) => {
+      const size = sel.boardingKennelSize;
+      const rateId = size ? durationRateId[size] : sel.packagePricingId;
+      const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
+
+      if (!rate) {
+        return {
+          ...sel,
+          kennelId: null,
+          packagePricingId: null,
+          lineAmount: addonTotalFor(sel),
+        };
+      }
+
+      return {
+        ...sel,
+        kennelId: null,
+        packageId: rate.package_id,
+        packagePricingId: rate.id,
+        lineAmount: lineAmountFor(rate, sel.pet.id, addonTotalFor(sel)),
+      };
+    });
+
+    onChange(updated);
   }
 
   const allPetsHaveKennelSize = pets.every(
-    (pet) => selectionFor(pet)?.boardingKennelSize
+    (pet) => !!selectionFor(pet)?.boardingKennelSize
   );
 
   const allRatesChosen = pets.every((pet) => {
@@ -327,11 +360,7 @@ export default function BoardingSelectionStep({
                 strokeWidth="3"
                 className="shrink-0 text-brand-pink"
               >
-                <path
-                  d="M5 13l4 4L19 7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               {inc}
             </li>
@@ -345,9 +374,7 @@ export default function BoardingSelectionStep({
         in the Appointment module when your pet checks in.
       </div>
 
-      <p className="mt-6 font-bold text-zinc-800">
-        Kennel Size
-      </p>
+      <p className="mt-6 font-bold text-zinc-800">Kennel Size</p>
 
       <div className="mt-2 space-y-3">
         {pets.map((pet) => {
@@ -355,16 +382,10 @@ export default function BoardingSelectionStep({
           const selectedSize = sel?.boardingKennelSize;
 
           return (
-            <div
-              key={pet.id}
-              className="rounded-xl border border-pink-100 bg-white p-4"
-            >
+            <div key={pet.id} className="rounded-xl border border-pink-100 bg-white p-4">
               <p className="text-sm font-semibold text-zinc-800">
                 {pet.name}
-                <span className="font-normal text-zinc-400">
-                  {" "}
-                  ({pet.size_label})
-                </span>
+                <span className="font-normal text-zinc-400"> ({pet.size_label})</span>
               </p>
 
               <div className="mt-3 grid grid-cols-2 gap-2">
@@ -411,8 +432,7 @@ export default function BoardingSelectionStep({
                               : "border-pink-200 text-zinc-700 hover:border-brand-pink",
                           ].join(" ")}
                         >
-                          {rate.size_detail ?? rate.size_label} — ₱
-                          {rate.price.toLocaleString()}
+                          {rate.size_detail ?? rate.size_label} — ₱{rate.price.toLocaleString()}
                           {rate.is_per_night ? " / night" : ""}
                         </button>
                       );
@@ -432,6 +452,7 @@ export default function BoardingSelectionStep({
                         >
                           Number of nights
                         </label>
+
                         <div className="mt-2 flex items-center gap-2">
                           <input
                             id={`boarding-nights-${pet.id}`}
@@ -439,62 +460,25 @@ export default function BoardingSelectionStep({
                             min={7}
                             step={1}
                             value={getNights(pet.id)}
-                            onChange={(event) => {
-                              const nights = Math.max(
-                                7,
-                                Number(event.target.value) || 7
-                              );
-                              setCustomNights((prev) => ({
-                                ...prev,
-                                [pet.id]: nights,
-                              }));
-
-                              const current = selectionFor(pet);
-                              const selectedRate = pricing.find(
-                                (rate) =>
-                                  rate.id === durationRateId[selectedSize]
-                              );
-
-                              if (selectedRate) {
-                                const addonsTotal =
-                                  current?.addonIds.reduce(
-                                    (sum, id) =>
-                                      sum +
-                                      (addonPrices.find(
-                                        (p) => p.addon_id === id
-                                      )?.price ?? 0),
-                                    0
-                                  ) ?? 0;
-
-                                updateSelection(pet, {
-                                  kennelId: null,
-                                  boardingKennelSize: selectedSize,
-                                  packagePricingId: selectedRate.id,
-                                  lineAmount:
-                                    selectedRate.price * nights +
-                                    addonsTotal,
-                                });
-                              }
-                            }}
+                            onChange={(event) => setNights(pet, event.target.value)}
                             className="w-28 rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-brand-pink focus:ring-2 focus:ring-pink-100"
                           />
                           <span className="text-xs text-zinc-500">
-                            nights × ₱{selectedSize
-                              ? (
-                                  pricing.find(
-                                    (rate) =>
-                                      rate.id === durationRateId[selectedSize]
-                                  )?.price ?? 550
-                                ).toLocaleString()
-                              : "550"}
-                            {" "}per night
+                            nights × ₱
+                            {(
+                              pricing.find(
+                                (rate) => rate.id === durationRateId[selectedSize]
+                              )?.price ?? 550
+                            ).toLocaleString()}{" "}
+                            per night
                           </span>
                         </div>
+
                         <p className="mt-1 text-[11px] text-zinc-400">
-                          7 nights = ₱{(
+                          {getNights(pet.id)} nights = ₱
+                          {(
                             (pricing.find(
-                              (rate) =>
-                                rate.id === durationRateId[selectedSize]
+                              (rate) => rate.id === durationRateId[selectedSize]
                             )?.price ?? 550) * getNights(pet.id)
                           ).toLocaleString()}
                         </p>
@@ -511,9 +495,7 @@ export default function BoardingSelectionStep({
         <>
           <p className="mt-6 font-bold text-zinc-800">
             Add-Ons{" "}
-            <span className="text-sm font-normal text-zinc-400">
-              (Optional)
-            </span>
+            <span className="text-sm font-normal text-zinc-400">(Optional)</span>
           </p>
 
           {pets.map((pet) => {
@@ -525,18 +507,17 @@ export default function BoardingSelectionStep({
 
             return (
               <div key={pet.id} className="mt-2">
-                <p className="text-xs font-semibold text-zinc-500">
-                  {pet.name}
-                </p>
+                <p className="text-xs font-semibold text-zinc-500">{pet.name}</p>
+
                 {alreadyGroomed && addons.length !== petAddons.length && (
-                  <p className="text-[11px] text-zinc-400">Already availed grooming in this booking.</p>
+                  <p className="text-[11px] text-zinc-400">
+                    Already availed grooming in this booking.
+                  </p>
                 )}
 
                 <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {petAddons.map((addon) => {
-                    const priceRow = addonPrices.find(
-                      (p) => p.addon_id === addon.id
-                    );
+                    const priceRow = addonPrices.find((p) => p.addon_id === addon.id);
                     const selected = sel?.addonIds.includes(addon.id);
 
                     return (
@@ -553,13 +534,7 @@ export default function BoardingSelectionStep({
                       >
                         <p className="font-semibold">{addon.name}</p>
                         {priceRow && (
-                          <p
-                            className={
-                              selected
-                                ? "text-white/80"
-                                : "text-zinc-400"
-                            }
-                          >
+                          <p className={selected ? "text-white/80" : "text-zinc-400"}>
                             +₱{priceRow.price}
                           </p>
                         )}

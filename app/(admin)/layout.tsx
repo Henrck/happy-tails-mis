@@ -39,7 +39,7 @@ export default async function AdminLayout({
   return (
     <>
       {staffRow && <AccountStatusWatcher userId={user.id} table="staff_profiles" />}
-      <AdminShell>{children}</AdminShell>
+      <AdminShell role={profile.role}>{children}</AdminShell>
     </>
   );
 }

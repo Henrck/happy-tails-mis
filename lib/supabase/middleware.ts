@@ -3,6 +3,7 @@
 // role access for the admin workspace.
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSuperadminOnlyRoute } from "@/lib/admin-access";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -67,6 +68,14 @@ export async function updateSession(request: NextRequest) {
     if (profile?.role !== "superadmin" && profile?.role !== "admin") {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/account";
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Staff can use the operational parts of the admin workspace, but cannot
+    // open configuration/management routes even if they manually type the URL.
+    if (profile.role === "admin" && isSuperadminOnlyRoute(request.nextUrl.pathname)) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/admin";
       return NextResponse.redirect(redirectUrl);
     }
   }

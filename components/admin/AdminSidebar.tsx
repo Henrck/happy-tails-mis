@@ -1,18 +1,4 @@
 "use client";
-// v3: the old top black "DASHBOARD ADMIN" bar (and its hamburger) is
-// gone — the hamburger now lives inside the sidebar itself, at the top.
-// Because of that, collapsing the sidebar can't fully hide it anymore
-// (w-0 would leave nothing to click to reopen it, since there's no
-// longer a topbar holding a second toggle) — collapsed state now shows
-// a slim icon-only rail instead of disappearing entirely.
-//
-// The user footer block above Log Out has been removed per request.
-//
-// Height fix: `h-screen sticky top-0` makes the sidebar's own height
-// always equal to the viewport, independent of how tall the page
-// content is — previously it was just a flex child with h-full, which
-// stretched to match tall pages (e.g. Service Management), pushing Log
-// Out far below the fold instead of staying pinned at the bottom.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -26,7 +12,7 @@ const navItems = [
   { href: "/admin/pet-records", label: "Pet's Record", icon: "file" },
   { href: "/admin/service-management", label: "Service Management", icon: "sliders", superadminOnly: true },
   { href: "/admin/website-management", label: "Website Management", icon: "globe", superadminOnly: true },
-  { href: "/admin/reports", label: "Report Management", icon: "chart" },
+  { href: "/admin/reports", label: "Report Management", icon: "chart", superadminOnly: true },
   { href: "/admin/users", label: "User Management", icon: "users", superadminOnly: true },
   { href: "/admin/profile", label: "Profile", icon: "user" },
 ];
@@ -35,7 +21,7 @@ function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     calendar: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4",
-    paw: "M8 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM19 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 21c-3 0-6-1.5-6-4.5S9 13 12 13s6 .5 6 3.5S15 21 12 21z",
+    paw: "M8 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 13a2 2 0 1 0-4 0 2 2 0 0 0 0 4zM19 13a2 2 0 1 0-4 0 2 2 0 0 0 0 4zM12 21c-3 0-6-1.5-6-4.5S9 13 12 13s6 .5 6 3.5S15 21 12 21z",
     cart: "M3 4h2l2.5 12h11L21 8H6M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
     box: "M4 8l8-4 8 4-8 4-8-4zM4 8v8l8 4 8-4V8M12 12v8",
     file: "M6 3h9l5 5v13H6zM14 3v6h6",
