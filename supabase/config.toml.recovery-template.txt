@@ -1,0 +1,6 @@
+# Add this block to your existing supabase/config.toml.
+# Do not replace your entire config.toml with this snippet.
+
+[auth.email.template.recovery]
+subject = "Your Happy Tails password reset code"
+content_path = "./supabase/templates/recovery.html"
