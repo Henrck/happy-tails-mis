@@ -77,14 +77,14 @@ export type DraftPetSelection = {
   packageId: string | null;
   packagePricingId: string | null;
   sizeId: string | null;
-  // Actual kennel number is assigned later in the Appointment module.
   kennelId: string | null;
-  // Temporary booking choice used to carry the requested kennel size
-  // through the wizard. The database derives the final kennel assignment
-  // from the appointment check-in process.
   boardingKennelSize?: "small" | "big" | null;
-  // Number of nights selected for open-ended/per-night boarding rates.
   boardingNights?: number | null;
+  // Boarding schedule is stored per pet. This is intentional: two pets
+  // with different kennel sizes must not share one appointment schedule.
+  boardingScheduledDate?: string | null;
+  boardingDropOffAt?: string | null;
+  boardingPickUpAt?: string | null;
   groomerId: string | null;
   addonIds: string[];
   lineAmount: number;
