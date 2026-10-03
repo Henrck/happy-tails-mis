@@ -1,9 +1,3 @@
-// The in-progress state of a walk-in booking as it moves through the
-// wizard. Nothing here is saved to the database until the final Summary
-// step calls createAppointment() — this is purely client-side draft
-// state, which is why it's looser than the real Appointment type (e.g.
-// customer can be null with just ownerName/ownerContact filled in for a
-// walk-in without an account).
 import type { Customer } from "@/lib/types/users";
 import type { ServiceType } from "@/lib/types/services";
 import type { Pet, DraftPetSelection, AppointmentServiceType } from "@/lib/types/appointments";
@@ -11,22 +5,22 @@ import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/Service
 
 export type WalkInStep =
   | "verify"
+  | "pet-info"
   | "service"
   | "waiver"
-  | "pet-info"
   | "selection"
   | "schedule"
   | "summary";
 
 export type WalkInDraft = {
-  customer: Customer | null; // null = walk-in without an account
+  customer: Customer | null;
   ownerName: string;
   ownerContact: string;
   ownerAddress: string;
-  serviceChoice: WalkInServiceChoice | null; // dog_grooming | cat_grooming | boarding | ala_carte — Ala Carte is a real 4th sibling, not a modifier
+  serviceChoice: WalkInServiceChoice | null;
   waiverAgreed: boolean;
-  pets: Pet[]; // pets involved in this booking (existing, selected, or newly added)
-  petSelections: DraftPetSelection[]; // built up during the Selection step
+  pets: Pet[];
+  petSelections: DraftPetSelection[];
   scheduledDate: string | null;
   scheduledTime: string | null;
   dropOffAt: string | null;
@@ -35,12 +29,10 @@ export type WalkInDraft = {
   specialRequests: string;
 };
 
-// Maps the wizard's 4-way choice down to the real appointments.service_type
-// column, which only has 4 values too (dog_grooming/cat_grooming/boarding/
-// ala_carte) — kept as a real function rather than assuming they're always
-// identical, since the wizard's choice type could diverge from the DB
-// column's allowed values later without this being the thing that breaks.
-export function toAppointmentServiceType(choice: WalkInServiceChoice): AppointmentServiceType {
+// Generic "grooming" is a UI-level service choice for mixed Dog + Cat
+// bookings. It is not a DB service_type. Before saving, SummaryStep
+// splits the selections by species and writes dog_grooming/cat_grooming.
+export function toAppointmentServiceType(choice: Exclude<WalkInServiceChoice, "grooming">): AppointmentServiceType {
   return choice;
 }
 

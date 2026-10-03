@@ -1,9 +1,9 @@
- "use client";
+"use client";
 
 import { useState } from "react";
-import { Cat, House, Sparkles, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { Cat, Dog, House, Sparkles, ArrowLeft, ArrowRight, Check } from "lucide-react";
 
-type ServiceId = "cat-grooming" | "boarding" | "ala-carte";
+type ServiceId = "dog-grooming" | "cat-grooming" | "boarding" | "ala-carte";
 
 type ServiceOption = {
   id: ServiceId;
@@ -14,6 +14,12 @@ type ServiceOption = {
 
 const services: ServiceOption[] = [
   {
+    id: "dog-grooming",
+    title: "Dog Grooming",
+    description: "Bath, grooming, and care for dogs.",
+    icon: <Dog size={34} strokeWidth={1.8} />,
+  },
+  {
     id: "cat-grooming",
     title: "Cat Grooming",
     description: "Bath, grooming, and care for cats.",
@@ -22,7 +28,7 @@ const services: ServiceOption[] = [
   {
     id: "boarding",
     title: "Boarding",
-    description: "Safe and comfortable stays for your pet.",
+    description: "Safe and comfortable stays for your pets.",
     icon: <House size={34} strokeWidth={1.8} />,
   },
   {
@@ -58,11 +64,14 @@ export default function ServiceSelection({
         </h1>
 
         <p className="mt-1 text-[16px] text-slate-500">
-          What does your pet need today?
+          Choose the service for the selected pet(s).
+        </p>
+        <p className="mt-1 text-[13px] text-slate-400">
+          You can book multiple pets together, including dogs and cats.
         </p>
       </div>
 
-      <div className="mx-auto mt-8 grid max-w-[650px] grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mx-auto mt-8 grid max-w-[850px] grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {services.map((service) => {
           const active = selected === service.id;
 
