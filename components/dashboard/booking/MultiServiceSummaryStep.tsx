@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createAppointment } from "@/lib/supabase/appointments";
+import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
 import { toAppointmentServiceType } from "@/lib/types/walk-in-draft";
 import type { BookingLeg } from "@/lib/types/booking-leg";
 import type { AppointmentServiceType, DraftPetSelection } from "@/lib/types/appointments";
@@ -46,7 +46,7 @@ export default function MultiServiceSummaryStep({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [savedCount, setSavedCount] = useState(0);
+  const submitLock = useRef(false);
 
   const grandTotal = legs.reduce((sum, leg) => sum + leg.petSelections.reduce((n, s) => n + s.lineAmount, 0), 0);
   // Generic grooming with both Dogs and Cats creates two DB appointments.
@@ -62,17 +62,18 @@ export default function MultiServiceSummaryStep({
   }, 0);
 
   async function handleComplete() {
+    if (submitLock.current || saved) return;
+    submitLock.current = true;
     setSaving(true);
     setError(null);
-    let completed = 0;
+
+    // IMPORTANT: Do not save each leg separately. Build the entire booking
+    // first, then make exactly one database call. Either all legs, pets and
+    // add-ons commit, or PostgreSQL rolls everything back.
+    const writes: CreateAppointmentInput[] = [];
 
     for (const leg of legs) {
-      const isBoarding = leg.serviceChoice === "boarding";
-
-      if (!isBoarding) {
-        // "grooming" is a UI-only choice. The database requires dog_grooming
-        // and cat_grooming. Group selections by species before saving so
-        // mixed-pet bookings retain BOTH the dog and cat appointments.
+      if (leg.serviceChoice !== "boarding") {
         const groups: Array<{
           serviceType: AppointmentServiceType;
           selections: DraftPetSelection[];
@@ -84,56 +85,51 @@ export default function MultiServiceSummaryStep({
           if (dogSelections.length) groups.push({ serviceType: "dog_grooming", selections: dogSelections });
           if (catSelections.length) groups.push({ serviceType: "cat_grooming", selections: catSelections });
         } else {
-          // TypeScript knows "grooming" is excluded from this branch.
           groups.push({
             serviceType: toAppointmentServiceType(leg.serviceChoice),
             selections: leg.petSelections,
           });
         }
 
-        if (groups.length === 0) {
+        if (!groups.length || !leg.scheduledDate) {
+          setError("A selected service has no pets or schedule. Please edit the booking.");
           setSaving(false);
-          setError("No pets were selected for this service. Please edit the booking.");
+          submitLock.current = false;
           return;
         }
 
         for (const group of groups) {
-          const { error: err } = await createAppointment({
+          writes.push({
             service_type: group.serviceType,
+            is_walk_in: false,
             customer_id: customer.id,
             owner_name: customer.full_name,
             owner_contact: customer.phone_number ?? "",
             owner_address: customer.address ?? null,
-            scheduled_date: leg.scheduledDate ?? "",
+            scheduled_date: leg.scheduledDate,
             scheduled_time: leg.scheduledTime,
             drop_off_at: null,
             pick_up_at: null,
             special_requests: leg.specialRequests || null,
             petSelections: group.selections,
           });
-          if (err) {
-            setSaving(false);
-            setError(completed ? `Saved ${completed} of ${saveUnits} appointment(s), then this one failed: ${err}` : `Failed to save: ${err}`);
-            return;
-          }
-          completed += 1;
-          setSavedCount(completed);
         }
         continue;
       }
 
-      // Boarding is intentionally saved one appointment per pet. This gives
-      // every kennel occupant an independent date/drop-off/pick-up schedule,
-      // which is required when pets use different kennel sizes or durations.
+      // Boarding is still one appointment per pet: independent kennel and
+      // drop-off/pick-up schedules, but ONE atomic transaction overall.
       for (const sel of leg.petSelections) {
         if (!sel.boardingScheduledDate || !sel.boardingDropOffAt || !sel.boardingPickUpAt) {
-          setSaving(false);
           setError(`A boarding schedule is missing for ${sel.pet.name}. Please edit the boarding schedule before confirming.`);
+          setSaving(false);
+          submitLock.current = false;
           return;
         }
 
-        const { error: err } = await createAppointment({
+        writes.push({
           service_type: "boarding",
+          is_walk_in: false,
           customer_id: customer.id,
           owner_name: customer.full_name,
           owner_contact: customer.phone_number ?? "",
@@ -145,19 +141,25 @@ export default function MultiServiceSummaryStep({
           special_requests: leg.specialRequests || null,
           petSelections: [sel],
         });
-
-        if (err) {
-          setSaving(false);
-          setError(completed ? `Saved ${completed} of ${saveUnits} appointment(s), then this boarding appointment failed: ${err}` : `Failed to save boarding appointment: ${err}`);
-          return;
-        }
-        completed += 1;
-        setSavedCount(completed);
       }
     }
 
-    setSaving(false);
-    setSaved(true);
+    try {
+      const { appointments, error: err } = await createAppointmentsAtomic(writes);
+      if (err) {
+        setError(`The booking was not completed: ${err}`);
+        submitLock.current = false;
+        return;
+      }
+      if (appointments.length !== writes.length) throw new Error("Unexpected booking confirmation count.");
+      setSaved(true);
+      // Keep the lock on success; this component is now a confirmation.
+    } catch (unexpected) {
+      setError(unexpected instanceof Error ? unexpected.message : "Unexpected booking error. Check existing appointments before trying again.");
+      submitLock.current = false;
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (saved) {
@@ -246,7 +248,7 @@ export default function MultiServiceSummaryStep({
 
       <div className="mt-6 grid grid-cols-2 gap-3">
         <button onClick={onBack} className="min-h-12 rounded-full border-2 border-zinc-300 px-6 py-3 text-sm font-semibold text-zinc-500 hover:border-zinc-400">Back</button>
-        <button onClick={handleComplete} disabled={saving} className="min-h-12 rounded-full bg-brand-pink px-6 py-3 text-sm font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-50">{saving ? `Saving ${savedCount}/${saveUnits}…` : "Complete Appointment"}</button>
+        <button onClick={handleComplete} disabled={saving} className="min-h-12 rounded-full bg-brand-pink px-6 py-3 text-sm font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-50">{saving ? `Saving all ${saveUnits} appointment(s)…` : "Complete Appointment"}</button>
       </div>
     </div>
   );

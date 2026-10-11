@@ -4,74 +4,57 @@ import type { Product, ProductBatch, ProductCategory } from "@/lib/types/product
 
 export async function fetchProducts(options?: { activeOnly?: boolean }) {
   const supabase = createClient();
-
   let query = supabase.from("products").select("*").order("product_code");
   if (options?.activeOnly) query = query.eq("status", "active");
 
   const { data, error } = await query;
-  if (error) {
-    return { products: [] as Product[], error: error.message };
-  }
+  if (error) return { products: [] as Product[], error: error.message };
 
-  // POS availability must come from the same product_batches records
-  // used by Inventory. A product with zero total quantity is not sellable.
-  const { data: batchData, error: batchError } = await supabase
-    .from("product_batches")
-    .select("product_id, quantity");
+  const { data: batchData, error: batchError } = await supabase.from("product_batches")
+    .select("product_id, quantity, expiration_date, is_adjustment");
+  if (batchError) return {
+    products: [] as Product[],
+    error: `Unable to read current stock: ${batchError.message}`,
+  };
 
-  if (batchError) {
-    return {
-      products: [] as Product[],
-      error: `Unable to read current stock: ${batchError.message}`,
-    };
-  }
-
+  // The POS only displays stock eligible for checkout. Expired goods stay
+  // visible in full Inventory but are not counted as sellable in POS.
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Manila" });
   const stockByProduct = new Map<string, number>();
-
   for (const batch of batchData ?? []) {
-    stockByProduct.set(
-      batch.product_id,
-      (stockByProduct.get(batch.product_id) ?? 0) + Number(batch.quantity ?? 0)
-    );
+    if (options?.activeOnly && !batch.is_adjustment && batch.expiration_date && batch.expiration_date < today) {
+      continue;
+    }
+    stockByProduct.set(batch.product_id,
+      (stockByProduct.get(batch.product_id) ?? 0) + Number(batch.quantity ?? 0));
   }
 
   const products = (data ?? []).map((product) => ({
     ...(product as Product),
     stock: Math.max(0, stockByProduct.get(product.id) ?? 0),
   }));
-
   return { products, error: undefined };
 }
 
 export async function fetchAllBatches() {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("product_batches")
-    .select("*")
-    .order("received_date", { ascending: false });
+  const { data, error } = await supabase.from("product_batches")
+    .select("*").order("received_date", { ascending: false });
   return { batches: (data ?? []) as ProductBatch[], error: error?.message };
 }
 
 export async function fetchBatchesForProduct(productId: string) {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("product_batches")
-    .select("*")
-    .eq("product_id", productId)
-    .order("received_date", { ascending: false });
+  const { data, error } = await supabase.from("product_batches")
+    .select("*").eq("product_id", productId).order("received_date", { ascending: false });
   return { batches: (data ?? []) as ProductBatch[], error: error?.message };
 }
 
 export function computeTotalStock(productId: string, batches: ProductBatch[]): number {
-  return batches
-    .filter((b) => b.product_id === productId)
-    .reduce((sum, b) => sum + b.quantity, 0);
+  return batches.filter((b) => b.product_id === productId).reduce((sum, b) => sum + b.quantity, 0);
 }
 
-export function computeStatus(
-  totalStock: number,
-  minStock: number
-): "Out of Stock" | "Low Stock" | "In Stock" {
+export function computeStatus(totalStock: number, minStock: number): "Out of Stock" | "Low Stock" | "In Stock" {
   if (totalStock <= 0) return "Out of Stock";
   return totalStock <= minStock ? "Low Stock" : "In Stock";
 }
@@ -88,15 +71,9 @@ export async function addProduct(product: {
   return supabase.from("products").insert(product).select().single();
 }
 
-export async function updateProduct(
-  id: string,
-  fields: {
-    name: string;
-    category: ProductCategory;
-    unit: string;
-    min_stock: number;
-  }
-) {
+export async function updateProduct(id: string, fields: {
+  name: string; category: ProductCategory; unit: string; min_stock: number;
+}) {
   const supabase = createClient();
   return supabase.from("products").update(fields).eq("id", id);
 }
@@ -105,40 +82,28 @@ export async function uploadProductImage(file: File, productCode: string) {
   const supabase = createClient();
   const ext = file.name.split(".").pop();
   const path = `products/${productCode}-${Date.now()}.${ext}`;
-
   const { error: uploadError } = await supabase.storage
-    .from("site-images")
-    .upload(path, file, { upsert: true });
-
+    .from("site-images").upload(path, file, { upsert: true });
   if (uploadError) return { error: uploadError.message, url: null };
-
   const { data } = supabase.storage.from("site-images").getPublicUrl(path);
   return { error: null, url: data.publicUrl };
 }
 
 export async function setProductImage(id: string, imageUrl: string) {
   const supabase = createClient();
-  const { error } = await supabase
-    .from("products")
-    .update({ image_url: imageUrl })
-    .eq("id", id);
+  const { error } = await supabase.from("products")
+    .update({ image_url: imageUrl }).eq("id", id);
   return { error };
 }
 
 export async function addBatch(batch: {
-  product_id: string;
-  quantity: number;
-  expiration_date: string | null;
+  product_id: string; quantity: number; expiration_date: string | null;
 }) {
   const supabase = createClient();
   return supabase.from("product_batches").insert(batch);
 }
 
-export async function adjustStock(
-  productId: string,
-  delta: number,
-  reason: string
-) {
+export async function adjustStock(productId: string, delta: number, reason: string) {
   const supabase = createClient();
   return supabase.from("product_batches").insert({
     product_id: productId,
@@ -150,19 +115,17 @@ export async function adjustStock(
   });
 }
 
-export async function setProductStatus(
-  id: string,
-  status: "active" | "discontinued"
-) {
+export async function setProductStatus(id: string, status: "active" | "discontinued") {
   const supabase = createClient();
   return supabase.from("products").update({ status }).eq("id", id);
 }
 
+// Legacy helper retained for existing imports. POS checkout no longer calls it
+// separately because inventory and the sales ledger must commit together.
 export async function sellProduct(productId: string, quantity: number) {
   const supabase = createClient();
   const { error } = await supabase.rpc("deduct_stock_fefo", {
-    p_product_id: productId,
-    p_quantity: quantity,
+    p_product_id: productId, p_quantity: quantity,
   });
   return { error: error?.message ?? null };
 }

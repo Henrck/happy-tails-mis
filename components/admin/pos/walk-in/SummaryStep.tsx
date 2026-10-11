@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createAppointment } from "@/lib/supabase/appointments";
+import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
 import type { WalkInDraft } from "@/lib/types/walk-in-draft";
 import { toAppointmentServiceType } from "@/lib/types/walk-in-draft";
 import type { Package, PetSize, Addon } from "@/lib/types/services";
@@ -38,13 +38,18 @@ export default function SummaryStep({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const submitLock = useRef(false);
 
   const isBoarding = draft.serviceChoice === "boarding";
   const totalAmount = draft.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
 
-  async function saveAppointment(service_type: "dog_grooming" | "cat_grooming" | "boarding" | "ala_carte", petSelections: typeof draft.petSelections) {
-    return createAppointment({
+  function buildAppointment(
+    service_type: "dog_grooming" | "cat_grooming" | "boarding" | "ala_carte",
+    petSelections: typeof draft.petSelections,
+  ): CreateAppointmentInput {
+    return {
       service_type,
+      is_walk_in: true,
       customer_id: draft.customer?.id ?? null,
       owner_name: draft.ownerName,
       owner_contact: draft.ownerContact,
@@ -55,52 +60,47 @@ export default function SummaryStep({
       pick_up_at: isBoarding ? draft.pickUpAt : null,
       special_requests: draft.specialRequests || null,
       petSelections,
-    });
+    };
   }
 
   async function handleComplete() {
+    if (submitLock.current || saved) return;
     if (!draft.serviceChoice || !draft.scheduledDate || draft.petSelections.length === 0) return;
-
+    submitLock.current = true;
     setSaving(true);
     setError(null);
 
-    // Narrow serviceChoice directly: TypeScript cannot infer that a
-    // separately computed isGrooming boolean excludes the UI-only
-    // "grooming" value from the else branch.
+    const writes: CreateAppointmentInput[] = [];
     if (
       draft.serviceChoice === "grooming" ||
       draft.serviceChoice === "dog_grooming" ||
       draft.serviceChoice === "cat_grooming"
     ) {
-      // Generic Grooming is a single customer-facing choice, but the DB
-      // still stores species-specific service_type values. Split only at
-      // persistence time so BOTH the Dog and Cat receive the service.
+      // Mixed Dog/Cat grooming keeps two species-specific appointments,
+      // but both commit together in the same database transaction.
       const dogSelections = draft.petSelections.filter((s) => s.pet.species === "Dog");
       const catSelections = draft.petSelections.filter((s) => s.pet.species === "Cat");
-
-      const groups: Array<["dog_grooming" | "cat_grooming", typeof draft.petSelections]> = [];
-      if (dogSelections.length) groups.push(["dog_grooming", dogSelections]);
-      if (catSelections.length) groups.push(["cat_grooming", catSelections]);
-
-      for (const [serviceType, selections] of groups) {
-        const { error: err } = await saveAppointment(serviceType, selections);
-        if (err) {
-          setSaving(false);
-          setError(`Grooming was only partially saved. Please check the appointment records. ${err}`);
-          return;
-        }
-      }
+      if (dogSelections.length) writes.push(buildAppointment("dog_grooming", dogSelections));
+      if (catSelections.length) writes.push(buildAppointment("cat_grooming", catSelections));
     } else {
-      const { error: err } = await saveAppointment(toAppointmentServiceType(draft.serviceChoice), draft.petSelections);
-      if (err) {
-        setSaving(false);
-        setError(err);
-        return;
-      }
+      writes.push(buildAppointment(toAppointmentServiceType(draft.serviceChoice), draft.petSelections));
     }
 
-    setSaving(false);
-    setSaved(true);
+    try {
+      const { error: err } = await createAppointmentsAtomic(writes);
+      if (err) {
+        setError(`The appointment was not completed: ${err}`);
+        submitLock.current = false;
+        return;
+      }
+      setSaved(true);
+      // Keep the lock on success to avoid duplicate submissions.
+    } catch (unexpected) {
+      setError(unexpected instanceof Error ? unexpected.message : "Unexpected booking error. Check existing appointments before trying again.");
+      submitLock.current = false;
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (saved) {

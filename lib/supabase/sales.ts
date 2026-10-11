@@ -1,8 +1,7 @@
-// Real sales ledger — pairs with supabase/041_sales_ledger.sql.
-// recordSale() is called from POS checkout right after stock is
-// deducted. fetchSalesReportRows() is what powers the Sales Reports tab.
+// POS sales ledger. One row per INVOICE for reporting, with nested items.
+// recordSale is retained unchanged for existing POS code compatibility.
 import { createClient } from "./client";
-import type { SalesReportRow } from "@/lib/data/sales-reports-mock";
+import type { SalesReportRow, SalesInvoiceItem } from "@/lib/data/sales-reports-mock";
 
 export type SaleLineInput = { productId: string; quantity: number; unitPrice: number };
 
@@ -31,40 +30,66 @@ export async function recordSale(
     }))
   );
   if (itemsError) return { error: itemsError.message };
-
   return { error: null, invoiceNumber: sale.invoice_number as string };
 }
 
-type SaleItemJoinRow = {
+type RawSaleItem = {
   quantity: number;
   unit_price: number;
-  sales: { invoice_number: string; sold_at: string } | null;
+  line_amount: number | null;
   products: { name: string; category: string } | null;
+};
+type RawSale = {
+  id: string;
+  invoice_number: string;
+  sold_at: string;
+  total_amount: number;
+  amount_paid: number | null;
+  payment_method: string;
+  sale_items: RawSaleItem[] | null;
 };
 
 function displayDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+  });
 }
 
-export async function fetchSalesReportRows() {
+export async function fetchSalesReportRows(): Promise<{ rows: SalesReportRow[]; error: string | null }> {
   const supabase = createClient();
+  // Query invoice headers, not sale_items, otherwise every product line
+  // repeats the same cash received and change given amounts.
   const { data, error } = await supabase
-    .from("sale_items")
-    .select("quantity, unit_price, sales ( invoice_number, sold_at ), products ( name, category )")
-    .order("created_at", { ascending: false });
-  if (error) return { rows: [] as SalesReportRow[], error: error.message };
+    .from("sales")
+    .select(`id, invoice_number, sold_at, total_amount, amount_paid, payment_method,
+      sale_items(quantity, unit_price, line_amount, products(name, category))`)
+    .order("sold_at", { ascending: false });
 
-  const rows: SalesReportRow[] = ((data ?? []) as unknown as SaleItemJoinRow[]).map((item) => {
-    const soldAt = item.sales?.sold_at ?? new Date().toISOString();
-    const dateOnly = soldAt.slice(0, 10);
-    return {
-      invoiceNumber: item.sales?.invoice_number ?? "—",
-      itemName: item.products?.name ?? "—",
-      category: item.products?.category ?? "—",
+  if (error) return { rows: [], error: error.message };
+
+  const rows: SalesReportRow[] = ((data ?? []) as unknown as RawSale[]).map((sale) => {
+    const items: SalesInvoiceItem[] = (sale.sale_items ?? []).map((item) => ({
+      name: item.products?.name ?? "Unknown product",
+      category: item.products?.category ?? "Unknown",
       quantity: item.quantity,
       unitPrice: item.unit_price,
-      date: dateOnly,
-      displayDate: displayDate(dateOnly),
+      lineTotal: item.line_amount ?? item.quantity * item.unit_price,
+    }));
+    const cashReceived = sale.amount_paid == null ? null : Number(sale.amount_paid);
+    const totalPrice = Number(sale.total_amount ?? 0);
+    const date = sale.sold_at.slice(0, 10);
+    return {
+      id: sale.id,
+      invoiceNumber: sale.invoice_number,
+      items,
+      itemName: items.map((item) => item.name).join(", ") || "—",
+      quantity: items.reduce((sum, item) => sum + item.quantity, 0),
+      totalPrice,
+      cashReceived,
+      changeGiven: cashReceived == null ? null : Math.max(0, Math.round((cashReceived - totalPrice) * 100) / 100),
+      paymentMethod: sale.payment_method ?? "—",
+      date,
+      displayDate: displayDate(date),
     };
   });
 

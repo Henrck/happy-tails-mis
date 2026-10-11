@@ -1,16 +1,16 @@
 "use client";
-// Point of Sale — normal sales operations remain available to staff.
-// POS Configuration is visible and accessible only to superadmins.
-import { useState, useMemo, useEffect } from "react";
+// POS Issue #2: commit the entire checkout through one atomic Supabase RPC.
+// Database is authoritative for stock, price and sales receipt.
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { fetchProducts, sellProduct } from "@/lib/supabase/products";
-import { recordSale } from "@/lib/supabase/sales";
+import { fetchProducts } from "@/lib/supabase/products";
+import { checkoutPosSale } from "@/lib/supabase/pos-checkout";
 import type { Product, ProductCategory } from "@/lib/types/products";
 import PosCategoryTabs from "@/components/admin/pos/PosCategoryTabs";
 import ProductPosCard from "@/components/admin/pos/ProductPosCard";
 import CartPanel, { type CartLine } from "@/components/admin/pos/CartPanel";
-import ProcessPaymentModal from "@/components/admin/pos/ProcessPaymentModal";
+import ProcessPaymentModal, { type LowStockWarning } from "@/components/admin/pos/ProcessPaymentModal";
 import ReturnExchangeModal from "@/components/admin/pos/ReturnExchangeModal";
 import SaleCompleteModal, { type CompletedSale } from "@/components/admin/pos/SaleCompleteModal";
 
@@ -22,6 +22,10 @@ export default function PointOfSalePage() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const processingRef = useRef(false);
+  // Keep this ID stable during retries, including ambiguous network failures.
+  const checkoutRequestId = useRef<string | null>(null);
   const [returnOpen, setReturnOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
@@ -31,6 +35,7 @@ export default function PointOfSalePage() {
     setLoading(true);
     const { products, error } = await fetchProducts({ activeOnly: true });
     if (!error) setAllProducts(products);
+    else setCheckoutError(`Unable to refresh inventory: ${error}`);
     setLoading(false);
   }
 
@@ -38,28 +43,22 @@ export default function PointOfSalePage() {
     async function load() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-
       if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const { data: profile } = await supabase.from("profiles")
+          .select("role").eq("id", user.id).maybeSingle();
         setIsSuperadmin(profile?.role === "superadmin");
       }
-
       await loadProducts();
     }
-    load();
+    void load();
   }, []);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return allProducts.filter((p) => {
-      const matchesCategory = category === "all" || p.category === category;
-      const matchesSearch = !q || p.name.toLowerCase().includes(q);
-      return matchesCategory && matchesSearch;
-    });
+    return allProducts.filter((p) =>
+      (category === "all" || p.category === category) &&
+      (!q || p.name.toLowerCase().includes(q))
+    );
   }, [allProducts, category, search]);
 
   const cartLines: CartLine[] = Object.entries(cart)
@@ -67,61 +66,92 @@ export default function PointOfSalePage() {
     .map(([id, qty]) => ({ product: allProducts.find((p) => p.id === id)!, qty }))
     .filter((line) => line.product);
 
-  const subtotal = cartLines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
-  const amountDue = subtotal;
+  const amountDue = cartLines.reduce((sum, l) => sum + l.product.price * l.qty, 0);
+
+  // A low-stock threshold is for staff decision-making, not a checkout ban.
+  // Warn when the proposed sale would leave stock at/below min_stock,
+  // even if the product currently has healthy stock.
+  const lowStockWarnings: LowStockWarning[] = cartLines
+    .filter(({ product, qty }) => {
+      const available = Math.max(0, product.stock ?? 0);
+      return available - qty <= product.min_stock;
+    })
+    .map(({ product, qty }) => ({
+      productId: product.id,
+      name: product.name,
+      currentStock: Math.max(0, product.stock ?? 0),
+      remainingStock: Math.max(0, (product.stock ?? 0) - qty),
+      minStock: product.min_stock,
+    }));
 
   function increment(id: string) {
-    setCart((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+    if (processingRef.current) return;
+    const product = allProducts.find((p) => p.id === id);
+    if (!product) return;
+    setCart((prev) => ({ ...prev, [id]: Math.min(Math.max(0, product.stock ?? 0), (prev[id] ?? 0) + 1) }));
+    checkoutRequestId.current = null;
   }
   function decrement(id: string) {
+    if (processingRef.current) return;
     setCart((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) - 1) }));
+    checkoutRequestId.current = null;
   }
   function remove(id: string) {
+    if (processingRef.current) return;
     setCart((prev) => {
       const next = { ...prev };
       delete next[id];
       return next;
     });
+    checkoutRequestId.current = null;
   }
   function clearCart() {
+    if (processingRef.current) return;
     setCart({});
+    checkoutRequestId.current = null;
   }
 
-  async function handleConfirmPayment(amountPaid: number, method: string) {
+  async function handleConfirmPayment(amountPaid: number, method: "Cash") {
+    if (processingRef.current || cartLines.length === 0) return;
+    // Prevent double submissions before React can rerender the button.
+    processingRef.current = true;
+    setProcessing(true);
     setCheckoutError(null);
+    if (!checkoutRequestId.current) checkoutRequestId.current = crypto.randomUUID();
 
-    for (const line of cartLines) {
-      const { error } = await sellProduct(line.product.id, line.qty);
-      if (error) {
-        setCheckoutError(`Couldn't complete sale: ${error}`);
+    try {
+      const { sale, error } = await checkoutPosSale({
+        requestId: checkoutRequestId.current,
+        items: cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty })),
+        amountPaid,
+        method,
+      });
+      if (error || !sale) {
+        setCheckoutError(error ?? "Checkout failed. Please review Sales Reports before retrying.");
         return;
       }
-    }
 
-    const itemCount = cartLines.reduce((sum, l) => sum + l.qty, 0);
-    const { error: recordError, invoiceNumber } = await recordSale(
-      cartLines.map((l) => ({ productId: l.product.id, quantity: l.qty, unitPrice: l.product.price })),
-      { method, amountPaid }
-    );
-
-    setPaymentOpen(false);
-
-    if (recordError) {
-      setCheckoutError(`Sale completed and stock was deducted, but it couldn't be logged to Sales Reports: ${recordError}`);
-    } else {
       setCompletedSale({
-        invoiceNumber: invoiceNumber ?? "—",
+        invoiceNumber: sale.invoiceNumber,
         method,
-        total: amountDue,
-        amountPaid,
-        change: amountPaid - amountDue,
-        itemCount,
-        items: cartLines.map((l) => ({ name: l.product.name, qty: l.qty, unitPrice: l.product.price })),
+        total: sale.totalAmount,
+        amountPaid: sale.amountPaid,
+        change: sale.changeAmount,
+        itemCount: sale.items.reduce((sum, item) => sum + item.quantity, 0),
+        items: sale.items.map((item) => ({
+          name: item.name, qty: item.quantity, unitPrice: item.unitPrice,
+        })),
       });
+      setPaymentOpen(false);
+      setCart({});
+      checkoutRequestId.current = null;
+      await loadProducts();
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : "Checkout connection failed. Check Sales Reports before retrying.");
+    } finally {
+      processingRef.current = false;
+      setProcessing(false);
     }
-
-    clearCart();
-    loadProducts();
   }
 
   return (
@@ -136,15 +166,21 @@ export default function PointOfSalePage() {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0 .33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                <path d="M4 21V3h16v18H4ZM8 7h8M8 12h8M8 17h6" />
               </svg>
               Configuration
             </button>
           )}
         </div>
 
-        {checkoutError && (
+        {checkoutError && !paymentOpen && (
           <p className="mt-3 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{checkoutError}</p>
+        )}
+
+        {lowStockWarnings.length > 0 && !paymentOpen && (
+          <div role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Low stock warning:</strong> This cart would leave {lowStockWarnings.length} product{lowStockWarnings.length === 1 ? "" : "s"} at or below the reorder level. The sale can still proceed after cashier confirmation.
+          </div>
         )}
 
         <div className="mt-4 flex flex-col sm:flex-row gap-3">
@@ -188,12 +224,16 @@ export default function PointOfSalePage() {
         onDecrement={decrement}
         onRemove={remove}
         onClear={clearCart}
-        onProcessPayment={() => setPaymentOpen(true)}
+        onProcessPayment={() => { setCheckoutError(null); setPaymentOpen(true); }}
         onReturnExchange={() => setReturnOpen(true)}
       />
 
       {paymentOpen && (
-        <ProcessPaymentModal amountDue={amountDue} onClose={() => setPaymentOpen(false)} onConfirm={handleConfirmPayment} />
+        <ProcessPaymentModal amountDue={amountDue}
+          processing={processing} error={checkoutError}
+          lowStockWarnings={lowStockWarnings}
+          onClose={() => { if (!processingRef.current) setPaymentOpen(false); }}
+          onConfirm={handleConfirmPayment} />
       )}
 
       {returnOpen && <ReturnExchangeModal onClose={() => setReturnOpen(false)} />}

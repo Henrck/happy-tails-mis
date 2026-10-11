@@ -223,10 +223,13 @@ export async function checkGroomerTimeConflict(
   return { conflict, error: null };
 }
 
-// --- Save a full appointment (the walk-in wizard's final step) ---
+// --- Issue #4: create the entire booking in ONE database transaction. ---
+// The database function uses SECURITY INVOKER; existing RLS policies still apply.
+// Issue #3's explicit Online / Walk-in classification is retained.
 
-export async function createAppointment(params: {
+export type CreateAppointmentInput = {
   service_type: AppointmentServiceType;
+  is_walk_in: boolean;
   customer_id: string | null;
   owner_name: string;
   owner_contact: string;
@@ -237,55 +240,63 @@ export async function createAppointment(params: {
   pick_up_at: string | null;
   special_requests: string | null;
   petSelections: DraftPetSelection[];
-}) {
-  const supabase = createClient();
-  const totalAmount = params.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
+};
 
-  const { data: appointment, error: apptError } = await supabase
-    .from("appointments")
-    .insert({
-      service_type: params.service_type,
-      customer_id: params.customer_id,
-      owner_name: params.owner_name,
-      owner_contact: params.owner_contact,
-      owner_address: params.owner_address,
-      is_walk_in: true,
-      scheduled_date: params.scheduled_date,
-      scheduled_time: params.scheduled_time,
-      drop_off_at: params.drop_off_at,
-      pick_up_at: params.pick_up_at,
-      special_requests: params.special_requests,
-      total_amount: totalAmount,
-    })
-    .select()
-    .single();
-
-  if (apptError || !appointment) return { appointment: null, error: apptError?.message ?? "Failed to create appointment." };
-
-  for (const sel of params.petSelections) {
-    const { data: apptPet, error: petError } = await supabase
-      .from("appointment_pets")
-      .insert({
-        appointment_id: appointment.id,
-        pet_id: sel.pet.id,
-        package_id: sel.packageId,
-        package_pricing_id: sel.packagePricingId,
-        size_id: sel.sizeId,
-        kennel_id: sel.kennelId,
-        groomer_id: sel.groomerId,
-        line_amount: sel.lineAmount,
-      })
-      .select()
-      .single();
-
-    if (petError || !apptPet) return { appointment, error: `Saved appointment, but a pet line failed: ${petError?.message}` };
-
-    if (sel.addonIds.length > 0) {
-      const addonRows = sel.addonIds.map((addonId) => ({ appointment_pet_id: apptPet.id, addon_id: addonId, price: 0 }));
-      const { error: addonError } = await supabase.from("appointment_addons").insert(addonRows);
-      if (addonError) return { appointment, error: `Saved appointment, but add-ons failed to save: ${addonError.message}` };
-    }
+/**
+ * Atomic across ALL appointments, pets and add-ons in the input array.
+ * One RPC request means a failing row rolls back the whole batch, including
+ * mixed Dog/Cat grooming and independently scheduled boarding pets.
+ */
+export async function createAppointmentsAtomic(params: CreateAppointmentInput[]) {
+  if (!params.length) {
+    return { appointments: [] as Appointment[], error: "No appointments to save." };
   }
 
-  return { appointment, error: null };
+  const payload = params.map((appt) => ({
+    service_type: appt.service_type,
+    is_walk_in: appt.is_walk_in,
+    customer_id: appt.customer_id,
+    owner_name: appt.owner_name,
+    owner_contact: appt.owner_contact,
+    owner_address: appt.owner_address,
+    scheduled_date: appt.scheduled_date,
+    scheduled_time: appt.scheduled_time,
+    drop_off_at: appt.drop_off_at,
+    pick_up_at: appt.pick_up_at,
+    special_requests: appt.special_requests,
+    pet_selections: appt.petSelections.map((sel) => ({
+      pet_id: sel.pet.id,
+      package_id: sel.packageId,
+      package_pricing_id: sel.packagePricingId,
+      size_id: sel.sizeId,
+      kennel_id: sel.kennelId,
+      groomer_id: sel.groomerId,
+      line_amount: sel.lineAmount,
+      addon_ids: sel.addonIds,
+    })),
+  }));
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("happytails_create_appointments_atomic", {
+    p_appointments: payload,
+  });
+
+  if (error) return { appointments: [] as Appointment[], error: error.message };
+
+  // Network/proxy anomalies are different from a SQL exception. Do not
+  // automatically retry an unconfirmed result: it may duplicate a booking.
+  if (!Array.isArray(data) || data.length !== params.length) {
+    return {
+      appointments: [] as Appointment[],
+      error: "The booking result could not be confirmed. Check existing appointments before retrying.",
+    };
+  }
+
+  return { appointments: data as Appointment[], error: null };
+}
+
+// Backward-compatible wrapper for any single-appointment callers.
+export async function createAppointment(params: CreateAppointmentInput) {
+  const { appointments, error } = await createAppointmentsAtomic([params]);
+  return { appointment: appointments[0] ?? null, error };
 }

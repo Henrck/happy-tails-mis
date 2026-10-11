@@ -1,113 +1,105 @@
-// Service Reports and Transaction Reports use the same real appointments data.
-// The report order is intentionally based on the appointment's CREATED_AT
-// timestamp so the newest input appears first, regardless of the scheduled
-// service date. This is different from appointment scheduling order.
-
+// Service Reports are the single operational view of Grooming, Boarding,
+// and Ala Carte appointments. Transaction Reports (formerly duplicate data)
+// has been merged into this view, including each pet's service charge.
+import { createClient } from "./client";
 import { fetchAppointments, type AppointmentRow } from "./appointment-management";
-import type { AppointmentStatus } from "@/lib/types/appointments";
-import type { ServiceReport, ReportStatus } from "@/lib/data/service-reports-mock";
-import type { TransactionReportRow } from "@/lib/data/transaction-reports-mock";
+import type { AppointmentStatus, AppointmentServiceType } from "@/lib/types/appointments";
+import type { ServiceReport, ReportStatus, ServiceCategory } from "@/lib/data/service-reports-mock";
 
 function mapStatus(status: AppointmentStatus): ReportStatus {
   switch (status) {
-    case "completed":
-      return "Completed";
-    case "checked_in":
-      return "Ongoing";
-    case "cancelled":
-      return "Cancelled";
+    case "completed": return "Completed";
+    case "checked_in": return "Ongoing";
+    case "cancelled": return "Cancelled";
     case "pending":
     case "confirmed":
-    default:
-      return "Scheduled";
+    default: return "Scheduled";
   }
 }
 
-function serviceLabel(
-  appt: AppointmentRow,
-  pet: AppointmentRow["pets"][number]
-): string {
+function categoryForService(type: AppointmentServiceType): ServiceCategory {
+  switch (type) {
+    case "boarding": return "Boarding";
+    case "ala_carte": return "Ala Carte";
+    case "dog_grooming":
+    case "cat_grooming": return "Grooming";
+  }
+}
+
+function serviceLabel(appt: AppointmentRow, pet: AppointmentRow["pets"][number]): string {
   if (pet.packageName) return pet.packageName;
   if (appt.service_type === "boarding") {
-    return pet.packagePricingLabel
-      ? `Boarding – ${pet.packagePricingLabel}`
-      : "Boarding";
+    return pet.packagePricingLabel ? `Boarding – ${pet.packagePricingLabel}` : "Boarding";
   }
-
-  return appt.service_type
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return appt.service_type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function displayDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+    month: "short", day: "numeric", year: "numeric",
   });
 }
 
-export async function fetchServiceAndTransactionReports() {
-  const { rows, error } = await fetchAppointments();
+/** Uses permanent per-pet IDs from the migration, never computes IDs from sorting. */
+export async function fetchServiceReports(): Promise<{ rows: ServiceReport[]; error: string | null }> {
+  const { rows: appointments, error } = await fetchAppointments();
+  if (error) return { rows: [], error };
 
-  if (error) {
-    return {
-      service: [] as ServiceReport[],
-      transaction: [] as TransactionReportRow[],
-      error,
-    };
+  const petRowIds = appointments.flatMap((a) => a.pets.map((p) => p.appointmentPetId));
+  if (petRowIds.length === 0) return { rows: [], error: null };
+
+  // Fetch report codes in bounded chunks so a big report won't create a huge
+  // URL in the PostgREST .in() request. The original appointment loader stays
+  // untouched for all other features.
+  const supabase = createClient();
+  const codes = new Map<string, string>();
+  for (let start = 0; start < petRowIds.length; start += 150) {
+    const ids = petRowIds.slice(start, start + 150);
+    const { data, error: codeError } = await supabase
+      .from("appointment_pets")
+      .select("id, report_code")
+      .in("id", ids);
+    if (codeError) {
+      return {
+        rows: [],
+        error: `Could not load service IDs: ${codeError.message}. Apply the report-code SQL migration first.`,
+      };
+    }
+    for (const pet of data ?? []) {
+      if (pet.report_code) codes.set(pet.id, pet.report_code);
+    }
   }
 
-  // IMPORTANT:
-  // fetchAppointments() is primarily ordered for appointment scheduling
-  // (scheduled date). Reports need a different priority: newest INPUT first.
-  //
-  // created_at is the actual time the appointment record was entered.
-  // Sorting here keeps the appointment-management table's existing ordering
-  // untouched while making Report Management prioritize the latest records.
-  const latestFirst = [...rows].sort((a, b) => {
-    const createdA = new Date(a.created_at).getTime();
-    const createdB = new Date(b.created_at).getTime();
-
-    if (createdB !== createdA) return createdB - createdA;
-
-    // Stable fallback if two records have the same created_at timestamp.
-    return b.scheduled_date.localeCompare(a.scheduled_date);
+  const newestFirst = [...appointments].sort((a, b) => {
+    const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    return diff || b.scheduled_date.localeCompare(a.scheduled_date);
   });
 
-  const service: ServiceReport[] = [];
-  const transaction: TransactionReportRow[] = [];
-
-  latestFirst.forEach((appt) => {
-    const status = mapStatus(appt.status);
-    const owner = appt.owner_name || "—";
-
-    appt.pets.forEach((pet, i) => {
-      const rowId = `${appt.id.slice(0, 8).toUpperCase()}-${i + 1}`;
-      const service_ = serviceLabel(appt, pet);
-
-      service.push({
-        id: rowId,
+  const rows: ServiceReport[] = [];
+  for (const appt of newestFirst) {
+    for (const pet of appt.pets) {
+      const reportCode = codes.get(pet.appointmentPetId);
+      if (!reportCode) {
+        return {
+          rows: [],
+          error: `Service ID missing for appointment ${appt.id}. Check the report-code migration and table permissions.`,
+        };
+      }
+      rows.push({
+        id: reportCode,
+        appointmentId: appt.id,
+        appointmentPetId: pet.appointmentPetId,
         pet: pet.name,
-        owner,
-        service: service_,
-        date: appt.scheduled_date,
-        displayDate: displayDate(appt.scheduled_date),
-        status,
-      });
-
-      transaction.push({
-        id: rowId,
-        petName: pet.name,
-        ownerName: owner,
-        service: service_,
+        owner: appt.owner_name || "—",
+        category: categoryForService(appt.service_type),
+        service: serviceLabel(appt, pet),
+        source: appt.is_walk_in ? "Walk-in" : "Online",
         amount: pet.lineAmount,
         date: appt.scheduled_date,
         displayDate: displayDate(appt.scheduled_date),
-        status,
+        status: mapStatus(pet.status ?? appt.status),
       });
-    });
-  });
-
-  return { service, transaction, error: null };
+    }
+  }
+  return { rows, error: null };
 }
