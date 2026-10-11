@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { resolveEmailForLogin } from "@/lib/supabase/customer-auth";
+import { resolveEmailForLogin, validateUsernameFormat } from "@/lib/supabase/customer-auth";
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -64,7 +64,7 @@ function SignInForm() {
       .single();
 
     const [{ data: customerRow }, { data: staffRow }] = await Promise.all([
-      supabase.from("customers").select("status").eq("id", data.user.id).maybeSingle(),
+      supabase.from("customers").select("status, username").eq("id", data.user.id).maybeSingle(),
       supabase.from("staff_profiles").select("status").eq("id", data.user.id).maybeSingle(),
     ]);
     const status = customerRow?.status ?? staffRow?.status ?? "active";
@@ -74,6 +74,50 @@ function SignInForm() {
       setError("This account has been deactivated. Please contact support.");
       setLoading(false);
       return;
+    }
+
+    // A user confirming their email does not have a session at sign-up time.
+    // Recover a missing customer username from the signup metadata ONLY after
+    // the password sign-in has produced a verified Supabase access token.
+    // Never overwrite an existing username (it may have been changed later).
+    if (customerRow && !customerRow.username) {
+      const pendingUsername = data.user.user_metadata?.username;
+      if (
+        typeof pendingUsername === "string" &&
+        !validateUsernameFormat(pendingUsername.trim())
+      ) {
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          setError("Signed in, but a secure session was unavailable. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const usernameResponse = await fetch("/api/auth/set-username", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ username: pendingUsername.trim() }),
+          });
+          if (!usernameResponse.ok) {
+            const result = await usernameResponse
+              .json()
+              .catch(() => ({ error: "Please retry or contact support." }));
+            setError(
+              `Account login succeeded, but your username could not be saved: ${result.error ?? "Please retry or contact support."}`
+            );
+            setLoading(false);
+            return;
+          }
+        } catch {
+          setError("Account login succeeded, but the username service is unavailable. Please try again.");
+          setLoading(false);
+          return;
+        }
+      }
     }
 
     if (profileError || !profile) {

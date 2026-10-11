@@ -63,7 +63,7 @@ export default function SignUpPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, username } },
+      options: { data: { full_name: fullName.trim(), username: username.trim() } },
     });
 
     if (signUpError) {
@@ -78,21 +78,9 @@ export default function SignUpPage() {
       return;
     }
 
-    if (data.user) {
-      const res = await fetch("/api/auth/set-username", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: data.user.id, username }),
-      });
-      const result = await res.json();
-
-      if (!res.ok) {
-        setLoading(false);
-        setError(`Account created, but saving the username failed: ${result.error}`);
-        return;
-      }
-    }
-
+    // The SEC-001 database trigger copies the chosen username from this
+    // Auth user's signup metadata to the customers table during registration.
+    // Do not call the authenticated set-username API before a session exists.
     setLoading(false);
 
     if (data.session) {
@@ -108,7 +96,7 @@ export default function SignUpPage() {
       <div className="bg-white rounded-2xl shadow p-8 text-center">
         <h1 className="text-2xl font-bold text-zinc-900">Check your email</h1>
         <p className="mt-3 text-sm text-zinc-600">
-          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come back and sign in.
+          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account. You can then sign in using your username or email address.
         </p>
         <a href="/sign-in" className="mt-6 inline-block bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold px-6 py-2.5 rounded-full transition-colors">Go to Sign In</a>
       </div>
