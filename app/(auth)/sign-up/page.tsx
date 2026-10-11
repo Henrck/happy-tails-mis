@@ -63,7 +63,7 @@ export default function SignUpPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, username } },
+      options: { data: { full_name: fullName.trim(), username: username.trim() } },
     });
 
     if (signUpError) {
@@ -78,11 +78,17 @@ export default function SignUpPage() {
       return;
     }
 
-    if (data.user) {
+    // Supabase may create an unconfirmed account without a session.
+    // Only call the protected API when signUp actually signed the user in.
+    // Otherwise the username stays in user_metadata until first sign-in.
+    if (data.user && data.session?.access_token) {
       const res = await fetch("/api/auth/set-username", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: data.user.id, username }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${data.session.access_token}`,
+        },
+        body: JSON.stringify({ username: username.trim() }),
       });
       const result = await res.json();
 
@@ -108,7 +114,7 @@ export default function SignUpPage() {
       <div className="bg-white rounded-2xl shadow p-8 text-center">
         <h1 className="text-2xl font-bold text-zinc-900">Check your email</h1>
         <p className="mt-3 text-sm text-zinc-600">
-          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then come back and sign in.
+          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then sign in using your email address. Your username will be activated on your first successful sign-in.
         </p>
         <a href="/sign-in" className="mt-6 inline-block bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold px-6 py-2.5 rounded-full transition-colors">Go to Sign In</a>
       </div>
