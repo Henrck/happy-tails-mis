@@ -40,7 +40,6 @@ export default function SummaryStep({
   const [saved, setSaved] = useState(false);
 
   const isBoarding = draft.serviceChoice === "boarding";
-  const isGrooming = draft.serviceChoice === "grooming" || draft.serviceChoice === "dog_grooming" || draft.serviceChoice === "cat_grooming";
   const totalAmount = draft.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
 
   async function saveAppointment(service_type: "dog_grooming" | "cat_grooming" | "boarding" | "ala_carte", petSelections: typeof draft.petSelections) {
@@ -65,7 +64,14 @@ export default function SummaryStep({
     setSaving(true);
     setError(null);
 
-    if (isGrooming) {
+    // Narrow serviceChoice directly: TypeScript cannot infer that a
+    // separately computed isGrooming boolean excludes the UI-only
+    // "grooming" value from the else branch.
+    if (
+      draft.serviceChoice === "grooming" ||
+      draft.serviceChoice === "dog_grooming" ||
+      draft.serviceChoice === "cat_grooming"
+    ) {
       // Generic Grooming is a single customer-facing choice, but the DB
       // still stores species-specific service_type values. Split only at
       // persistence time so BOTH the Dog and Cat receive the service.

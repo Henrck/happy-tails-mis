@@ -5,6 +5,7 @@ import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/Service
 const labels: Record<WalkInServiceChoice, { label: string; icon: string }> = {
   dog_grooming: { label: "Dog Grooming", icon: "🐕" },
   cat_grooming: { label: "Cat Grooming", icon: "🐈" },
+  grooming: { label: "Grooming", icon: "✂️" },
   boarding: { label: "Boarding", icon: "🏠" },
   ala_carte: { label: "Ala Carte", icon: "🛍️" },
 };
