@@ -1,14 +1,11 @@
 "use client";
-// Mounted once in the dashboard/admin layout. Catches the case
-// middleware alone can't: someone already signed in and actively
-// browsing when an admin deactivates their account. Middleware only
-// runs on a new request, so without this, a deactivated user sitting
-// on a page they'd already loaded would keep working until their next
-// click. This subscribes live to the user's own row and reacts
-// immediately when status flips away from "active".
-import { useEffect, useState } from "react";
+// Keep an already-open page in sync with account-status changes.
+// Middleware and server layouts still enforce authorization on requests.
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+
+type BlockReason = "deactivated" | "unverified" | null;
 
 export default function AccountStatusWatcher({
   userId,
@@ -18,34 +15,52 @@ export default function AccountStatusWatcher({
   table: "customers" | "staff_profiles";
 }) {
   const router = useRouter();
-  const [deactivated, setDeactivated] = useState(false);
+  const [blockReason, setBlockReason] = useState<BlockReason>(null);
+  const [checking, setChecking] = useState(false);
+  // One browser client for the lifetime of this mounted watcher.
+  const [supabase] = useState(createClient);
+
+  const recheck = useCallback(async () => {
+    setChecking(true);
+    try {
+      const { data, error } = await supabase.from(table)
+        .select("status")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error || !data) setBlockReason("unverified");
+      else if (data.status !== "active") setBlockReason("deactivated");
+      else setBlockReason(null);
+    } catch {
+      setBlockReason("unverified");
+    } finally {
+      setChecking(false);
+    }
+  }, [supabase, table, userId]);
 
   useEffect(() => {
-    const supabase = createClient();
+    void recheck();
     const channel = supabase
       .channel(`account-status-${table}-${userId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table, filter: `id=eq.${userId}` },
-        (payload) => {
-          const newStatus = (payload.new as { status?: string })?.status;
-          if (newStatus && newStatus !== "active") setDeactivated(true);
-        }
+        { event: "*", schema: "public", table, filter: `id=eq.${userId}` },
+        () => { void recheck(); }
       )
       .subscribe();
-
+    window.addEventListener("focus", recheck);
     return () => {
-      supabase.removeChannel(channel);
+      window.removeEventListener("focus", recheck);
+      void supabase.removeChannel(channel);
     };
-  }, [userId, table]);
+  }, [supabase, userId, table, recheck]);
 
   async function handleSignOut() {
-    const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/sign-in?deactivated=1");
+    router.replace(blockReason === "deactivated" ? "/sign-in?deactivated=1" : "/sign-in?access=unverified");
+    router.refresh();
   }
 
-  if (!deactivated) return null;
+  if (!blockReason) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4">
@@ -57,15 +72,25 @@ export default function AccountStatusWatcher({
               <path d="M15 9l-6 6M9 9l6 6" strokeLinecap="round" />
             </svg>
           </div>
-          <h3 className="mt-3 text-lg font-bold text-zinc-800">Your account is now deactivated</h3>
-          <p className="mt-1 text-sm text-zinc-500">You&rsquo;ll be signed out. Please contact support if this is unexpected.</p>
+          <h3 className="mt-3 text-lg font-bold text-zinc-800">
+            {blockReason === "deactivated" ? "Your account is now deactivated" : "Account access could not be verified"}
+          </h3>
+          <p className="mt-1 text-sm text-zinc-500">
+            {blockReason === "deactivated"
+              ? "Your account is inactive or archived. Please contact support."
+              : "We couldn't confirm that your account is active. Retry or contact support."}
+          </p>
         </div>
-        <div className="px-6 pb-6">
-          <button
-            onClick={handleSignOut}
-            className="w-full bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold py-2.5 rounded-full transition-colors"
-          >
-            OK
+        <div className="px-6 pb-6 space-y-2">
+          {blockReason === "unverified" && (
+            <button type="button" onClick={() => void recheck()} disabled={checking}
+              className="w-full border-2 border-brand-pink text-brand-pink font-semibold py-2.5 rounded-full disabled:opacity-50">
+              {checking ? "Checking…" : "Retry verification"}
+            </button>
+          )}
+          <button onClick={handleSignOut}
+            className="w-full bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold py-2.5 rounded-full">
+            Sign out
           </button>
         </div>
       </div>

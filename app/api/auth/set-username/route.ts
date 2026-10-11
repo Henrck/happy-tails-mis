@@ -1,11 +1,7 @@
 /**
- * Security fix SEC-001: authenticated users may set only their own username.
- *
- * Accepts Supabase SSR session cookies (same-origin browser POST) or an
- * Authorization: Bearer <Supabase access token> header. Never trust a
- * userId supplied by a caller as the target of a privileged update.
- *
- * Assumes customers.id is the authenticated user's auth.users.id.
+ * Authenticated users may set only their own username (SEC-001).
+ * Issue #5: require an ACTIVE customer row even when using service_role.
+ * Supports Supabase SSR cookies or a verified Supabase bearer token.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
@@ -15,7 +11,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  // Preserve refreshed Supabase auth cookies on every returned response.
   const cookieChanges: Array<(response: NextResponse) => void> = [];
 
   function respond(payload: Record<string, unknown>, status = 200) {
@@ -38,8 +33,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Validate the session against Supabase Auth. Do not rely on getSession()
-    // or on the userId received in the JSON payload to identify the caller.
     const authorization = request.headers.get("authorization");
     let authenticatedUserId: string | undefined;
 
@@ -72,8 +65,7 @@ export async function POST(request: NextRequest) {
       if (error || !data.user) return respond({ error: "Unauthorized" }, 401);
       authenticatedUserId = data.user.id;
 
-      // Session cookies are automatic browser credentials. Protect their
-      // state-changing use against cross-origin POST/CSRF requests.
+      // Browser cookie auth must be same-origin to prevent CSRF.
       const origin = request.headers.get("origin");
       if (!origin || origin !== new URL(request.url).origin) {
         return respond({ error: "Forbidden origin" }, 403);
@@ -81,14 +73,10 @@ export async function POST(request: NextRequest) {
     }
 
     const contentLength = Number(request.headers.get("content-length") ?? 0);
-    if (contentLength > 2048) {
-      return respond({ error: "Request body too large" }, 413);
-    }
+    if (contentLength > 2048) return respond({ error: "Request body too large" }, 413);
 
     const text = await request.text();
-    if (text.length > 2048) {
-      return respond({ error: "Request body too large" }, 413);
-    }
+    if (text.length > 2048) return respond({ error: "Request body too large" }, 413);
 
     let body: unknown;
     try {
@@ -100,15 +88,8 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return respond({ error: "Invalid request body" }, 400);
     }
-
     const input = body as Record<string, unknown>;
-
-    // Backward compatibility: existing callers can still send userId, but
-    // they can never use it to update another account.
-    if (
-      input.userId !== undefined &&
-      input.userId !== authenticatedUserId
-    ) {
+    if (input.userId !== undefined && input.userId !== authenticatedUserId) {
       return respond({ error: "Cannot edit another user's username" }, 403);
     }
 
@@ -119,10 +100,7 @@ export async function POST(request: NextRequest) {
     const username = input.username.trim();
     if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
       return respond(
-        {
-          error:
-            "Username must be 3–30 characters and contain only letters, numbers, underscores, periods or hyphens",
-        },
+        { error: "Username must be 3–30 characters and contain only letters, numbers, underscores, periods or hyphens" },
         400
       );
     }
@@ -133,16 +111,30 @@ export async function POST(request: NextRequest) {
       return respond({ error: "Server configuration error" }, 500);
     }
 
-    // The service key must remain server-only. IMPORTANT: the target row is
-    // taken exclusively from getUser()'s verified ID, never from request JSON.
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    // Unlike a regular browser query, service_role bypasses RLS. Check the
+    // authenticated customer's status explicitly BEFORE privileged mutation.
+    const { data: customer, error: accountError } = await admin
+      .from("customers")
+      .select("id, status")
+      .eq("id", authenticatedUserId)
+      .maybeSingle();
+
+    if (accountError || !customer) {
+      return respond({ error: "Customer account could not be verified" }, 403);
+    }
+    if (customer.status !== "active") {
+      return respond({ error: "Customer account is not active" }, 403);
+    }
 
     const { data: updated, error: updateError } = await admin
       .from("customers")
       .update({ username })
       .eq("id", authenticatedUserId)
+      .eq("status", "active")
       .select("id")
       .maybeSingle();
 
@@ -154,10 +146,7 @@ export async function POST(request: NextRequest) {
       return respond({ error: "Unable to update username" }, 500);
     }
 
-    if (!updated) {
-      return respond({ error: "Customer profile not found" }, 404);
-    }
-
+    if (!updated) return respond({ error: "Customer account is no longer active" }, 403);
     return respond({ success: true, userId: authenticatedUserId, username });
   } catch (error) {
     console.error("set-username: unexpected error", error);

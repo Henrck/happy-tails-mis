@@ -8,7 +8,7 @@ import { resolveEmailForLogin, validateUsernameFormat } from "@/lib/supabase/cus
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6-3.5 6-9.5 6-3.5-6-9.5-6Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="12" cy="12" r="2.7" fill="none" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   ) : (
@@ -26,11 +26,15 @@ function SignInForm() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(() =>
-    searchParams.get("deactivated") === "1"
-      ? "This account has been deactivated. Please contact support."
-      : null
-  );
+  const [error, setError] = useState<string | null>(() => {
+    if (searchParams.get("deactivated") === "1") {
+      return "This account is inactive or archived. Please contact support.";
+    }
+    if (searchParams.get("access") === "unverified") {
+      return "Your account access could not be verified. Please retry or contact support.";
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -38,100 +42,120 @@ function SignInForm() {
     setError(null);
     setLoading(true);
 
-    const { email, error: resolveError } = await resolveEmailForLogin(identifier.trim());
-    if (resolveError || !email) {
-      setError(resolveError ?? "Couldn't find that account.");
-      setLoading(false);
-      return;
-    }
+    try {
+      const { email, error: resolveError } = await resolveEmailForLogin(identifier.trim());
+      if (resolveError || !email) {
+        setError(resolveError ?? "Couldn't find that account.");
+        return;
+      }
 
-    const supabase = createClient();
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      const supabase = createClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (signInError || !data.user) {
-      setError(signInError?.message ?? "Something went wrong signing in.");
-      setLoading(false);
-      return;
-    }
+      if (signInError || !data.user) {
+        setError(signInError?.message ?? "Something went wrong signing in.");
+        return;
+      }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single();
+      // Never infer a user's access level or account status when a lookup
+      // fails. Query only the authoritative table for the verified role.
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .maybeSingle();
 
-    const [{ data: customerRow }, { data: staffRow }] = await Promise.all([
-      supabase.from("customers").select("status, username").eq("id", data.user.id).maybeSingle(),
-      supabase.from("staff_profiles").select("status").eq("id", data.user.id).maybeSingle(),
-    ]);
-    const status = customerRow?.status ?? staffRow?.status ?? "active";
+      if (profileError || !profile || typeof profile.role !== "string") {
+        await supabase.auth.signOut();
+        setError("Your account profile could not be verified. Please contact support.");
+        return;
+      }
 
-    if (status !== "active") {
-      await supabase.auth.signOut();
-      setError("This account has been deactivated. Please contact support.");
-      setLoading(false);
-      return;
-    }
+      const isStaff = profile.role === "superadmin" || profile.role === "admin";
+      let customerRow: { status: string; username: string | null } | null = null;
+      let status: string | null = null;
+      let accessVerified = false;
 
-    // A user confirming their email does not have a session at sign-up time.
-    // Recover a missing customer username from the signup metadata ONLY after
-    // the password sign-in has produced a verified Supabase access token.
-    // Never overwrite an existing username (it may have been changed later).
-    if (customerRow && !customerRow.username) {
-      const pendingUsername = data.user.user_metadata?.username;
-      if (
-        typeof pendingUsername === "string" &&
-        !validateUsernameFormat(pendingUsername.trim())
-      ) {
-        const accessToken = data.session?.access_token;
-        if (!accessToken) {
-          setError("Signed in, but a secure session was unavailable. Please try again.");
-          setLoading(false);
-          return;
-        }
+      if (isStaff) {
+        const { data: staffRow, error: staffError } = await supabase
+          .from("staff_profiles")
+          .select("status")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        accessVerified = !staffError && !!staffRow;
+        status = staffRow?.status ?? null;
+      } else {
+        const { data: customer, error: customerError } = await supabase
+          .from("customers")
+          .select("status, username")
+          .eq("id", data.user.id)
+          .maybeSingle();
+        accessVerified = !customerError && !!customer;
+        if (customer) customerRow = customer;
+        status = customer?.status ?? null;
+      }
 
-        try {
-          const usernameResponse = await fetch("/api/auth/set-username", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ username: pendingUsername.trim() }),
-          });
-          if (!usernameResponse.ok) {
-            const result = await usernameResponse
-              .json()
-              .catch(() => ({ error: "Please retry or contact support." }));
-            setError(
-              `Account login succeeded, but your username could not be saved: ${result.error ?? "Please retry or contact support."}`
-            );
-            setLoading(false);
+      if (!accessVerified) {
+        await supabase.auth.signOut();
+        setError("Your account status could not be verified. Please retry or contact support.");
+        return;
+      }
+
+      if (status !== "active") {
+        await supabase.auth.signOut();
+        setError("This account is inactive or archived. Please contact support.");
+        return;
+      }
+
+      // SEC-001: preserve recovery of a missing username after first
+      // confirmed email login, using the authenticated user's token.
+      if (customerRow && !customerRow.username) {
+        const pendingUsername = data.user.user_metadata?.username;
+        if (
+          typeof pendingUsername === "string" &&
+          !validateUsernameFormat(pendingUsername.trim())
+        ) {
+          const accessToken = data.session?.access_token;
+          if (!accessToken) {
+            setError("Signed in, but a secure session was unavailable. Please try again.");
             return;
           }
-        } catch {
-          setError("Account login succeeded, but the username service is unavailable. Please try again.");
-          setLoading(false);
-          return;
+
+          try {
+            const usernameResponse = await fetch("/api/auth/set-username", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ username: pendingUsername.trim() }),
+            });
+            if (!usernameResponse.ok) {
+              const result = await usernameResponse
+                .json()
+                .catch(() => ({ error: "Please retry or contact support." }));
+              setError(
+                `Account login succeeded, but your username could not be saved: ${result.error ?? "Please retry or contact support."}`
+              );
+              return;
+            }
+          } catch {
+            setError("Account login succeeded, but the username service is unavailable. Please try again.");
+            return;
+          }
         }
       }
-    }
 
-    if (profileError || !profile) {
-      router.push("/account");
+      router.push(isStaff ? "/admin" : "/account");
       router.refresh();
-      return;
+    } catch {
+      setError("Unable to verify your account right now. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    if (profile.role === "superadmin" || profile.role === "admin") {
-      router.push("/admin");
-    } else {
-      router.push("/account");
-    }
-    router.refresh();
   }
 
   return (
@@ -169,7 +193,7 @@ function SignInForm() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-zinc-300 px-3 py-2 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink"
+              className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink"
             />
             <button
               type="button"
@@ -192,7 +216,7 @@ function SignInForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-60 text-white font-semibold py-2.5 rounded-full transition-colors"
+          className="w-full bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-60 text-white font-semibold py-2.5 rounded-full"
         >
           {loading ? "Signing in..." : "Sign In"}
         </button>

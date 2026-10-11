@@ -185,9 +185,6 @@ export default function MultiServiceSummaryStep({
       <div className="mt-5 space-y-4">
         {legs.map((leg) => {
           const isBoarding = leg.serviceChoice === "boarding";
-          const packages = packagesByService[leg.serviceChoice] ?? [];
-          const sizes = sizesByService[leg.serviceChoice] ?? [];
-          const addons = addonsByService[leg.serviceChoice] ?? [];
           const legTotal = leg.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
 
           return (
@@ -198,6 +195,14 @@ export default function MultiServiceSummaryStep({
               </div>
 
               {leg.petSelections.map((sel) => {
+                // "grooming" is a combined UI choice; stored packages and
+                // prices belong to dog_grooming or cat_grooming respectively.
+                const lookupKey = leg.serviceChoice === "grooming"
+                  ? sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming"
+                  : leg.serviceChoice;
+                const packages = packagesByService[lookupKey] ?? [];
+                const sizes = sizesByService[lookupKey] ?? [];
+                const addons = addonsByService[lookupKey] ?? [];
                 const pkg = packages.find((p) => p.id === sel.packageId);
                 const size = sizes.find((s) => s.id === sel.sizeId);
                 const groomer = groomers.find((g) => g.id === sel.groomerId);

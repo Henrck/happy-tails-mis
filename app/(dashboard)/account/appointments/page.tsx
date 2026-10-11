@@ -83,6 +83,19 @@ export default function BookAppointmentPage() {
     setAddonsByService((prev) => ({ ...prev, [serviceType]: addonResult.addons }));
   }, [packagesByService]);
 
+  // Generic "grooming" covers both species. The selection component can
+  // already handle that choice; load both sets here for summary labels.
+  const loadLookupsForChoice = useCallback((choice: WalkInServiceChoice) => {
+    if (choice === "grooming") {
+      void Promise.all([
+        loadGroomingLookups("dog_grooming"),
+        loadGroomingLookups("cat_grooming"),
+      ]);
+    } else if (choice === "dog_grooming" || choice === "cat_grooming") {
+      void loadGroomingLookups(choice);
+    }
+  }, [loadGroomingLookups]);
+
   useEffect(() => {
     setAddonsByService((prev) => ({ ...prev, boarding: boardingAddons }));
   }, [boardingAddons]);
@@ -96,7 +109,7 @@ export default function BookAppointmentPage() {
       const [next, ...rest] = queue;
       setQueuedLegs(rest);
       setCurrentLeg(next);
-      if (next.serviceChoice === "dog_grooming" || next.serviceChoice === "cat_grooming") loadGroomingLookups(next.serviceChoice);
+      loadLookupsForChoice(next.serviceChoice);
       setStep("selection");
     } else {
       setStep("service");
@@ -122,7 +135,7 @@ export default function BookAppointmentPage() {
 
     const leg = emptyLeg(choice, eligiblePetIds);
     setCurrentLeg(leg);
-    if (choice === "dog_grooming" || choice === "cat_grooming") loadGroomingLookups(choice);
+    loadLookupsForChoice(choice);
     setStep("selection");
   }
 
@@ -157,7 +170,7 @@ export default function BookAppointmentPage() {
     if (!leg) return;
     setCompletedLegs((prev) => prev.filter((l) => l.id !== legId));
     setCurrentLeg(leg);
-    if (leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") loadGroomingLookups(leg.serviceChoice);
+    loadLookupsForChoice(leg.serviceChoice);
     setStep("selection");
   }
 
@@ -166,7 +179,7 @@ export default function BookAppointmentPage() {
   if (loading || !customer) return <p className="py-10 text-center text-sm text-zinc-400 sm:py-16">Loading…</p>;
 
   const legPets = currentLeg ? pets.filter((p) => currentLeg.petIds.includes(p.id)) : [];
-  const isGrooming = currentLeg?.serviceChoice === "dog_grooming" || currentLeg?.serviceChoice === "cat_grooming";
+  const isGrooming = currentLeg?.serviceChoice === "grooming" || currentLeg?.serviceChoice === "dog_grooming" || currentLeg?.serviceChoice === "cat_grooming";
   const showSidebar = (step === "selection" || step === "schedule") && legPets.length > 0;
 
   return (
@@ -186,7 +199,7 @@ export default function BookAppointmentPage() {
         {step === "selection" && currentLeg?.serviceChoice === "boarding" && (
           <BoardingSelectionStep pets={legPets} selections={currentLeg.petSelections}
             alreadyGroomedPetIds={completedLegs
-              .filter((leg) => leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming")
+              .filter((leg) => leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming" || leg.serviceChoice === "grooming")
               .flatMap((leg) => leg.petIds)}
             onChange={handleLegSelectionChange} scheduledDate={currentLeg.scheduledDate}
             onBack={() => setStep("service")} onNext={() => setStep("schedule")} />
@@ -198,7 +211,7 @@ export default function BookAppointmentPage() {
         )}
 
         {step === "selection" && isGrooming && currentLeg && (
-          <GroomingSelectionStep serviceType={currentLeg.serviceChoice as "dog_grooming" | "cat_grooming"}
+          <GroomingSelectionStep serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
             pets={legPets} selections={currentLeg.petSelections} onChange={handleLegSelectionChange}
             onBack={() => { setCurrentLeg(null); setStep(queuedLegs.length > 0 || completedLegs.length > 0 ? "add-more" : "pet-info"); }}
             onNext={() => setStep("schedule")} />
@@ -218,7 +231,7 @@ export default function BookAppointmentPage() {
             onConfirmed={handleLegScheduleConfirmed} />
         )}
 
-        {step === "schedule" && currentLeg && (currentLeg.serviceChoice === "dog_grooming" || currentLeg.serviceChoice === "cat_grooming" || currentLeg.serviceChoice === "ala_carte") && (
+        {step === "schedule" && currentLeg && (currentLeg.serviceChoice === "grooming" || currentLeg.serviceChoice === "dog_grooming" || currentLeg.serviceChoice === "cat_grooming" || currentLeg.serviceChoice === "ala_carte") && (
           <GroomingScheduleStep customer={customer} ownerContact={customer.phone_number ?? ""}
             petSelections={currentLeg.petSelections} groomers={groomers} scheduledDate={currentLeg.scheduledDate}
             scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}

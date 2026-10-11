@@ -1,10 +1,5 @@
 // DELETE /api/admin/delete-staff/[id]
-// Superadmin-only. Permanently deletes the auth user, which cascades to
-// remove staff_profiles and profiles automatically (both reference
-// auth.users with ON DELETE CASCADE). This needs the admin client — a
-// normal client-side delete on staff_profiles alone would leave the
-// actual login (auth.users) behind, letting them still sign in with
-// nothing left to show for it.
+// Superadmin-only. Permanently removes a staff auth user and related records.
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,12 +7,23 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: { user: actor } } = await supabase.auth.getUser();
-  if (!actor) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  const actor = auth.user;
+  if (authError || !actor) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
 
-  const { data: actorProfile } = await supabase.from("profiles").select("role").eq("id", actor.id).single();
-  if (!actorProfile || actorProfile.role !== "superadmin") {
-    return NextResponse.json({ error: "Only the superadmin can permanently delete accounts." }, { status: 403 });
+  const [{ data: actorProfile, error: profileError }, { data: staffRow, error: staffError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", actor.id).maybeSingle(),
+    supabase.from("staff_profiles").select("status").eq("id", actor.id).maybeSingle(),
+  ]);
+
+  // Unlike /admin page requests, /api/admin routes are NOT in the proxy
+  // matcher. A role check alone is insufficient: a deactivated actor's
+  // existing JWT could still call a service-role API operation.
+  if (profileError || staffError || !actorProfile || !staffRow) {
+    return NextResponse.json({ error: "Account access could not be verified." }, { status: 403 });
+  }
+  if (actorProfile.role !== "superadmin" || staffRow.status !== "active") {
+    return NextResponse.json({ error: "Only an active superadmin can permanently delete accounts." }, { status: 403 });
   }
 
   if (id === actor.id) {
@@ -25,10 +31,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 
   const adminClient = createAdminClient();
-
-  // Log BEFORE deleting — once the user is gone, target_id would point
-  // at nothing (though the row itself is kept regardless, per
-  // audit_logs having no FK constraint on target_id).
+  // Log BEFORE deleting, while the target still exists.
   await adminClient.from("audit_logs").insert({
     actor_id: actor.id,
     actor_role: actorProfile.role,

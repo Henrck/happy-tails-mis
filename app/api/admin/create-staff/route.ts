@@ -1,11 +1,6 @@
 // POST /api/admin/create-staff
-//
-// Superadmin-exclusive, as established. The only change from before:
-// created accounts get role = 'admin' (not 'staff' — that role no
-// longer exists). "job_title" is still a free-text cosmetic label
-// (e.g. "Admin", "Groomer", "Front Desk") with zero effect on
-// permissions — every account created here has the exact same access
-// level underneath, no matter what title you give them.
+// Superadmin-only. Staff members always receive role='admin'; job titles
+// are cosmetic labels and do not change permissions.
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,20 +8,23 @@ import { validatePassword, validateEmail, validatePhoneNumber, validateUsername 
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const { data: { user: actor } } = await supabase.auth.getUser();
+  const { data: auth, error: authError } = await supabase.auth.getUser();
+  const actor = auth.user;
 
-  if (!actor) {
+  if (authError || !actor) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  const { data: actorProfile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", actor.id)
-    .single();
+  const [{ data: actorProfile, error: profileError }, { data: staffRow, error: staffError }] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", actor.id).maybeSingle(),
+    supabase.from("staff_profiles").select("status").eq("id", actor.id).maybeSingle(),
+  ]);
 
-  if (!actorProfile || actorProfile.role !== "superadmin") {
-    return NextResponse.json({ error: "Only the superadmin can create staff accounts." }, { status: 403 });
+  if (profileError || staffError || !actorProfile || !staffRow) {
+    return NextResponse.json({ error: "Account access could not be verified." }, { status: 403 });
+  }
+  if (actorProfile.role !== "superadmin" || staffRow.status !== "active") {
+    return NextResponse.json({ error: "Only an active superadmin can create staff accounts." }, { status: 403 });
   }
 
   const body = await request.json();
@@ -81,14 +79,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: createError?.message ?? "Failed to create account." }, { status: 500 });
   }
 
-  // CHANGED: 'admin', not 'staff' — that role no longer exists. Still
-  // hardcoded, still not accepted as a request parameter — no way to
-  // smuggle in 'superadmin' here.
   const { data: adminRole } = await adminClient.from("roles").select("id").eq("name", "admin").single();
 
   await adminClient.from("profiles").update({ role: "admin", role_id: adminRole?.id }).eq("id", newUser.user.id);
 
-  const { data: staffProfile, error: staffError } = await adminClient
+  const { data: staffProfile, error: staffErrorOnCreate } = await adminClient
     .from("staff_profiles")
     .insert({
       id: newUser.user.id,
@@ -104,9 +99,9 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (staffError) {
+  if (staffErrorOnCreate) {
     await adminClient.auth.admin.deleteUser(newUser.user.id);
-    return NextResponse.json({ error: `Failed to create staff profile: ${staffError.message}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to create staff profile: ${staffErrorOnCreate.message}` }, { status: 500 });
   }
 
   await adminClient.from("audit_logs").insert({
