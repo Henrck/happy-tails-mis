@@ -78,26 +78,9 @@ export default function SignUpPage() {
       return;
     }
 
-    // Supabase may create an unconfirmed account without a session.
-    // Only call the protected API when signUp actually signed the user in.
-    // Otherwise the username stays in user_metadata until first sign-in.
-    if (data.user && data.session?.access_token) {
-      const res = await fetch("/api/auth/set-username", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${data.session.access_token}`,
-        },
-        body: JSON.stringify({ username: username.trim() }),
-      });
-      const result = await res.json();
-
-      if (!res.ok) {
-        setLoading(false);
-        setError(`Account created, but saving the username failed: ${result.error}`);
-        return;
-      }
-    }
+    // On customer INSERT, the SEC-001 database trigger copies the signup
+    // username from auth.user_metadata. No session (or public privileged API)
+    // call is needed before email verification.
 
     setLoading(false);
 
@@ -114,7 +97,7 @@ export default function SignUpPage() {
       <div className="bg-white rounded-2xl shadow p-8 text-center">
         <h1 className="text-2xl font-bold text-zinc-900">Check your email</h1>
         <p className="mt-3 text-sm text-zinc-600">
-          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account, then sign in using your email address. Your username will be activated on your first successful sign-in.
+          We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account. You can then sign in using your username or email address.
         </p>
         <a href="/sign-in" className="mt-6 inline-block bg-brand-pink hover:bg-brand-pink-dark text-white font-semibold px-6 py-2.5 rounded-full transition-colors">Go to Sign In</a>
       </div>
