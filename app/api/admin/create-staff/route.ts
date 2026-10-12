@@ -54,16 +54,46 @@ export async function POST(request: Request) {
 
   const adminClient = createAdminClient();
 
-  const { data: existingUsername } = await adminClient
+  const normalizedUsername = username.trim();
+  const safePattern = normalizedUsername.replace(/[\\%_]/g, "\\$&");
+  const { data: possibleStaff, error: usernameLookupError } = await adminClient
     .from("staff_profiles")
-    .select("id")
-    .eq("username", username)
-    .maybeSingle();
-  if (existingUsername) {
+    .select("username")
+    .ilike("username", safePattern)
+    .limit(20);
+  if (usernameLookupError) {
+    return NextResponse.json({ error: "Could not validate the staff username." }, { status: 503 });
+  }
+  if ((possibleStaff ?? []).some((row) =>
+    row.username?.toLowerCase() === normalizedUsername.toLowerCase()
+  )) {
+    return NextResponse.json({ error: "That username is already taken." }, { status: 409 });
+  }
+  // Customer and staff identifiers share one login field. Avoid creating
+  // duplicate usernames between the two account types.
+  const { data: customerUsernameTaken, error: customerLookupError } = await adminClient
+    .rpc("is_username_taken", { check_username: normalizedUsername });
+  if (customerLookupError) {
+    return NextResponse.json({ error: "Could not check customer username collisions." }, { status: 503 });
+  }
+  if (customerUsernameTaken) {
     return NextResponse.json({ error: "That username is already taken." }, { status: 409 });
   }
 
-  const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+  // Validate role configuration BEFORE creating an Auth user.
+  const { data: adminRole, error: roleLookupError } = await adminClient
+    .from("roles")
+    .select("id")
+    .eq("name", "admin")
+    .maybeSingle();
+  if (roleLookupError || !adminRole) {
+    return NextResponse.json({ error: "Staff role is not configured in Supabase." }, { status: 503 });
+  }
+
+  const { data: existingUsers, error: existingUsersError } = await adminClient.auth.admin.listUsers();
+  if (existingUsersError || !existingUsers) {
+    return NextResponse.json({ error: "Could not verify email availability." }, { status: 503 });
+  }
   if (existingUsers.users.some((u) => u.email?.toLowerCase() === email.toLowerCase())) {
     return NextResponse.json({ error: "That email is already registered." }, { status: 409 });
   }
@@ -79,9 +109,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: createError?.message ?? "Failed to create account." }, { status: 500 });
   }
 
-  const { data: adminRole } = await adminClient.from("roles").select("id").eq("name", "admin").single();
-
-  await adminClient.from("profiles").update({ role: "admin", role_id: adminRole?.id }).eq("id", newUser.user.id);
+  // The earlier code ignored the profile update result. An UPDATE that
+  // affects zero rows returns no error, leaving a staff Auth user with a
+  // missing or incorrect role. Verify the result and fail the creation.
+  const { data: assignedProfile, error: assignmentError } = await adminClient
+    .from("profiles")
+    .update({ role: "admin", role_id: adminRole.id })
+    .eq("id", newUser.user.id)
+    .select("id, role")
+    .maybeSingle();
+  if (assignmentError || !assignedProfile || assignedProfile.role !== "admin") {
+    await adminClient.auth.admin.deleteUser(newUser.user.id);
+    console.error("Staff profile role assignment failed", assignmentError?.code ?? "missing_profile");
+    return NextResponse.json({ error: "Could not assign the staff role. No staff account was created." }, { status: 500 });
+  }
 
   const { data: staffProfile, error: staffErrorOnCreate } = await adminClient
     .from("staff_profiles")
@@ -90,10 +131,11 @@ export async function POST(request: Request) {
       first_name: firstName,
       middle_name: middleName || null,
       last_name: lastName,
-      username,
+      username: normalizedUsername,
+      email: email.trim(),
       phone_number: phoneNumber || null,
       job_title: jobTitle || "Staff",
-      role_id: adminRole?.id,
+      role_id: adminRole.id,
       status: "active",
     })
     .select()

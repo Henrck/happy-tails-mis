@@ -2,8 +2,6 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { resolveEmailForLogin, validateUsernameFormat } from "@/lib/supabase/customer-auth";
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -43,116 +41,30 @@ function SignInForm() {
     setLoading(true);
 
     try {
-      const { email, error: resolveError } = await resolveEmailForLogin(identifier.trim());
-      if (resolveError || !email) {
-        setError(resolveError ?? "Couldn't find that account.");
-        return;
-      }
-
-      const supabase = createClient();
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // Issue #6: never request or receive the email behind a username.
+      // One same-origin endpoint verifies credentials, role and account status.
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
       });
+      const result = (await response.json().catch(() => null)) as
+        | { ok?: boolean; redirectTo?: string; error?: string }
+        | null;
 
-      if (signInError || !data.user) {
-        setError(signInError?.message ?? "Something went wrong signing in.");
+      if (!response.ok || !result?.ok) {
+        setError(result?.error ?? "Unable to sign in. Please try again.");
         return;
       }
 
-      // Never infer a user's access level or account status when a lookup
-      // fails. Query only the authoritative table for the verified role.
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (profileError || !profile || typeof profile.role !== "string") {
-        await supabase.auth.signOut();
-        setError("Your account profile could not be verified. Please contact support.");
-        return;
-      }
-
-      const isStaff = profile.role === "superadmin" || profile.role === "admin";
-      let customerRow: { status: string; username: string | null } | null = null;
-      let status: string | null = null;
-      let accessVerified = false;
-
-      if (isStaff) {
-        const { data: staffRow, error: staffError } = await supabase
-          .from("staff_profiles")
-          .select("status")
-          .eq("id", data.user.id)
-          .maybeSingle();
-        accessVerified = !staffError && !!staffRow;
-        status = staffRow?.status ?? null;
-      } else {
-        const { data: customer, error: customerError } = await supabase
-          .from("customers")
-          .select("status, username")
-          .eq("id", data.user.id)
-          .maybeSingle();
-        accessVerified = !customerError && !!customer;
-        if (customer) customerRow = customer;
-        status = customer?.status ?? null;
-      }
-
-      if (!accessVerified) {
-        await supabase.auth.signOut();
-        setError("Your account status could not be verified. Please retry or contact support.");
-        return;
-      }
-
-      if (status !== "active") {
-        await supabase.auth.signOut();
-        setError("This account is inactive or archived. Please contact support.");
-        return;
-      }
-
-      // SEC-001: preserve recovery of a missing username after first
-      // confirmed email login, using the authenticated user's token.
-      if (customerRow && !customerRow.username) {
-        const pendingUsername = data.user.user_metadata?.username;
-        if (
-          typeof pendingUsername === "string" &&
-          !validateUsernameFormat(pendingUsername.trim())
-        ) {
-          const accessToken = data.session?.access_token;
-          if (!accessToken) {
-            setError("Signed in, but a secure session was unavailable. Please try again.");
-            return;
-          }
-
-          try {
-            const usernameResponse = await fetch("/api/auth/set-username", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({ username: pendingUsername.trim() }),
-            });
-            if (!usernameResponse.ok) {
-              const result = await usernameResponse
-                .json()
-                .catch(() => ({ error: "Please retry or contact support." }));
-              setError(
-                `Account login succeeded, but your username could not be saved: ${result.error ?? "Please retry or contact support."}`
-              );
-              return;
-            }
-          } catch {
-            setError("Account login succeeded, but the username service is unavailable. Please try again.");
-            return;
-          }
-        }
-      }
-
-      router.push(isStaff ? "/admin" : "/account");
+      // Server-issued Supabase SSR cookies are now stored by the browser.
+      // The server sends back a destination, never the user's email/token.
+      router.push(result.redirectTo === "/admin" ? "/admin" : "/account");
       router.refresh();
     } catch {
-      setError("Unable to verify your account right now. Please try again.");
+      setError("Unable to sign in right now. Please try again.");
     } finally {
       setLoading(false);
     }
