@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, PawPrint, UserRound } from "lucide-react";
 
@@ -30,6 +31,7 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
   const [visible, setVisible] = useState(false);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +47,10 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
       setError("This account is inactive or archived. Please contact support.");
     } else if (params.get("access") === "unverified") {
       setError("Your account access could not be verified. Please retry or contact support.");
+    } else if (params.get("google_error") === "oauth") {
+      setError("Google sign-in could not be completed. Please try again.");
+    } else if (params.get("google_error") === "setup") {
+      setError("Your Google account was verified, but HappyTails account setup is incomplete. Please contact support.");
     }
   }, [params]);
 
@@ -79,6 +85,33 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
       setError("Unable to sign in right now. Please try again.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    if (busy || googleBusy) return;
+    setGoogleBusy(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (oauthError || !data.url) {
+        setError("Unable to start Google sign-in. Please try again.");
+        setGoogleBusy(false);
+        return;
+      }
+      // Supabase returns the provider authorization URL. Never embed
+      // Google credentials in the frontend or manually handle ID tokens.
+      window.location.assign(data.url);
+    } catch {
+      setError("Unable to start Google sign-in. Please try again.");
+      setGoogleBusy(false);
     }
   }
 
@@ -168,13 +201,12 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
           <button
             type="button"
             className="ht-login-google"
-            disabled
-            title="Google sign-in has not been configured yet."
-            aria-describedby="ht-google-help"
+            disabled={busy || googleBusy}
+            onClick={handleGoogleSignIn}
+            aria-label="Continue with Google"
           >
-            <GoogleG /> <span>Continue with Google</span>
+            <GoogleG /> <span>{googleBusy ? "Connecting to Google..." : "Continue with Google"}</span>
           </button>
-          <span className="sr-only" id="ht-google-help">Google sign-in is not configured. Use email or username and password.</span>
         </section>
       </div>
       <div className="ht-login-portrait-bottom" aria-hidden="true" />
