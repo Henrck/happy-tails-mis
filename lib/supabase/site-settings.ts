@@ -15,7 +15,9 @@ export type SiteSettingKey =
   | "pet_avatar_dog_male"
   | "pet_avatar_dog_female"
   | "pet_avatar_cat_male"
-  | "pet_avatar_cat_female";
+  | "pet_avatar_cat_female"
+  | "login_background_desktop"
+  | "login_background_mobile";
 
 export type SiteSetting = {
   key: SiteSettingKey;
@@ -43,4 +45,6 @@ export const SITE_SETTING_LABELS: Record<SiteSettingKey, string> = {
   pet_avatar_dog_female: "Pet Avatar — Dog (Female)",
   pet_avatar_cat_male: "Pet Avatar — Cat (Male)",
   pet_avatar_cat_female: "Pet Avatar — Cat (Female)",
+  login_background_desktop: "Login Background — Desktop / Landscape",
+  login_background_mobile: "Login Background — Mobile / Portrait",
 };

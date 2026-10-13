@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { type SiteSetting, type SiteSettingKey } from "@/lib/supabase/site-settings";
 import EditableSection from "@/components/admin/operations/EditableSection";
@@ -146,8 +147,14 @@ export default function WebsiteManagementPage() {
   return (
     <PoliciesModalProvider>
       <div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="flex-1 text-3xl font-bold text-brand-pink">Website Management</h1>
+          <Link
+            href="/admin/website-management/login"
+            className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand-pink bg-white px-5 py-2 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink"
+          >
+            Login Configuration
+          </Link>
           <button
             onClick={() => setEditMode((v) => !v)}
             className={`rounded-full border-2 px-6 py-2 text-sm font-semibold transition-colors ${

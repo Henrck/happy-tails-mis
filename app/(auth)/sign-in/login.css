@@ -1,0 +1,484 @@
+/* HappyTails login reference reproduction, scoped to sign-in only.
+   The remaining auth pages keep their existing shared layout. */
+.ht-login-page {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  /* Cover fills the entire viewport: no pink letterbox strips at either side.
+     Preserve aspect ratio; modest cropping is possible on non-16:9 screens. */
+  background-color: #fbe9f1;
+  background-image: var(--ht-landscape);
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  color: #31313c;
+  isolation: isolate;
+}
+
+.ht-login-placement {
+  min-height: 100%;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 24px clamp(32px, 11vw, 184px) 24px 20px;
+  box-sizing: border-box;
+}
+.ht-login-portrait-top,
+.ht-login-portrait-middle,
+.ht-login-portrait-bottom { display: none; }
+
+.ht-login-card {
+  isolation: isolate;
+  position: relative;
+  box-sizing: border-box;
+  flex: 0 1 535px;
+  width: min(100%, 535px);
+  padding: 38px 33px 31px;
+  margin-top: 94px;
+  background: rgba(255, 252, 255, 0.985);
+  border: 1px solid #ffe0ef;
+  border-radius: 47px;
+  box-shadow: 0 7px 24px rgba(209, 64, 119, 0.13);
+}
+
+/* Rounded protrusions recreate the card's dog-bone silhouette. */
+.ht-login-card::before,
+.ht-login-card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: -27px;
+  width: 110px;
+  height: 110px;
+  background: #faeff7;
+  border: 12px solid #fffaff;
+  box-shadow: inset 0 0 15px rgba(252, 219, 236, 0.75);
+  border-radius: 50%;
+}
+.ht-login-card::before { left: 9px; }
+.ht-login-card::after { right: 9px; }
+
+.ht-login-heading { text-align: center; }
+.ht-login-paw {
+  display: block;
+  margin: -22px auto 5px;
+  height: 41px;
+  width: 41px;
+  color: #e71c80;
+  stroke-width: 1.5;
+}
+.ht-login-heading h1 {
+  margin: 0;
+  color: #e3177e;
+  font-family: var(--font-heading), 'Trebuchet MS', sans-serif;
+  font-weight: 700;
+  line-height: 1.05;
+  font-size: 52px;
+}
+.ht-login-heading p {
+  margin: 10px 0 23px;
+  color: #65646e;
+  font-family: var(--font-body), sans-serif;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.ht-login-form { display: flex; flex-direction: column; gap: 19px; }
+.ht-login-field {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: 60px;
+  width: 100%;
+  padding: 0 22px;
+  gap: 17px;
+  background: #faecf4;
+  border: 1.5px solid #f7d3e7;
+  border-radius: 19px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.ht-login-field:focus-within {
+  border-color: #e52c8d;
+  box-shadow: 0 0 0 3px rgb(232 36 128 / 12%);
+}
+.ht-login-field-icon {
+  flex: none;
+  height: 26px;
+  width: 26px;
+  color: #e81c80;
+}
+.ht-login-field input {
+  flex: 1;
+  min-width: 0;
+  height: 58px;
+  margin: 0;
+  padding: 0;
+  color: #31313c;
+  background: transparent;
+  outline: none;
+  border: none;
+  font-family: var(--font-body), sans-serif;
+  font-size: 15px;
+}
+.ht-login-field input::placeholder { color: #77737d; opacity: 1; }
+.ht-login-password-toggle {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  padding: 0;
+  color: #7b7d89;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+.ht-login-password-toggle svg { height: 23px; width: 23px; }
+.ht-login-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 0 1px;
+  font-size: 14px;
+  font-family: var(--font-body), sans-serif;
+}
+.ht-login-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ht-login-remember input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border-radius: 5px;
+  border: 2px solid #e92988;
+  background: #fff;
+  cursor: pointer;
+}
+.ht-login-remember input:checked { background: #e72a86; }
+.ht-login-remember input:checked::after {
+  content: '';
+  width: 11px;
+  height: 6px;
+  border: solid white;
+  border-width: 0 0 2px 2px;
+  transform: translateY(-2px) rotate(-45deg);
+}
+.ht-login-options a {
+  color: #e61c7b;
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ht-login-options a:hover { text-decoration: underline; }
+.ht-login-error {
+  margin: -3px 0 0;
+  padding: 11px 12px;
+  border: 1px solid #ffc2d0;
+  border-radius: 11px;
+  color: #ae2343;
+  background: #fff0f3;
+  line-height: 1.4;
+  font-size: 13px;
+}
+.ht-login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 58px;
+  margin-top: 1px;
+  padding: 9px 16px;
+  width: 100%;
+  background: #e63284;
+  border: none;
+  border-radius: 999px;
+  color: white;
+  cursor: pointer;
+  font-family: var(--font-heading), sans-serif;
+  font-size: 25px;
+  font-weight: 600;
+  transition: transform 150ms ease, background 150ms ease;
+}
+.ht-login-submit svg { width: 29px; height: 29px; }
+.ht-login-submit:hover:not(:disabled) { background: #d52174; }
+.ht-login-submit:active:not(:disabled) { transform: translateY(1px); }
+.ht-login-submit:disabled { cursor: wait; opacity: .7; }
+.ht-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 19px 0 17px;
+  color: #74717a;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.ht-login-divider::before,
+.ht-login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #efcbdc;
+}
+.ht-login-google {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 56px;
+  border: 1.5px solid #e63087;
+  border-radius: 999px;
+  background: white;
+  color: #42424c;
+  font-family: var(--font-body), sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.ht-login-google:disabled { cursor: not-allowed; }
+.ht-google-icon { width: 27px; height: 27px; flex: none; }
+.ht-login-submit:focus-visible,
+.ht-login-google:focus-visible,
+.ht-login-password-toggle:focus-visible,
+.ht-login-remember input:focus-visible,
+.ht-login-options a:focus-visible { outline: 3px solid #ef9dcb; outline-offset: 3px; }
+
+@media (max-width: 1150px) and (orientation: landscape) {
+  .ht-login-placement { padding-right: 4vw; }
+  .ht-login-card { flex-basis: min(49vw, 535px); }
+}
+
+/* Portrait reference: top logo/tagline, live bone-shaped form, bottom photo.
+   Three cropped portions of the user's portrait retain the exact supplied art.
+   The form itself is HTML and does not appear in those crops. */
+@media (orientation: portrait) {
+  .ht-login-page {
+    background: #fae8ef;
+  }
+  .ht-login-portrait-top {
+    display: block;
+    width: 100%;
+    aspect-ratio: 941 / 488;
+    background: url('/images/happytails-login-portrait-top.webp') center top / contain no-repeat;
+  }
+  .ht-login-placement {
+    position: relative;
+    justify-content: center;
+    align-items: center;
+    min-height: max(70vw, 635px);
+    padding: 30px 16px 24px;
+  }
+  .ht-login-portrait-middle {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    /* Natural-ratio repeated artwork: never stretch the middle segment to card height. */
+    background: url('/images/happytails-login-portrait-middle.webp') center top / 100% auto repeat-y;
+  }
+  .ht-login-card {
+    margin-top: 0;
+    flex: 0 1 610px;
+    width: min(100%, 610px);
+    padding: 43px 39px 34px;
+  }
+  .ht-login-heading h1 { font-size: 54px; }
+  .ht-login-portrait-bottom {
+    display: block;
+    width: 100%;
+    aspect-ratio: 941 / 527;
+    background: url('/images/happytails-login-portrait-bottom.webp') center top / contain no-repeat;
+  }
+  /* When system settings contain a replacement portrait image, render that
+     full artwork behind the real HTML form rather than the default crops. */
+  .ht-login-custom-portrait {
+    background-image: var(--ht-portrait);
+    background-repeat: no-repeat;
+    /* Uploaded portrait artwork also fits entirely within its available canvas. */
+    background-size: contain;
+    background-position: center top;
+    background-color: #fae8ef;
+  }
+  .ht-login-custom-portrait .ht-login-portrait-top,
+  .ht-login-custom-portrait .ht-login-portrait-middle,
+  .ht-login-custom-portrait .ht-login-portrait-bottom { display: none; }
+  .ht-login-custom-portrait .ht-login-placement {
+    min-height: 100dvh;
+    padding: clamp(200px, 49vw, 485px) 16px clamp(150px, 35vw, 370px);
+  }
+}
+
+@media (max-width: 620px) and (orientation: portrait) {
+  .ht-login-placement { min-height: 0; padding: 29px 15px 25px; }
+  .ht-login-card { padding: 36px 20px 27px; border-radius: 38px; }
+  .ht-login-card::before,
+  .ht-login-card::after {
+    top: -21px;
+    width: 82px;
+    height: 82px;
+    border-width: 9px;
+  }
+  .ht-login-card::before { left: 7px; }
+  .ht-login-card::after { right: 7px; }
+  .ht-login-paw { width: 37px; height: 37px; margin-top: -12px; }
+  .ht-login-heading h1 { font-size: 40px; }
+  .ht-login-heading p { font-size: 12px; margin: 8px 0 20px; }
+  .ht-login-form { gap: 14px; }
+  .ht-login-field { min-height: 53px; padding: 0 13px; border-radius: 15px; gap: 12px; }
+  .ht-login-field-icon { width: 22px; height: 22px; }
+  .ht-login-field input { height: 51px; font-size: 14px; }
+  .ht-login-password-toggle { width: 24px; }
+  .ht-login-options { font-size: 12px; }
+  .ht-login-remember { gap: 6px; }
+  .ht-login-remember input { width: 20px; height: 20px; }
+  .ht-login-submit { min-height: 54px; font-size: 21px; }
+  .ht-login-submit svg { width: 25px; height: 25px; }
+  .ht-login-divider { margin: 18px 0 14px; font-size: 13px; }
+  .ht-login-google { min-height: 52px; font-size: 14px; }
+  .ht-google-icon { height: 24px; width: 24px; }
+}
+
+/* Short landscape screens: keep the form usable rather than cropped. */
+@media (max-height: 680px) and (orientation: landscape) {
+  .ht-login-placement { min-height: 100dvh; padding-top: 28px; padding-bottom: 28px; }
+  .ht-login-card { margin-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ht-login-submit,
+  .ht-login-field { transition: none; }
+}
+
+/* Final fit safeguards for all screen sizes, including ultra-wide, tablet,
+   320px phones, and short landscape viewports. Keep the form scrollable. */
+.ht-login-page { background-attachment: scroll; }
+.ht-login-card { max-width: calc(100vw - 24px); min-width: 0; }
+.ht-login-field, .ht-login-options { min-width: 0; }
+.ht-login-portrait-top, .ht-login-portrait-bottom { background-size: contain; }
+@media (max-width: 760px) and (orientation: landscape) {
+  .ht-login-placement {
+    justify-content: center;
+    padding-inline: 12px;
+  }
+  .ht-login-card { flex-basis: min(100%, 470px); }
+}
+@media (max-width: 360px) {
+  .ht-login-card { padding-inline: 13px; }
+  .ht-login-options { font-size: 11px; }
+  .ht-login-field { gap: 8px; }
+}
+
+/* ===============================================================
+   Overlap correction — October 2026
+   The original landscape graphic embeds a logo, tagline and footer.
+   Those must not sit behind the live form. Confine the background to
+   a left-side artwork panel, and give the form its own right panel.
+   =============================================================== */
+@media (min-width: 1024px) and (orientation: landscape) {
+  .ht-login-page {
+    background-image: none;
+    background-color: #fae9f1;
+    background: linear-gradient(90deg, #fce8f1 0%, #fce8f1 54%, #fce7ef 58%, #fff2f8 100%);
+  }
+  .ht-login-page::before {
+    content: '';
+    position: fixed;
+    z-index: -1;
+    inset: 0 auto 0 0;
+    width: 61%;
+    pointer-events: none;
+    background-image: var(--ht-landscape);
+    background-color: #fce8f1;
+    background-repeat: no-repeat;
+    /* Preserve source aspect ratio; the left side holds the person,
+       dog and logo. The baked-in tagline and footer do not cross
+       into the separate interactive form panel. */
+    background-position: left center;
+    background-size: auto 100%;
+    -webkit-mask-image: linear-gradient(to right, black 0%, black 86%, transparent 100%);
+    mask-image: linear-gradient(to right, black 0%, black 86%, transparent 100%);
+  }
+  .ht-login-placement {
+    position: relative;
+    min-height: 100dvh;
+    justify-content: flex-end;
+    align-items: center;
+    padding: 44px clamp(24px, 4.5vw, 86px) 44px 55%;
+  }
+  .ht-login-card {
+    flex: 0 1 535px;
+    width: 100%;
+    margin-top: 0;
+  }
+}
+
+/* On smaller landscape screens, the form still has its own column.
+   Let page scroll vertically rather than overlay important content. */
+@media (min-width: 1024px) and (max-width: 1280px) and (orientation: landscape) {
+  .ht-login-placement { padding-left: 51%; padding-right: 20px; }
+  .ht-login-page::before { width: 57%; }
+  .ht-login-card { padding: 31px 24px 25px; }
+  .ht-login-heading h1 { font-size: 43px; }
+  .ht-login-form { gap: 13px; }
+  .ht-login-field { min-height: 52px; }
+  .ht-login-field input { height: 51px; }
+}
+
+/* Tablets in landscape need more room than a side-by-side card allows.
+   Switch to the portrait artwork composition rather than overlapping. */
+@media (min-width: 621px) and (max-width: 1023px) and (orientation: landscape) {
+  .ht-login-page { background: #fae8ef; }
+  .ht-login-portrait-top {
+    display: block;
+    width: 100%;
+    aspect-ratio: 941 / 488;
+    background: url('/images/happytails-login-portrait-top.webp') center top / contain no-repeat;
+  }
+  .ht-login-placement {
+    position: relative;
+    justify-content: center;
+    align-items: center;
+    min-height: 0;
+    padding: 32px 18px;
+  }
+  .ht-login-portrait-middle {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: url('/images/happytails-login-portrait-middle.webp') center top / 100% auto repeat-y;
+  }
+  .ht-login-card { width: min(100%, 610px); flex: 0 1 610px; margin-top: 0; }
+  .ht-login-portrait-bottom {
+    display: block;
+    width: 100%;
+    aspect-ratio: 941 / 527;
+    background: url('/images/happytails-login-portrait-bottom.webp') center top / contain no-repeat;
+  }
+  .ht-login-custom-portrait {
+    background-image: var(--ht-portrait);
+    background-position: center top;
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+  .ht-login-custom-portrait .ht-login-portrait-top,
+  .ht-login-custom-portrait .ht-login-portrait-middle,
+  .ht-login-custom-portrait .ht-login-portrait-bottom { display: none; }
+  .ht-login-custom-portrait .ht-login-placement { min-height: 100dvh; }
+}
+
+@media (max-width: 620px) and (orientation: landscape) {
+  .ht-login-page { background-position: center center; background-size: cover; }
+  .ht-login-placement { justify-content: center; padding: 35px 14px; }
+  .ht-login-card { margin-top: 0; }
+}
