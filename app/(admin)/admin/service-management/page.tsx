@@ -1,14 +1,12 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory,
   togglePackageActive, toggleSizeActive, toggleAddonActive,
 } from "@/lib/supabase/services";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
-import type { SiteSetting, SiteSettingKey } from "@/lib/supabase/site-settings";
-import { PET_AVATAR_KEYS } from "@/lib/utils/pet-avatar";
-
 import ServiceTabs from "@/components/admin/services/ServiceTabs";
 import PackageCard from "@/components/admin/services/PackageCard";
 import SizeGuideTable from "@/components/admin/services/SizeGuideTable";
@@ -16,12 +14,11 @@ import AddOnsSection from "@/components/admin/services/AddOnsSection";
 import PackageFormModal from "@/components/admin/services/PackageFormModal";
 import SizeFormModal from "@/components/admin/services/SizeFormModal";
 import AddOnFormModal from "@/components/admin/services/AddOnFormModal";
-import PetAvatarsManager from "@/components/admin/services/PetAvatarsManager";
 
+// Pet avatar configuration lives in Website Management, not Service Management.
 export default function ServiceManagementPage() {
   const [tab, setTab] = useState<ServiceType>("dog_grooming");
   const [search, setSearch] = useState("");
-
   const [packages, setPackages] = useState<Package[]>([]);
   const [inclusions, setInclusions] = useState<PackageInclusion[]>([]);
   const [pricing, setPricing] = useState<PackagePricing[]>([]);
@@ -32,22 +29,11 @@ export default function ServiceManagementPage() {
   const [aLaCartePrices, setALaCartePrices] = useState<AddonPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [packageModal, setPackageModal] = useState<{ mode: "add" | "edit"; pkg?: Package } | null>(null);
   const [sizeModal, setSizeModal] = useState<{ mode: "add" | "edit"; size?: PetSize } | null>(null);
   const [addonModal, setAddonModal] = useState<{ mode: "add" | "edit"; addon?: Addon; categoryId: string } | null>(null);
 
-  // Pet Avatars configuration — same upload mechanism as Website
-  // Management (site-images storage bucket + site_settings row per key).
-  const [avatarSettings, setAvatarSettings] = useState<SiteSetting[]>([]);
-  const [manageAvatars, setManageAvatars] = useState(false);
-  const [avatarUploadTarget, setAvatarUploadTarget] = useState<SiteSettingKey | null>(null);
-  const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
-  const avatarFileInputRef = useRef<HTMLInputElement>(null);
-
   const addonCategoryName = tab === "boarding" ? "Boarding Add-ons" : "Grooming Add-ons";
-
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -57,7 +43,6 @@ export default function ServiceManagementPage() {
       fetchAddonsByCategory(addonCategoryName),
       fetchAddonsByCategory("Ala Carte"),
     ]);
-
     setPackages(pkgResult.packages);
     setInclusions(pkgResult.inclusions);
     setPricing(pkgResult.pricing);
@@ -66,272 +51,74 @@ export default function ServiceManagementPage() {
     setAddonPrices(addonResult.prices);
     setALaCarteAddons(alaCarteResult.addons);
     setALaCartePrices(alaCarteResult.prices);
-
     if (pkgResult.error) setError(pkgResult.error);
     setLoading(false);
   }, [tab, addonCategoryName]);
-
   useEffect(() => { loadData(); }, [loadData]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const supabase = createClient();
-      const { data } = await supabase.from("site_settings").select("*").in("key", PET_AVATAR_KEYS);
-      if (!cancelled) setAvatarSettings((data as SiteSetting[]) ?? []);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  function openAvatarUploadFor(key: SiteSettingKey) {
-    setAvatarUploadTarget(key);
-    window.setTimeout(() => avatarFileInputRef.current?.click(), 0);
-  }
-
-  async function handleAvatarFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    const key = avatarUploadTarget;
-    e.target.value = "";
-    if (!file || !key) return;
-
-    setAvatarUploading(true);
-    setAvatarError(null);
-
-    try {
-      const supabase = createClient();
-      const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
-        const img = new window.Image();
-        img.onload = () => {
-          URL.revokeObjectURL(img.src);
-          resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(img.src);
-          reject(new Error("The selected file is not a valid image."));
-        };
-        img.src = URL.createObjectURL(file);
-      });
-
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${key}-${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage.from("site-images").upload(path, file, {
-        upsert: true,
-        contentType: file.type,
-      });
-      if (uploadError) throw uploadError;
-
-      const newUrl = supabase.storage.from("site-images").getPublicUrl(path).data.publicUrl;
-      const { error: updateError } = await supabase
-        .from("site_settings")
-        .update({
-          image_url: newUrl,
-          image_width: dimensions.width,
-          image_height: dimensions.height,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("key", key);
-
-      if (updateError) throw updateError;
-
-      setAvatarSettings((prev) =>
-        prev.map((s) =>
-          s.key === key
-            ? { ...s, image_url: newUrl, image_width: dimensions.width, image_height: dimensions.height }
-            : s
-        )
-      );
-    } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : "Image upload failed.");
-    } finally {
-      setAvatarUploading(false);
-      setAvatarUploadTarget(null);
-    }
-  }
-
   const filteredPackages = packages.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()));
-
-  async function handleTogglePackage(pkg: Package) {
-    await togglePackageActive(pkg.id, !pkg.is_active);
-    loadData();
-  }
-  async function handleToggleSize(size: PetSize) {
-    await toggleSizeActive(size.id, !size.is_active);
-    loadData();
-  }
-  async function handleToggleAddon(addon: Addon) {
-    await toggleAddonActive(addon.id, !addon.is_active);
-    loadData();
-  }
-
+  async function handleTogglePackage(pkg: Package) { await togglePackageActive(pkg.id, !pkg.is_active); loadData(); }
+  async function handleToggleSize(size: PetSize) { await toggleSizeActive(size.id, !size.is_active); loadData(); }
+  async function handleToggleAddon(addon: Addon) { await toggleAddonActive(addon.id, !addon.is_active); loadData(); }
   async function handleArchivePackage(pkg: Package) {
     if (!confirm(`Archive "${pkg.name}"? This hides it from customers but keeps its history.`)) return;
-    await togglePackageActive(pkg.id, false);
-    loadData();
+    await togglePackageActive(pkg.id, false); loadData();
   }
   async function handleArchiveSize(size: PetSize) {
     if (!confirm(`Archive "${size.label}"? Existing packages keep their pricing, but this size won't be offered for new packages.`)) return;
-    await toggleSizeActive(size.id, false);
-    loadData();
+    await toggleSizeActive(size.id, false); loadData();
   }
   async function handleArchiveAddon(addon: Addon) {
     if (!confirm(`Archive "${addon.name}"?`)) return;
-    await toggleAddonActive(addon.id, false);
-    loadData();
+    await toggleAddonActive(addon.id, false); loadData();
   }
 
   return (
     <div>
       <div className="flex items-center gap-3">
-        <div className="flex-1 relative max-w-sm">
+        <div className="relative max-w-sm flex-1">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
             <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
           </svg>
-          <input type="text" placeholder="Search packages" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-full border border-pink-200 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
+          <input type="text" placeholder="Search packages" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-full border border-pink-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
         </div>
-        <button
-          onClick={() => setManageAvatars(true)}
-          className="flex items-center gap-1.5 border-2 border-brand-pink text-brand-pink font-semibold text-sm px-4 py-2 rounded-full hover:bg-brand-pink hover:text-white transition-colors whitespace-nowrap"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
-          Configure Pet Avatars
-        </button>
-        <input ref={avatarFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelected} />
       </div>
-
-      {avatarUploading && <p className="mt-2 text-sm font-semibold text-brand-pink">Uploading...</p>}
-      {avatarError && <p className="mt-2 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{avatarError}</p>}
-
       <h1 className="mt-6 text-2xl font-bold text-brand-pink">Service Management</h1>
-
-      <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
-        <ServiceTabs active={tab} onChange={setTab} />
-      </div>
-
-      {error && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{error}</p>}
-
-      {loading ? (
-        <p className="mt-10 text-center text-zinc-400">Loading...</p>
-      ) : (
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><ServiceTabs active={tab} onChange={setTab} /></div>
+      {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
+      {loading ? <p className="mt-10 text-center text-zinc-400">Loading...</p> : (
         <>
           <div className="mt-6 flex items-center justify-between">
             <h2 className="font-bold text-zinc-800">Package</h2>
-            <button onClick={() => setPackageModal({ mode: "add" })} className="border-2 border-brand-pink text-brand-pink font-semibold text-sm px-5 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors">
-              Add Package
-            </button>
+            <button onClick={() => setPackageModal({ mode: "add" })} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-pink hover:text-white">Add Package</button>
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPackages.length === 0 ? (
-              <p className="col-span-full text-center text-zinc-400 py-8">No packages yet for this service.</p>
-            ) : (
-              filteredPackages.map((pkg) => (
-                <PackageCard
-                  key={pkg.id}
-                  pkg={pkg}
-                  inclusions={inclusions.filter((i) => i.package_id === pkg.id)}
-                  pricing={pricing.filter((p) => p.package_id === pkg.id)}
-                  onEdit={() => setPackageModal({ mode: "edit", pkg })}
-                  onToggleActive={() => handleTogglePackage(pkg)}
-                  onArchive={() => handleArchivePackage(pkg)}
-                />
-              ))
-            )}
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredPackages.length === 0 ? <p className="col-span-full py-8 text-center text-zinc-400">No packages yet for this service.</p> : filteredPackages.map((pkg) => (
+              <PackageCard key={pkg.id} pkg={pkg} inclusions={inclusions.filter((i) => i.package_id === pkg.id)} pricing={pricing.filter((p) => p.package_id === pkg.id)} onEdit={() => setPackageModal({ mode: "edit", pkg })} onToggleActive={() => handleTogglePackage(pkg)} onArchive={() => handleArchivePackage(pkg)} />
+            ))}
           </div>
-
           {tab !== "boarding" && (
             <div className="mt-8">
               <div className="flex items-center justify-between">
                 <h2 className="font-bold text-zinc-800">Size Guide</h2>
-                <button onClick={() => setSizeModal({ mode: "add" })} className="border-2 border-brand-pink text-brand-pink font-semibold text-sm px-5 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors">
-                  Add Size
-                </button>
+                <button onClick={() => setSizeModal({ mode: "add" })} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink hover:bg-brand-pink hover:text-white">Add Size</button>
               </div>
-              <div className="mt-3">
-                <SizeGuideTable sizes={sizes} onEdit={(size) => setSizeModal({ mode: "edit", size })} onToggleActive={handleToggleSize} onArchive={handleArchiveSize} />
-              </div>
+              <div className="mt-3"><SizeGuideTable sizes={sizes} onEdit={(size) => setSizeModal({ mode: "edit", size })} onToggleActive={handleToggleSize} onArchive={handleArchiveSize} /></div>
             </div>
           )}
-
           <div className="mt-8">
             <div className="flex items-center justify-between">
               <div />
-              <button
-                onClick={async () => {
-                  const supabase = createClient();
-                  const { data } = await supabase.from("addon_categories").select("id").eq("name", addonCategoryName).single();
-                  if (data) setAddonModal({ mode: "add", categoryId: data.id });
-                }}
-                className="border-2 border-brand-pink text-brand-pink font-semibold text-sm px-5 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors"
-              >
-                Add Add-Ons
-              </button>
+              <button onClick={async () => { const supabase = createClient(); const { data } = await supabase.from("addon_categories").select("id").eq("name", addonCategoryName).single(); if (data) setAddonModal({ mode: "add", categoryId: data.id }); }} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink hover:bg-brand-pink hover:text-white">Add Add-Ons</button>
             </div>
-            <div className="mt-3">
-              <AddOnsSection
-                title={addonCategoryName}
-                addons={addons}
-                prices={addonPrices}
-                onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })}
-                onToggleActive={handleToggleAddon}
-                onArchive={handleArchiveAddon}
-              />
-            </div>
+            <div className="mt-3"><AddOnsSection title={addonCategoryName} addons={addons} prices={addonPrices} onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })} onToggleActive={handleToggleAddon} onArchive={handleArchiveAddon} /></div>
           </div>
-
-          <div className="mt-8">
-            <AddOnsSection
-              title="Ala Carte"
-              addons={aLaCarteAddons}
-              prices={aLaCartePrices}
-              onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })}
-              onToggleActive={handleToggleAddon}
-              onArchive={handleArchiveAddon}
-            />
-          </div>
+          <div className="mt-8"><AddOnsSection title="Ala Carte" addons={aLaCarteAddons} prices={aLaCartePrices} onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })} onToggleActive={handleToggleAddon} onArchive={handleArchiveAddon} /></div>
         </>
       )}
-
-      {packageModal && (
-        <PackageFormModal
-          serviceType={tab}
-          sizes={sizes}
-          existing={packageModal.pkg}
-          existingInclusions={packageModal.pkg ? inclusions.filter((i) => i.package_id === packageModal.pkg!.id) : undefined}
-          existingPricing={packageModal.pkg ? pricing.filter((p) => p.package_id === packageModal.pkg!.id) : undefined}
-          onClose={() => setPackageModal(null)}
-          onSaved={() => { setPackageModal(null); loadData(); }}
-        />
-      )}
-
-      {sizeModal && (
-        <SizeFormModal serviceType={tab} existing={sizeModal.size} onClose={() => setSizeModal(null)} onSaved={() => { setSizeModal(null); loadData(); }} />
-      )}
-
-      {addonModal && (
-        <AddOnFormModal
-          categoryId={addonModal.categoryId}
-          existing={addonModal.addon}
-          existingPrices={addonModal.addon ? [...addonPrices, ...aLaCartePrices].filter((p) => p.addon_id === addonModal.addon!.id) : undefined}
-          onClose={() => setAddonModal(null)}
-          onSaved={() => { setAddonModal(null); loadData(); }}
-        />
-      )}
-
-      {manageAvatars && (
-        <PetAvatarsManager
-          settings={avatarSettings}
-          onEdit={(key) => {
-            setManageAvatars(false);
-            openAvatarUploadFor(key);
-          }}
-          onClose={() => setManageAvatars(false)}
-        />
-      )}
+      {packageModal && <PackageFormModal serviceType={tab} sizes={sizes} existing={packageModal.pkg} existingInclusions={packageModal.pkg ? inclusions.filter((i) => i.package_id === packageModal.pkg!.id) : undefined} existingPricing={packageModal.pkg ? pricing.filter((p) => p.package_id === packageModal.pkg!.id) : undefined} onClose={() => setPackageModal(null)} onSaved={() => { setPackageModal(null); loadData(); }} />}
+      {sizeModal && <SizeFormModal serviceType={tab} existing={sizeModal.size} onClose={() => setSizeModal(null)} onSaved={() => { setSizeModal(null); loadData(); }} />}
+      {addonModal && <AddOnFormModal categoryId={addonModal.categoryId} existing={addonModal.addon} existingPrices={addonModal.addon ? [...addonPrices, ...aLaCartePrices].filter((p) => p.addon_id === addonModal.addon!.id) : undefined} onClose={() => setAddonModal(null)} onSaved={() => { setAddonModal(null); loadData(); }} />}
     </div>
   );
 }

@@ -1,153 +1,26 @@
+"use client";
 import type { Pet } from "@/lib/types/appointments";
-import { usePetAvatarSettings } from "@/lib/hooks/usePetAvatarSettings";
-import { resolvePetAvatar } from "@/lib/utils/pet-avatar";
+import PetAvatar from "@/components/dashboard/PetAvatar";
 
-function GenderMark({ pet }: { pet: Pet }) {
-  const sex = String((pet as Pet & { sex?: string }).sex ?? "").toLowerCase();
-
-  if (sex === "female" || sex === "f") {
-    return <span className="text-pink-500 text-[18px] leading-none">♀</span>;
-  }
-
-  if (sex === "male" || sex === "m") {
-    return <span className="text-sky-500 text-[18px] leading-none">♂</span>;
-  }
-
-  return null;
-}
-
-export default function BookingPetCard({
-  pet,
-  selected,
-  onToggleSelect,
-  onViewProfile,
-}: {
-  pet: Pet;
-  selected: boolean;
-  onToggleSelect: () => void;
-  onViewProfile: () => void;
+export default function BookingPetCard({ pet, selected, onToggleSelect, onViewProfile }: {
+  pet: Pet; selected: boolean; onToggleSelect: () => void; onViewProfile: () => void;
 }) {
-  const species = pet.species === "Cat" ? "Cat" : "Dog";
-  const avatarSettings = usePetAvatarSettings();
-  const artwork = resolvePetAvatar(avatarSettings, pet.species, pet.sex);
-
   return (
-    <article
-      className={[
-        "overflow-hidden rounded-[18px] bg-white",
-        "border shadow-[0_2px_8px_rgba(31,41,55,0.08)]",
-        selected
-          ? "border-brand-pink ring-1 ring-brand-pink/20"
-          : "border-pink-100",
-      ].join(" ")}
-    >
-      {/* Banner is deliberately the same wide aspect ratio as the card.
-          object-contain (not object-cover) keeps the whole dog/cat
-          artwork visible instead of cropping it — the tinted backdrop
-          fills whatever space is left around it. */}
-      <div
-        className={[
-          "relative aspect-[1.78/1] w-full overflow-hidden",
-          species === "Cat" ? "bg-pink-100" : "bg-sky-100",
-        ].join(" ")}
-      >
-        <img
-          src={artwork}
-          alt=""
-          className="block h-full w-full object-contain object-center"
-        />
-
-        <button
-          type="button"
-          onClick={onToggleSelect}
-          aria-label={`${selected ? "Deselect" : "Select"} ${pet.name}`}
-          aria-pressed={selected}
-          className={[
-            "absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full",
-            "border border-white shadow-sm transition-all",
-            selected
-              ? "bg-brand-pink text-white"
-              : "bg-white/95 text-transparent hover:bg-white",
-          ].join(" ")}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+    <article className={`flex h-full flex-col rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md ${selected ? "border-brand-pink ring-2 ring-brand-pink/20" : "border-pink-100"}`}>
+      <div className="flex items-start gap-4">
+        <PetAvatar pet={pet} size="lg" />
+        <div className="min-w-0 flex-1 pt-1">
+          <h3 className="truncate text-lg font-bold text-slate-800">{pet.name}</h3>
+          <p className="mt-1 truncate text-sm text-slate-500">{pet.breed || "Breed not specified"}{pet.size_label ? ` · ${pet.size_label}` : ""}</p>
+          {pet.age != null && <p className="mt-1 text-xs text-slate-500">{pet.age} {pet.age === 1 ? "year" : "years"} old</p>}
+        </div>
+        <button type="button" onClick={onToggleSelect} aria-label={`${selected ? "Deselect" : "Select"} ${pet.name}`} aria-pressed={selected} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${selected ? "border-brand-pink bg-brand-pink text-white" : "border-zinc-200 bg-white"}`}>
+          {selected && <span aria-hidden="true">✓</span>}
         </button>
       </div>
-
-      <div className="px-6 pb-5 pt-4">
-        <div className="flex items-center gap-2">
-          <h3 className="truncate text-[19px] font-bold leading-6 text-slate-800">
-            {pet.name}
-          </h3>
-          <GenderMark pet={pet} />
-        </div>
-
-        <p className="mt-2 text-[16px] leading-5 text-slate-500">
-          {pet.breed}
-          <span className="mx-2 text-slate-300">•</span>
-          {pet.size_label}
-        </p>
-
-        <div className="mt-5 grid grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={onViewProfile}
-            className="flex h-12 items-center justify-center gap-2 rounded-full border-2 border-brand-pink bg-white px-3 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-pink hover:text-white"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="4" width="18" height="18" rx="2" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-            </svg>
-            View Profile
-          </button>
-
-          <button
-            type="button"
-            onClick={onToggleSelect}
-            className={[
-              "flex h-12 items-center justify-center gap-2 rounded-full px-3 text-sm font-semibold transition-colors",
-              selected
-                ? "border-2 border-brand-pink bg-brand-pink text-white"
-                : "border-2 border-sky-300 bg-white text-sky-600 hover:bg-sky-300 hover:text-white",
-            ].join(" ")}
-          >
-            {selected && (
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
-            {selected ? "Selected" : "Select"}
-          </button>
-        </div>
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-5">
+        <button type="button" onClick={onViewProfile} className="min-h-10 rounded-full border border-brand-pink px-2 text-xs font-semibold text-brand-pink hover:bg-pink-50">View Profile</button>
+        <button type="button" onClick={onToggleSelect} aria-pressed={selected} className={`min-h-10 rounded-full px-2 text-xs font-semibold ${selected ? "bg-brand-pink text-white" : "border border-brand-pink bg-white text-brand-pink hover:bg-pink-50"}`}>{selected ? "Selected" : "Select"}</button>
       </div>
     </article>
   );
