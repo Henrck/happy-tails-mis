@@ -1,0 +1,142 @@
+/* HappyTails booking — scoped visual layer. All form logic remains untouched. */
+.ht-booking { --ht-ink:#202a3a; --ht-muted:#707988; --ht-line:#f0e6ed; --ht-soft:#fdf6fa; --ht-accent:#ef338b; color:var(--ht-ink); padding-bottom:2rem; }
+.ht-booking-intro { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1.25rem; margin:0 0 1.35rem; padding:1.4rem 1.8rem; border:1px solid #f4dfe9; border-radius:1.5rem; background:linear-gradient(115deg,#fff 0%,#fff 62%,#fff1f7 100%); box-shadow:0 6px 28px rgba(100,47,75,.035); }
+.ht-booking-eyebrow { color:#db4188; font-size:.7rem; font-weight:700; letter-spacing:.13em; }
+.ht-booking-intro h1 { margin-top:.3rem; font-size:clamp(1.45rem,2.6vw,1.95rem); line-height:1.23; letter-spacing:-.035em; font-weight:750; color:#263248; }
+.ht-booking-intro p:not(.ht-booking-eyebrow) { margin-top:.45rem; font-size:.875rem; color:var(--ht-muted); }
+.ht-booking-intro-note { display:flex; flex-wrap:wrap; align-items:center; gap:.7rem; font-size:.74rem; color:#c34e80; }
+.ht-booking-intro-note span:not(.ht-booking-note-divider) { display:inline-flex; flex-direction:column; gap:2px; font-weight:700; }
+.ht-booking-intro-note b { font-weight:600; color:#626d80; }
+.ht-booking-note-divider { height:25px; width:1px; background:#f4d4e3; }
+/* White workspaces use restrained borders instead of decorative shadows. */
+.ht-booking > div > div:first-child { border:1px solid #f0e3eb !important; border-radius:1.45rem !important; box-shadow:0 8px 28px rgba(52,28,44,.035); }
+.ht-booking h2 { color:var(--ht-ink) !important; letter-spacing:-.025em; }
+.ht-booking h2 + p { color:var(--ht-muted); line-height:1.6; }
+/* Service tiles: a small neutral icon with a precise selection ring. */
+.ht-booking button[aria-pressed] { border-radius:1rem !important; box-shadow:none !important; }
+.ht-booking button[aria-pressed="false"] { background:#fff !important; border-color:#eae3e9 !important; }
+.ht-booking button[aria-pressed="true"] { background:#fff6fa !important; border-color:var(--ht-accent) !important; box-shadow:0 0 0 1px rgba(239,51,139,.06) !important; }
+.ht-booking button[aria-pressed] > span[aria-hidden="true"] { background:#fbf3f7 !important; font-size:1.35rem !important; width:2.7rem; height:2.7rem; }
+/* Package and add-on choices: increase spacing and definition. */
+.ht-booking button[class*="text-left"][class*="border-2"] { border-radius:.9rem !important; min-height:68px; padding:1rem !important; transition:background-color .15s,border-color .15s; }
+.ht-booking button[class*="text-left"][class*="border-pink-100"] { background:white; border-color:#eae4e9 !important; }
+.ht-booking button[class*="text-left"][class*="border-brand-pink"] { background:#fff5fa !important; border-color:var(--ht-accent) !important; color:var(--ht-ink) !important; }
+.ht-booking button[class*="text-left"][class*="border-brand-pink"] p { color:inherit; }
+.ht-booking button[class*="text-left"][class*="border-brand-pink"] p[class*="text-white"] { color:#ad5279 !important; }
+/* Avoid conspicuous solid gradients; highlight only the action that moves forward. */
+.ht-booking button[class*="rounded-full"][class*="bg-brand-pink"] { box-shadow:none !important; }
+.ht-booking button:disabled { cursor:not-allowed; opacity:.48; }
+.ht-booking button:focus-visible, .ht-booking input:focus-visible, .ht-booking select:focus-visible { outline:2px solid #e53a8b; outline-offset:3px; }
+.ht-booking input, .ht-booking select, .ht-booking textarea { accent-color:#ef338b; }
+/* Right summary panel: calmer, more useful information density. */
+.ht-booking > div > div:last-child:not(:first-child) { border-color:#eee1e9 !important; border-radius:1.2rem !important; box-shadow:0 5px 20px rgba(50,30,40,.025); }
+.ht-booking > div > div:last-child:not(:first-child) h3 { color:#283345 !important; }
+.ht-booking > div > div:last-child:not(:first-child) div[class*="bg-brand-tint"] { background:#fdf5f9 !important; border-radius:.8rem !important; }
+@media (min-width:1024px) { .ht-booking-intro-note { margin-left:auto; } }
+@media (max-width:640px) { .ht-booking-intro { padding:1.15rem; border-radius:1.15rem; } .ht-booking-intro-note { width:100%; justify-content:space-between; font-size:.68rem; } .ht-booking > div > div:first-child { padding:1rem !important; } }
+@media (prefers-reduced-motion:reduce) { .ht-booking *, .ht-booking *::before, .ht-booking *::after { transition:none !important; } }
+/* v4: Booking page-specific refinements. Keep the existing booking rules and pricing untouched. */
+.ht-booking-v4{--ht-accent:#f33291;--ht-dark:#19283f;--ht-border:#f4dfe9;padding:8px 0 32px;color:var(--ht-dark)}
+.ht-booking-v4 .ht-booking-shell{display:grid;grid-template-columns:180px minmax(0,1fr);gap:22px;align-items:start}
+.ht-booking-v4 .ht-booking-progress{position:sticky;top:24px;padding:22px 7px 18px 3px}
+.ht-booking-v4 .ht-progress-overline{font-size:10px;font-weight:800;letter-spacing:1.4px;color:#e84792}
+.ht-booking-v4 .ht-booking-progress h2{margin:8px 0 23px;font-weight:800;font-size:19px;color:#16263d}
+.ht-booking-v4 .ht-booking-progress ol{margin:0;padding:0;list-style:none}
+.ht-booking-v4 .ht-booking-progress li{display:flex;gap:12px;align-items:center;min-height:54px;position:relative;color:#8993a4;font-size:13px;font-weight:600}
+.ht-booking-v4 .ht-booking-progress li:not(:last-child):before{content:"";position:absolute;left:13px;top:39px;height:28px;width:2px;background:#e9e7eb}
+.ht-booking-v4 .ht-progress-marker{height:28px;width:28px;flex:0 0 28px;border-radius:50%;background:#f0edf0;color:#9ca1ae;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+.ht-booking-v4 .ht-booking-progress li.active{color:#15253c}.ht-booking-v4 .ht-booking-progress li.active .ht-progress-marker,.ht-booking-v4 .ht-booking-progress li.completed .ht-progress-marker{background:var(--ht-accent);color:white}
+.ht-booking-v4 .ht-booking-progress li.completed:before{background:#f7abc9}
+.ht-booking-v4 .ht-progress-help{margin-top:25px;max-width:150px;font-size:11px;line-height:1.6;color:#9398a4}
+.ht-booking-v4 .ht-booking-panel{min-width:0;border:1px solid #f8e7ef;border-radius:24px;background:white;padding:30px;box-shadow:0 10px 35px rgba(85,27,52,.04)}
+.ht-booking-v4 .ht-booking-main{min-width:0;display:flex;align-items:start;gap:20px}
+.ht-booking-v4 .ht-booking-main .ht-booking-panel{flex:1}
+.ht-booking-v4 .ht-booking-main> :last-child:not(:first-child){flex-shrink:0}
+.ht-booking-v4 .ht-booking-panel button{transition:background-color .15s,border-color .15s,transform .15s}
+.ht-booking-v4 .ht-booking-panel button:focus-visible{outline:2px solid #ed358c;outline-offset:2px}
+.ht-booking-v4 .ht-booking-panel button[aria-pressed="true"]{border-color:var(--ht-accent)!important;background:#fff4fa!important}
+.ht-booking-v4 .ht-booking-panel button[aria-pressed="false"]{border-color:#f4dbe7!important}
+.ht-booking-v4 .ht-booking-panel h2{color:#17263e}
+.ht-booking-v4 .ht-booking-panel button:disabled{cursor:not-allowed;opacity:.55}
+@media(max-width:1050px){.ht-booking-v4 .ht-booking-shell{grid-template-columns:145px minmax(0,1fr);gap:12px}.ht-booking-v4 .ht-booking-panel{padding:20px}}
+@media(max-width:760px){.ht-booking-v4 .ht-booking-shell{display:block}.ht-booking-v4 .ht-booking-progress{position:static;padding:4px 0 14px}.ht-booking-v4 .ht-booking-progress h2,.ht-booking-v4 .ht-progress-overline,.ht-booking-v4 .ht-progress-help{display:none}.ht-booking-v4 .ht-booking-progress ol{display:flex;overflow-x:auto;gap:8px}.ht-booking-v4 .ht-booking-progress li{flex:0 0 auto;min-height:36px;gap:6px;font-size:11px}.ht-booking-v4 .ht-booking-progress li:before{display:none}.ht-booking-v4 .ht-progress-marker{width:22px;height:22px;flex-basis:22px}.ht-booking-v4 .ht-booking-main{flex-direction:column}.ht-booking-v4 .ht-booking-panel{padding:18px;width:100%}}
+
+/* Booking v5: controlled in-panel scrolling, better service selection and schedule layout. */
+.ht-booking-v4 .ht-pet-choice-scroll{max-height:min(49vh,460px);scrollbar-width:thin;scrollbar-color:#ec9fc4 #fff4f8}
+.ht-booking-v4 .ht-pet-choice-scroll:focus-visible{outline:2px solid #f33291;outline-offset:2px}
+.ht-booking-v4 .ht-booking-services > div{max-width:none}
+.ht-booking-v4 .ht-booking-services > div > div[class*="grid"]{max-width:none}
+.ht-booking-v4 .ht-booking-services button[aria-pressed]{min-height:175px;border-radius:18px!important;background:white!important;border:1px solid #f3dce7!important;box-shadow:none!important}
+.ht-booking-v4 .ht-booking-services button[aria-pressed="true"]{border:2px solid #f33291!important;background:#fff7fa!important}
+.ht-booking-v4 .ht-booking-services button[aria-pressed] span[aria-hidden="true"]{width:58px;height:58px;display:flex;align-items:center;justify-content:center;background:#fef0f6!important;border-radius:16px;font-size:29px!important}
+.ht-booking-v4 .ht-booking-services button[aria-pressed]:hover{border-color:#f33291!important;transform:translateY(-2px)}
+.ht-booking-v4 .ht-booking-schedule > div{max-width:none}
+.ht-booking-v4 .ht-booking-schedule h2{color:#19283f!important;font-size:25px}
+.ht-booking-v4 .ht-booking-schedule input[type="date"],.ht-booking-v4 .ht-booking-schedule input[type="time"]{height:48px;border-color:#eedee6;border-radius:13px}
+.ht-booking-v4 .ht-booking-schedule button[class*="border-pink-200"]{border:1px solid #f0dce6!important;border-radius:11px!important;min-height:42px}
+.ht-booking-v4 .ht-booking-schedule button[class*="bg-brand-pink"]{border-color:#f33291!important}
+.ht-booking-v4 .ht-booking-schedule div[class*="max-h-48"]{max-height:220px;scrollbar-width:thin;scrollbar-color:#efa5c8 #fff4f8}
+.ht-booking-v4 .ht-booking-schedule div[class*="rounded-full"][class*="border-pink-100"]{border-width:1px;border-radius:14px;background:#fff8fb;line-height:1.6}
+.ht-booking-v4 .ht-more-services button:hover{transform:translateY(-1px)}
+@media(max-width:760px){.ht-booking-v4 .ht-pet-choice-scroll{max-height:48vh}.ht-booking-v4 .ht-booking-services button[aria-pressed]{min-height:145px}}
+
+/* v6: keep the active-pet panel below the left-hand booking progress. */
+.ht-booking-v4 .ht-booking-left{min-width:0;position:sticky;top:20px;align-self:start}
+.ht-booking-v4 .ht-booking-left .ht-booking-progress{position:static;padding-bottom:6px}
+.ht-booking-v4 .ht-booking-left>div:last-child{width:100%;margin-top:12px;position:static;max-height:260px;overflow:auto}
+.ht-booking-v4 .ht-booking-main{display:block;min-width:0}
+.ht-booking-v4 .ht-booking-main .ht-booking-panel{width:100%}
+.ht-booking-v4 .ht-pet-choice-scroll{max-height:none;overflow:visible}
+.ht-booking-v4 .ht-pet-choice-scroll.ht-pet-scroll-active{max-height:470px;overflow-y:auto}
+@media(max-width:760px){.ht-booking-v4 .ht-booking-left{position:static}.ht-booking-v4 .ht-booking-left>div:last-child{max-height:160px}.ht-booking-v4 .ht-pet-choice-scroll.ht-pet-scroll-active{max-height:350px}}
+
+/* v7 — HappyTails booking interactive-state color correction.
+   Scoped to Book Appointment only. No component logic or layouts changed. */
+.ht-booking-v4 {
+  --ht-choice-pink: #f33291;
+  --ht-choice-hover: #fff0f7;
+  --ht-choice-soft: #fff5fa;
+  --ht-choice-border: #f6bdd8;
+}
+/* Service cards and pet-selection cards: pale selected card + pink outline. */
+.ht-booking-v4 .ht-booking-panel button[aria-pressed="true"]:not(:disabled),
+.ht-booking-v4 .ht-booking-services button[aria-pressed="true"]:not(:disabled) {
+  background-color:var(--ht-choice-soft) !important;
+  border-color:var(--ht-choice-pink) !important;
+  color:#202a3a;
+}
+.ht-booking-v4 .ht-booking-panel button[aria-pressed="false"]:not(:disabled):hover {
+  background-color:var(--ht-choice-hover) !important;
+  border-color:var(--ht-choice-pink) !important;
+}
+/* Calendar date and timeslot selections must have strong contrast.
+   This overrides the generic aria-pressed rule above only inside the scheduler. */
+.ht-booking-v4 .ht-calendar-booking button[aria-pressed="true"]:not(:disabled) {
+  background-color:var(--ht-choice-pink) !important;
+  border-color:var(--ht-choice-pink) !important;
+  color:#fff !important;
+  box-shadow:none !important;
+}
+.ht-booking-v4 .ht-calendar-booking button[aria-pressed="false"]:not(:disabled):hover {
+  background-color:var(--ht-choice-hover) !important;
+  border-color:var(--ht-choice-pink) !important;
+  color:#202a3a !important;
+}
+/* Package, size and add-on tiles selected using border/background classes. */
+.ht-booking-v4 .ht-booking-panel button[class*="border-brand-pink"][class*="bg-pink-50"],
+.ht-booking-v4 .ht-booking-panel button[class*="border-brand-pink"][class*="bg-brand-tint"] {
+  background-color:var(--ht-choice-soft) !important;
+  border-color:var(--ht-choice-pink) !important;
+  color:#202a3a;
+}
+/* Native checkbox/radio indicators and keyboard focus styling. */
+.ht-booking-v4 input[type="checkbox"],
+.ht-booking-v4 input[type="radio"] { accent-color:var(--ht-choice-pink) !important; }
+.ht-booking-v4 button:focus-visible,
+.ht-booking-v4 input:focus-visible,
+.ht-booking-v4 select:focus-visible,
+.ht-booking-v4 textarea:focus-visible {
+  outline:2px solid var(--ht-choice-pink) !important;
+  outline-offset:2px;
+}
+.ht-booking-v4 .ht-booking-panel button:disabled:hover {transform:none;}

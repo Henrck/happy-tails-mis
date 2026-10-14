@@ -1,51 +1,34 @@
 "use client";
-
+import { ArrowLeft, ArrowRight, Check, Dog, Cat, Scissors, House, Sparkles, Plus } from "lucide-react";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
-
-const labels: Record<WalkInServiceChoice, { label: string; icon: string }> = {
-  dog_grooming: { label: "Dog Grooming", icon: "🐕" },
-  cat_grooming: { label: "Cat Grooming", icon: "🐈" },
-  grooming: { label: "Grooming", icon: "✂️" },
-  boarding: { label: "Boarding", icon: "🏠" },
-  ala_carte: { label: "Ala Carte", icon: "🛍️" },
+const choices = {
+  dog_grooming: { label: "Dog Grooming", description: "Bath, trim and finishing care", Icon: Dog },
+  cat_grooming: { label: "Cat Grooming", description: "Gentle grooming for cats", Icon: Cat },
+  grooming: { label: "Grooming", description: "Care for dogs and cats", Icon: Scissors },
+  boarding: { label: "Boarding", description: "A comfortable overnight stay", Icon: House },
+  ala_carte: { label: "À La Carte", description: "Additional individual services", Icon: Sparkles },
 };
-
-export default function AddAnotherServicePrompt({
-  eligibleServices, onAddService, onDone,
-}: {
+export default function AddAnotherServicePrompt({ eligibleServices, onAddService, onDone, onBack }: {
   eligibleServices: WalkInServiceChoice[];
   onAddService: (choice: WalkInServiceChoice) => void;
   onDone: () => void;
+  onBack: () => void;
 }) {
-  return (
-    <div className="mx-auto flex w-full max-w-lg flex-col items-center py-5 text-center sm:py-10">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 sm:h-14 sm:w-14">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-emerald-600 sm:h-[26px] sm:w-[26px]">
-          <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-
-      <h2 className="mt-4 text-xl font-bold text-zinc-800 sm:text-2xl">That service is set up!</h2>
-      <p className="mt-1 max-w-sm text-sm leading-5 text-zinc-500">Want to add another service to this booking?</p>
-
-      {eligibleServices.length > 0 ? (
-        <div className="mt-5 grid w-full grid-cols-1 gap-3 min-[430px]:grid-cols-2 sm:max-w-md">
-          {eligibleServices.map((choice) => (
-            <button key={choice} type="button" onClick={() => onAddService(choice)}
-              className="flex min-h-[112px] w-full flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-pink-100 bg-white px-4 py-4 active:scale-[0.99] hover:border-brand-pink sm:min-h-[116px]">
-              <span className="text-2xl" aria-hidden="true">{labels[choice].icon}</span>
-              <span className="text-sm font-semibold text-zinc-700">{labels[choice].label}</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-1 max-w-sm text-sm text-zinc-500">All your selected pets are covered — ready for the summary.</p>
-      )}
-
-      <button type="button" onClick={onDone}
-        className="mt-5 min-h-12 w-full rounded-full bg-brand-pink px-5 py-3 text-sm font-semibold text-white hover:bg-brand-pink-dark sm:mt-6 sm:text-base">
-        {eligibleServices.length > 0 ? "No, continue to Summary" : "Continue to Summary"}
-      </button>
+  return <section className="ht-more-services mx-auto w-full max-w-3xl">
+    <header className="mb-7 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-pink-50 text-brand-pink"><Check size={24}/></div>
+      <h2 className="mt-4 text-2xl font-bold text-slate-800">Add another service?</h2>
+      <p className="mt-2 text-sm text-slate-500">Your current service is ready. Choose an additional service or review your booking.</p>
+    </header>
+    {eligibleServices.length > 0 ? <div className="grid gap-3 sm:grid-cols-2">
+      {eligibleServices.map(choice => { const {label, description, Icon} = choices[choice]; return <button key={choice} type="button" onClick={() => onAddService(choice)} className="group flex items-center gap-4 rounded-2xl border border-pink-100 bg-white p-4 text-left transition hover:border-brand-pink hover:bg-pink-50/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-pink-50 text-brand-pink"><Icon size={23} strokeWidth={1.8}/></span>
+        <span className="flex-1"><span className="block text-sm font-bold text-slate-800">{label}</span><span className="mt-1 block text-xs text-slate-500">{description}</span></span><Plus size={18} className="text-brand-pink" />
+      </button>; })}
+    </div> : <p className="rounded-2xl border border-pink-100 bg-pink-50/40 p-6 text-center text-sm text-slate-600">No additional eligible services. Continue to review your booking.</p>}
+    <div className="mt-7 grid grid-cols-2 gap-3">
+      <button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border-2 border-pink-200 bg-white text-sm font-semibold text-brand-pink transition hover:border-brand-pink"><ArrowLeft size={16}/> Back</button>
+      <button type="button" onClick={onDone} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink text-sm font-semibold text-white transition hover:opacity-90">Review Booking <ArrowRight size={16}/></button>
     </div>
-  );
+  </section>;
 }
