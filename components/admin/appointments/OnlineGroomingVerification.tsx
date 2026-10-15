@@ -30,6 +30,8 @@ export default function OnlineGroomingVerification({ appointment, pet, onSaved }
   if (appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "checked_in") return null;
 
   async function calculate() {
+    // Narrow again inside the async callback; JSX early returns do not carry into closures.
+    if (serviceType !== "dog_grooming" && serviceType !== "cat_grooming") return;
     if (!booked) {setError("The saved package details could not be loaded.");return;}
     setBusy(true); setError(null); setPreview(null); setApproved(false);
     const result = await previewGroomingVerification({
