@@ -14,7 +14,7 @@ import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg 
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
 import CustomerServiceChoiceStep from "@/components/dashboard/booking/CustomerServiceChoiceStep";
 import BookingPetInformationStep from "@/components/dashboard/booking/BookingPetInformationStep";
-import GroomingSelectionStep from "@/components/admin/pos/walk-in/GroomingSelectionStep";
+import CustomerGroomingSelectionStep from "@/components/dashboard/booking/CustomerGroomingSelectionStep";
 import BoardingSelectionStep from "@/components/admin/pos/walk-in/BoardingSelectionStep";
 import AlaCarteSelectionStep from "@/components/admin/pos/walk-in/AlaCarteSelectionStep";
 import CustomerGroomingScheduleStep from "@/components/dashboard/booking/CustomerGroomingScheduleStep";
@@ -152,7 +152,7 @@ export default function BookAppointmentPage() {
         {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep
           pets={legPets} selections={currentLeg.petSelections} onChange={handleLegSelectionChange}
           onBack={() => setStep("service")} onNext={() => setStep("schedule")} />}
-        {step === "selection" && isGrooming && currentLeg && <GroomingSelectionStep
+        {step === "selection" && isGrooming && currentLeg && <CustomerGroomingSelectionStep
           serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
           pets={legPets} selections={currentLeg.petSelections} onChange={handleLegSelectionChange}
           onBack={() => { setCurrentLeg(null); setStep(queuedLegs.length > 0 || completedLegs.length > 0 ? "add-more" : "pet-info"); }}

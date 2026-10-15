@@ -1,10 +1,5 @@
 "use client";
-// Notifications — REAL now. Was a static placeholder ("TBD whether we
-// build this out"). Rows come from the notifications table, populated
-// entirely by the notify_appointment_status_change trigger
-// (042_customer_notifications.sql) whenever staff changes an
-// appointment's status. Same client-fetch + Realtime-subscribe pattern
-// as My Pets (app/(dashboard)/account/page.tsx) for consistency.
+
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -14,6 +9,8 @@ import {
   subscribeToNotifications,
 } from "@/lib/supabase/notifications";
 import type { Notification } from "@/lib/types/notifications";
+
+const PAGE_SIZE = 10;
 
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -54,6 +51,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const loadNotifications = useCallback(async (id: string) => {
     const { notifications: rows } = await fetchNotifications(id);
@@ -63,15 +61,8 @@ export default function NotificationsPage() {
   useEffect(() => {
     async function init() {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Layout already guarantees a logged-in user with a real
-      // customers row exists before this page can be reached — this is
-      // just defensive, not the real auth gate.
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-
       setUserId(user.id);
       await loadNotifications(user.id);
       setLoading(false);
@@ -86,12 +77,15 @@ export default function NotificationsPage() {
   }, [userId, loadNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const pageCount = Math.max(1, Math.ceil(notifications.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageNotifications = notifications.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   async function handleMarkRead(n: Notification) {
     if (n.read) return;
     setNotifications((prev) => prev.map((row) => (row.id === n.id ? { ...row, read: true } : row)));
     const { error } = await markNotificationRead(n.id);
-    if (error && userId) await loadNotifications(userId); // resync on failure rather than leave a wrong optimistic state
+    if (error && userId) await loadNotifications(userId);
   }
 
   async function handleMarkAllRead() {
@@ -106,10 +100,7 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-zinc-800">Notifications</h1>
         {unreadCount > 0 && (
-          <button
-            onClick={handleMarkAllRead}
-            className="text-sm font-semibold text-brand-pink hover:underline"
-          >
+          <button onClick={handleMarkAllRead} className="text-sm font-semibold text-brand-pink hover:underline">
             Mark all as read
           </button>
         )}
@@ -125,35 +116,57 @@ export default function NotificationsPage() {
           </p>
         </div>
       ) : (
-        <div className="mt-6 flex flex-col gap-2">
-          {notifications.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => handleMarkRead(n)}
-              className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
-                n.read ? "border-zinc-100 bg-white" : "border-pink-200 bg-brand-tint"
-              }`}
-            >
-              <div
-                className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                  n.read ? "bg-zinc-100 text-zinc-400" : "bg-brand-pink text-white"
+        <>
+          <div className="mt-6 flex flex-col gap-2">
+            {pageNotifications.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => handleMarkRead(n)}
+                className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3.5 text-left transition-colors ${
+                  n.read ? "border-zinc-100 bg-white" : "border-pink-200 bg-brand-tint"
                 }`}
               >
-                {iconForTitle(n.title)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className={`truncate text-sm ${n.read ? "font-medium text-zinc-600" : "font-semibold text-zinc-800"}`}>
-                    {n.title}
-                  </p>
-                  {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-brand-pink" />}
+                <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                  n.read ? "bg-zinc-100 text-zinc-400" : "bg-brand-pink text-white"
+                }`}>
+                  {iconForTitle(n.title)}
                 </div>
-                <p className="mt-0.5 text-sm text-zinc-500">{n.message}</p>
-                <p className="mt-1 text-xs text-zinc-400">{relativeTime(n.created_at)}</p>
-              </div>
-            </button>
-          ))}
-        </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className={`truncate text-sm ${n.read ? "font-medium text-zinc-600" : "font-semibold text-zinc-800"}`}>
+                      {n.title}
+                    </p>
+                    {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-brand-pink" />}
+                  </div>
+                  <p className="mt-0.5 text-sm text-zinc-500">{n.message}</p>
+                  <p className="mt-1 text-xs text-zinc-400">{relativeTime(n.created_at)}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {pageCount > 1 && (
+            <nav aria-label="Notifications pagination" className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              <button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}
+                className="rounded-full border border-pink-200 px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint disabled:cursor-not-allowed disabled:opacity-40">
+                Previous
+              </button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
+                <button key={number} type="button" onClick={() => setPage(number)} aria-current={number === currentPage ? "page" : undefined}
+                  className={`min-w-9 rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${number === currentPage ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-brand-pink hover:bg-brand-tint"}`}>
+                  {number}
+                </button>
+              ))}
+              <button type="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}
+                className="rounded-full border border-pink-200 px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint disabled:cursor-not-allowed disabled:opacity-40">
+                Next
+              </button>
+              <p className="w-full text-center text-xs text-zinc-400">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, notifications.length)} of {notifications.length} notifications
+              </p>
+            </nav>
+          )}
+        </>
       )}
     </div>
   );

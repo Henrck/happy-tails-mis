@@ -39,15 +39,15 @@ export default function PetDetailPage() {
   }, [params.petId]);
   async function save(e: FormEvent) {
     e.preventDefault();
-    if (!pet || saving || !state.validate() || !state.size) return;
+    if (!pet || saving || !state.validate()) return;
     setSaving(true); setMessage("");
     const { form, size } = state;
     const { error } = await editCustomerPet(pet.id, { name: form.name.trim(), species: form.species,
-      breed: form.breed.trim(), size_label: size.label, pet_size_id: size.id, weight_kg: Number(form.weight),
-      sex: form.sex || null, age: Number(form.age) });
+      breed: form.breed.trim(), size_label: size?.label ?? "Unclassified", pet_size_id: size?.id ?? null, weight_kg: form.weight.trim() ? Number(form.weight) : null,
+      sex: form.sex || null, age: form.age.trim() ? Number(form.age) : null });
     setSaving(false);
     if (error) setMessage(error.message);
-    else { setMessage("Pet profile updated successfully."); setPet({ ...pet, ...form, size_label: size.label, pet_size_id: size.id, weight_kg: Number(form.weight), sex: form.sex || null, age: Number(form.age) }); }
+    else { setMessage("Pet profile updated successfully."); setPet({ ...pet, ...form, size_label: size?.label ?? "Unclassified", pet_size_id: size?.id ?? null, weight_kg: form.weight.trim() ? Number(form.weight) : null, sex: form.sex || null, age: form.age.trim() ? Number(form.age) : null }); }
   }
   if (loading) return <p className="py-16 text-center text-zinc-500">Loading pet profile…</p>;
   if (!pet) return <p className="py-16 text-center text-zinc-500">Pet not found.</p>;
@@ -59,9 +59,9 @@ export default function PetDetailPage() {
     </div>
     <form noValidate onSubmit={save} className="space-y-5 rounded-3xl border border-pink-100 bg-white p-6 md:p-8">
       <CustomerPetFields state={state}/>
-      {pet.weight_kg == null && <p className="text-xs text-amber-700">This pet was registered before weight tracking. Enter its current weight (KG) to link it to the size guide.</p>}
+      {pet.weight_kg == null && <p className="text-xs text-amber-700">This pet was registered before weight tracking. Weight can be recorded by the staff when you visit the shop.</p>}
       {message && <p role="status" className={`text-sm ${message.includes("successfully") ? "text-green-600" : "text-red-600"}`}>{message}</p>}
-      <div className="flex justify-end"><button disabled={saving || state.loadingGuide || !!state.guideError} type="submit" className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save Pet Changes"}</button></div>
+      <div className="flex justify-end"><button disabled={saving || (!!state.form.weight.trim() ? false : state.loadingGuide || !!state.guideError)} type="submit" className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save Pet Changes"}</button></div>
     </form>
   </div>;
 }

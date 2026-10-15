@@ -45,11 +45,9 @@ export function validatePetInput(form: { name: string; species: Species; breed: 
   if (!form.name.trim()) errors.name = "Pet name is required.";
   if (!form.species) errors.species = "Species is required.";
   if (!form.breed.trim()) errors.breed = "Breed is required.";
-  if (!form.weight.trim()) errors.weight = "Weight (KG) is required.";
-  else if (!Number.isFinite(Number(form.weight)) || Number(form.weight) <= 0) errors.weight = "Enter a valid weight greater than 0 kg.";
-  else if (!size) errors.weight = "Weight is not covered by the active size guide. Please contact staff.";
-  if (!form.age.trim()) errors.age = "Age is required.";
-  else if (!Number.isInteger(Number(form.age)) || Number(form.age) < 0 || Number(form.age) > 100) errors.age = "Enter a valid age in whole years (0–100).";
+  if (form.weight.trim() && (!Number.isFinite(Number(form.weight)) || Number(form.weight) <= 0)) errors.weight = "Enter a valid weight greater than 0 kg.";
+  else if (form.weight.trim() && !size) errors.weight = "Weight is not covered by the active size guide. Please contact staff.";
+  if (form.age.trim() && (!Number.isInteger(Number(form.age)) || Number(form.age) < 0 || Number(form.age) > 100)) errors.age = "Enter a valid age in whole years (0–100).";
   if (!form.sex) errors.sex = "Sex is required.";
   return errors;
 }
@@ -58,14 +56,14 @@ export function validatePetInput(form: { name: string; species: Species; breed: 
 // existing walk-in or appointment APIs.
 export async function insertCustomerPet(input: {
   customer_id: string; name: string; species: Species; breed: string;
-  size_label: string; weight_kg: number; pet_size_id: string;
-  age: number; sex: "Male" | "Female" | null;
+  size_label: string; weight_kg: number | null; pet_size_id: string | null;
+  age: number | null; sex: "Male" | "Female" | null;
 }) {
   return createClient().from("pets").insert(input).select().single();
 }
 export async function editCustomerPet(id: string, input: {
   name: string; species: Species; breed: string; size_label: string;
-  weight_kg: number; pet_size_id: string; age: number; sex: "Male" | "Female" | null;
+  weight_kg: number | null; pet_size_id: string | null; age: number | null; sex: "Male" | "Female" | null;
 }) {
   const { data, error } = await createClient().from("pets").update(input).eq("id", id).select();
   if (error) return { data, error };

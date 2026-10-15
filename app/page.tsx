@@ -44,6 +44,7 @@ export default async function Home() {
           boardingImage={get("services_boarding_image")?.image_url}
           spaImage={get("services_spa_image")?.image_url}
         />
+        <Gallery photos={galleryPhotos} />
         <GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} />
         <GroomingPricing
           basicImage={get("grooming_basic_image")?.image_url}
@@ -59,7 +60,6 @@ export default async function Home() {
         <SpaBenefits />
         <ProductsCarousel products={products} />
         <AboutUs backgroundUrl={get("about_us_background")?.image_url} />
-        <Gallery photos={galleryPhotos} />
       </main>
       <Footer />
       <PoliciesModal />

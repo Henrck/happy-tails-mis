@@ -1,11 +1,4 @@
 "use client";
-// Before/After teaser on the homepage.
-// REAL FIX per request: cards were small (4 per row on desktop, 2 on
-// mobile) and not clickable — just static thumbnails. Now 3 per row max
-// (1 on mobile) so each before/after photo is meaningfully bigger, and
-// clicking any card opens a full-size lightbox (components/gallery/
-// GalleryLightbox) with prev/next through the whole photo list, not just
-// whatever page happened to be visible.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { GalleryPhoto } from "@/lib/types/gallery";
@@ -29,19 +22,18 @@ export default function Gallery({ photos }: { photos: GalleryPhoto[] }) {
   }, [pageCount, paused, lightboxIndex]);
 
   return (
-    <section className="bg-brand-tint py-14">
+    <section className="bg-white py-14">
       <div className="site-container text-center">
         <h2 className="text-2xl font-bold text-zinc-900 md:text-3xl">Happy Tails, Happy Pets</h2>
         <p className="mt-2 text-sm text-zinc-600 md:text-base">A few before-and-afters from our grooming table.</p>
 
         {visible.length ? (
           <div
-            className="mt-8 flex items-center gap-3"
+            className="mt-8"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
           >
-            <button onClick={() => setPage((p) => (p - 1 + pageCount) % pageCount)} aria-label="Previous photos" className="h-9 w-9 shrink-0 rounded-full bg-brand-pink text-white hover:bg-brand-pink-dark transition-colors">‹</button>
-            <div className="grid min-w-0 flex-1 grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-3 md:gap-8">
               {visible.map((photo) => (
                 <GalleryCard
                   key={photo.id}
@@ -50,15 +42,21 @@ export default function Gallery({ photos }: { photos: GalleryPhoto[] }) {
                 />
               ))}
             </div>
-            <button onClick={() => setPage((p) => (p + 1) % pageCount)} aria-label="Next photos" className="h-9 w-9 shrink-0 rounded-full bg-brand-pink text-white hover:bg-brand-pink-dark transition-colors">›</button>
+            {pageCount > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-4">
+                <button type="button" onClick={() => setPage((p) => (p - 1 + pageCount) % pageCount)} aria-label="Previous photos" className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-pink text-xl text-white transition-colors hover:bg-brand-pink-dark">‹</button>
+                <span className="text-sm text-zinc-500" aria-live="polite">{page + 1} / {pageCount}</span>
+                <button type="button" onClick={() => setPage((p) => (p + 1) % pageCount)} aria-label="Next photos" className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-pink text-xl text-white transition-colors hover:bg-brand-pink-dark">›</button>
+              </div>
+            )}
           </div>
         ) : (
-          <div className="mt-8 rounded-2xl border border-brand-pink-light/60 bg-white/70 px-6 py-10 text-sm text-zinc-500">
+          <div className="mt-8 rounded-2xl border border-brand-pink-light/60 bg-brand-tint px-6 py-10 text-sm text-zinc-500">
             Before-and-after photos will appear here soon.
           </div>
         )}
 
-        <Link href="/gallery" className="mt-8 inline-block rounded-full bg-brand-pink px-8 py-2.5 text-sm font-semibold text-white hover:bg-brand-pink-dark">
+        <Link href="/gallery" className="mt-8 inline-block rounded-full bg-brand-pink px-8 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-pink-dark">
           View More
         </Link>
       </div>

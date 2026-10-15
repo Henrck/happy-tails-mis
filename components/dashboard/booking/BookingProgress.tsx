@@ -4,7 +4,7 @@ export type BookingPhase = "pet-info" | "service" | "selection" | "schedule" | "
 const steps = [
   { key: "pet-info", label: "Choose a Pet" },
   { key: "service", label: "Select Service" },
-  { key: "selection", label: "Details" },
+  { key: "selection", label: "Packages" },
   { key: "schedule", label: "Schedule" },
   { key: "add-more", label: "More Services" },
   { key: "summary", label: "Review" },

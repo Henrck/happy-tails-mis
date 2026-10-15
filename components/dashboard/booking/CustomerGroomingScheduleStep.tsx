@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { checkGroomerTimeConflict } from "@/lib/supabase/appointments";
 import type { DraftPetSelection } from "@/lib/types/appointments";
@@ -35,7 +35,17 @@ export default function CustomerGroomingScheduleStep({ customer, ownerContact, p
   onBack: () => void;
   onConfirmed: () => void;
 }) {
-  const now = new Date();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const isPastSlot = (date: string | null, slot: string) => {
+    if (!date) return true;
+    const [hour, minute] = slot.split(":").map(Number);
+    const at = new Date(`${date}T${slot}:00`);
+    return at.getTime() <= Date.now();
+  };
   const [month, setMonth] = useState(() => {
     const parts = scheduledDate?.split("-").map(Number);
     return parts && parts.length === 3 ? new Date(parts[0], parts[1] - 1, 1) : new Date(now.getFullYear(), now.getMonth(), 1);
@@ -51,6 +61,11 @@ export default function CustomerGroomingScheduleStep({ customer, ownerContact, p
 
   async function verify() {
     if (!scheduledDate || !scheduledTime || checking) return;
+    if (isPastSlot(scheduledDate, scheduledTime)) {
+      setError("This time has already passed. Select a future time slot.");
+      onTimeChange("");
+      return;
+    }
     setChecking(true); setError(null);
     try {
       for (const id of activeGroomerIds) {
@@ -101,12 +116,13 @@ export default function CustomerGroomingScheduleStep({ customer, ownerContact, p
       <div className="rounded-2xl border border-pink-100 bg-white p-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800"><Clock3 size={16} className="text-brand-pink"/> Time slots</h3>
         <p className="mb-3 text-xs text-slate-500">{scheduledDate ? "Choose a time for the selected date" : "Select a date first"}</p>
-        <div className="grid max-h-[300px] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-1" aria-label="Appointment time slots">{slots.map(time => <button type="button" key={time} disabled={!scheduledDate} aria-pressed={scheduledTime === time} onClick={() => { onTimeChange(time); setError(null); }} className={`min-h-9 rounded-lg border px-2 py-2 text-xs font-semibold transition ${scheduledTime === time ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-slate-700 hover:border-brand-pink disabled:cursor-not-allowed disabled:opacity-40"}`}>{timeLabel(time)}</button>)}</div>
+        <div className="grid max-h-[300px] grid-cols-2 gap-2 overflow-y-auto pr-1 lg:grid-cols-1" aria-label="Appointment time slots">{slots.map(time => <button type="button" key={time} disabled={!scheduledDate || isPastSlot(scheduledDate, time)} aria-pressed={scheduledTime === time} onClick={() => { onTimeChange(time); setError(null); }} className={`min-h-9 rounded-lg border px-2 py-2 text-xs font-semibold transition ${scheduledTime === time ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-slate-700 hover:border-brand-pink disabled:cursor-not-allowed disabled:opacity-35 disabled:bg-slate-50 disabled:text-slate-400"}`}>{timeLabel(time)}{scheduledDate && isPastSlot(scheduledDate, time) ? " · Unavailable" : ""}</button>)}</div>
       </div>
     </div>
+    {scheduledDate === todayKey() && <p className="mt-3 text-xs text-slate-500">Times that have passed today are unavailable.</p>}
     <label className="mt-5 block text-sm font-semibold text-slate-700" htmlFor="ht-grooming-requests">Special requests / medical conditions / allergies / feeding instructions</label>
     <textarea id="ht-grooming-requests" rows={3} value={specialRequests} onChange={e => onRequestsChange(e.target.value)} placeholder="Share any instructions our team should know..." className="mt-2 w-full resize-y rounded-xl border border-pink-100 px-4 py-3 text-sm focus:border-brand-pink focus:outline-none"/>
     {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
-    <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-pink-200 font-semibold text-brand-pink"><ArrowLeft size={16}/> Back</button><button type="button" onClick={verify} disabled={!scheduledDate || !scheduledTime || checking} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink font-semibold text-white disabled:opacity-40">{checking ? "Checking..." : "Next"} <ArrowRight size={16}/></button></div>
+    <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-pink-200 font-semibold text-brand-pink"><ArrowLeft size={16}/> Back</button><button type="button" onClick={verify} disabled={!scheduledDate || !scheduledTime || checking || isPastSlot(scheduledDate, scheduledTime)} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink font-semibold text-white disabled:opacity-40">{checking ? "Checking..." : "Next"} <ArrowRight size={16}/></button></div>
   </section>;
 }
