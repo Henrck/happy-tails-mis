@@ -100,7 +100,26 @@ export default function CustomerGroomingSelectionStep({serviceType, pets, select
     onChange([...selections.filter(s=>s.pet.id!==activePet.id),updated]);
   }
   function toggleAddon(id:string){if(!activeSelection)return;updateSelection({addonIds:activeSelection.addonIds.includes(id)?activeSelection.addonIds.filter(x=>x!==id):[...activeSelection.addonIds,id]});}
-  const allConfigured=pets.every(p=>{const sel=selections.find(s=>s.pet.id===p.id);const lookup=lookupByService[p.species==="Cat"?"cat_grooming":"dog_grooming"];const index=lookup.sizes.findIndex(s=>s.id===sel?.sizeId);return !!sel?.packageId && index>=0 && minimumSizeIndex(p,lookup.sizes)!==-2 && index>=minimumSizeIndex(p,lookup.sizes) && !!lookup.pricing.find(row=>row.id===sel.packagePricingId)});
+  function isPetConfigured(p: Pet) {
+    const sel = selections.find(s => s.pet.id === p.id);
+    const lookup = lookupByService[p.species === "Cat" ? "cat_grooming" : "dog_grooming"];
+    const index = lookup.sizes.findIndex(s => s.id === sel?.sizeId);
+    const minimum = minimumSizeIndex(p, lookup.sizes);
+    return !!sel?.packageId && index >= 0 && minimum !== -2 && index >= minimum
+      && !!lookup.pricing.find(row => row.id === sel.packagePricingId && row.package_id === sel.packageId);
+  }
+  const currentConfigured = activePet ? isPetConfigured(activePet) : false;
+  const allConfigured = pets.length > 0 && pets.every(isPetConfigured);
+  const remaining = pets.filter(p => !isPetConfigured(p));
+  function handleNextPetOrSchedule() {
+    if (!currentConfigured) return;
+    if (allConfigured) { onNext(); return; }
+    // Advance to the next unfinished pet, wrapping around the tabs if needed.
+    const nextIndex = Array.from({ length: pets.length - 1 }, (_, offset) =>
+      (activePetIdx + offset + 1) % pets.length
+    ).find(index => !isPetConfigured(pets[index]));
+    if (nextIndex !== undefined) setActivePetIdx(nextIndex);
+  }
   if(loading)return <p className="py-16 text-center text-zinc-400">Loading grooming options…</p>;
   if(!activePet)return null;
   return <div className="mx-auto w-full max-w-3xl">
@@ -120,6 +139,6 @@ export default function CustomerGroomingSelectionStep({serviceType, pets, select
         {data.addons.length>0&&<><p className="mt-6 font-bold text-zinc-800">Add-Ons <span className="text-sm font-normal text-zinc-400">(Optional)</span></p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{data.addons.map(addon=>{const size=data.sizes.find(s=>s.id===activeSelection.sizeId);const price=addonPrice(addon.id,size?.label);const selected=activeSelection.addonIds.includes(addon.id);return <button key={addon.id} type="button" onClick={()=>toggleAddon(addon.id)} className={`rounded-xl border-2 px-3 py-2 text-left text-xs ${selected?"border-brand-pink bg-brand-pink text-white":"border-pink-100 text-zinc-700 hover:border-pink-200"}`}><p className="font-semibold">{addon.name}</p>{price&&<p className={selected?"text-white/80":"text-zinc-400"}>₱{price.price}</p>}</button>})}</div></>}
       </>}
     </div>
-    <div className="mt-8 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 hover:border-zinc-400">Back</button><button type="button" onClick={onNext} disabled={!allConfigured} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-40">Next</button></div>
+    <div className="mt-8 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 hover:border-zinc-400">Back</button><button type="button" onClick={handleNextPetOrSchedule} disabled={!currentConfigured} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-40">{allConfigured ? "Next: Schedule" : `Next Pet${remaining.length ? ` (${remaining.length} remaining)` : ""}`}</button></div>
   </div>;
 }
