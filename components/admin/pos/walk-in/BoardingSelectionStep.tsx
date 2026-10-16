@@ -1,216 +1,37 @@
 "use client";
-
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fetchPackagesFull, fetchAddonsByCategory } from "@/lib/supabase/services";
+import { blockingReason, hasFreeBathDry, isBathDry } from "@/lib/booking/boarding-promotions";
 import type { Package, PackagePricing, Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
-
-const INCLUSIONS = ["Check In 8AM to 6:00 PM", "Supervision by staff", "Air conditioned area", "Filtered water provided", "Free bath & blow dry (for boarding of at least 4 nights)"];
-type BoardingKennelSize = "small" | "big";
-function labelForSize(size: BoardingKennelSize) { return size === "small" ? "Small Kennel" : "Big Kennel"; }
-function rateSortValue(rate: PackagePricing): number {
-  if (rate.is_per_night) return Number.MAX_SAFE_INTEGER;
-  if (typeof rate.nights === "number" && rate.nights > 0) return rate.nights;
-  const text = `${rate.size_detail ?? ""} ${rate.size_label ?? ""}`.toLowerCase();
-  const match = text.match(/(\d+)\s*nights?/);
-  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER - 1;
-}
-function sortBoardingRates(rates: PackagePricing[]): PackagePricing[] {
-  return [...rates].sort((a, b) => rateSortValue(a) - rateSortValue(b) || Number(a.is_per_night) - Number(b.is_per_night) || a.price - b.price);
-}
-function isSevenDaysOrMore(rate: PackagePricing) {
-  const label = `${rate.size_label ?? ""} ${rate.size_detail ?? ""}`.toLowerCase();
-  return rate.is_per_night || label.includes("7") || label.includes("week");
-}
-function packageMatchesKennelSize(pkg: Package | undefined, size: BoardingKennelSize) {
-  return !!pkg && pkg.name.toLowerCase().includes(size === "small" ? "small" : "big");
-}
-const validNights = (text: string): number | null => {
-  if (!/^\d+$/.test(text)) return null;
-  const value = Number(text);
-  return Number.isSafeInteger(value) && value >= 7 ? value : null;
-};
-
-export default function BoardingSelectionStep({ pets, selections, onChange, scheduledDate: _scheduledDate, onBack, onNext, alreadyGroomedPetIds }: {
-  pets: Pet[];
-  selections: DraftPetSelection[];
-  onChange: (selections: DraftPetSelection[]) => void;
-  scheduledDate: string | null;
-  onBack: () => void;
-  onNext: () => void;
-  alreadyGroomedPetIds?: string[];
-}) {
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [pricing, setPricing] = useState<PackagePricing[]>([]);
-  const [addons, setAddons] = useState<Addon[]>([]);
-  const [addonPrices, setAddonPrices] = useState<AddonPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [durationRateId, setDurationRateId] = useState<Record<string, string | null>>({});
-  // Keep the raw string so clearing the number is possible; never replace an empty value with 7 during typing.
-  const [customNights, setCustomNights] = useState<Record<string, string>>({});
-  const [touchedNights, setTouchedNights] = useState<Record<string, boolean>>({});
-  const getNights = (petId: string) => validNights(customNights[petId] ?? "");
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    const [pkgResult, addonResult] = await Promise.all([fetchPackagesFull("boarding"), fetchAddonsByCategory("Boarding Add-ons")]);
-    setPackages(pkgResult.packages);
-    setPricing(pkgResult.pricing);
-    setAddons(addonResult.addons.filter((a) => a.is_active));
-    setAddonPrices(addonResult.prices);
-    setLoading(false);
-  }, []);
-  useEffect(() => { void loadData(); }, [loadData]);
-  useEffect(() => {
-    if (!pricing.length) return;
-    setDurationRateId((previous) => {
-      const next = { ...previous };
-      for (const selection of selections) if (selection.packagePricingId) next[selection.pet.id] = selection.packagePricingId;
-      return next;
-    });
-    setCustomNights((previous) => {
-      const next = { ...previous };
-      for (const selection of selections) {
-        if (next[selection.pet.id] === undefined && typeof selection.boardingNights === "number" && selection.boardingNights >= 7) next[selection.pet.id] = String(selection.boardingNights);
-      }
-      return next;
-    });
-  }, [pricing, selections]);
-
-  function selectionFor(pet: Pet) { return selections.find((s) => s.pet.id === pet.id); }
-  function addonTotalFor(sel: DraftPetSelection | undefined) {
-    return sel?.addonIds.reduce((sum, id) => sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0), 0) ?? 0;
-  }
-  function lineAmountFor(rate: PackagePricing, petId: string, addonTotal: number) {
-    return (rate.is_per_night ? rate.price * (getNights(petId) ?? 0) : rate.price) + addonTotal;
-  }
-  function updateSelection(pet: Pet, patch: Partial<DraftPetSelection>) {
-    const base: DraftPetSelection = selectionFor(pet) ?? { pet, packageId: null, packagePricingId: null, sizeId: null, kennelId: null, groomerId: null, addonIds: [], lineAmount: 0 };
-    onChange([...selections.filter((s) => s.pet.id !== pet.id), { ...base, ...patch }]);
-  }
-  function pricingFor(size: BoardingKennelSize) {
-    const pkg = packages.find((p) => packageMatchesKennelSize(p, size));
-    return pkg ? sortBoardingRates(pricing.filter((p) => p.package_id === pkg.id)) : [];
-  }
-  function selectKennelSize(pet: Pet, size: BoardingKennelSize) {
-    const current = selectionFor(pet);
-    const currentRate = current?.packagePricingId ? pricing.find((r) => r.id === current.packagePricingId) : null;
-    const selectedRate = currentRate && packageMatchesKennelSize(packages.find((p) => p.id === currentRate.package_id), size) ? currentRate : null;
-    const pkg = packages.find((p) => packageMatchesKennelSize(p, size));
-    setDurationRateId((prev) => ({ ...prev, [pet.id]: selectedRate?.id ?? null }));
-    updateSelection(pet, { kennelId: null, boardingKennelSize: size, packageId: selectedRate?.package_id ?? pkg?.id ?? null,
-      packagePricingId: selectedRate?.id ?? null, boardingNights: selectedRate && isSevenDaysOrMore(selectedRate) ? getNights(pet.id) : selectedRate?.nights ?? null,
-      lineAmount: selectedRate ? lineAmountFor(selectedRate, pet.id, addonTotalFor(current)) : addonTotalFor(current) });
-  }
-  function selectRate(pet: Pet, size: BoardingKennelSize, rate: PackagePricing) {
-    setDurationRateId((prev) => ({ ...prev, [pet.id]: rate.id }));
-    const current = selectionFor(pet);
-    const custom = isSevenDaysOrMore(rate);
-    updateSelection(pet, { kennelId: null, boardingKennelSize: size, packageId: rate.package_id, packagePricingId: rate.id,
-      boardingNights: custom ? getNights(pet.id) : rate.nights ?? null,
-      lineAmount: custom && getNights(pet.id) === null ? addonTotalFor(current) : lineAmountFor(rate, pet.id, addonTotalFor(current)) });
-  }
-  function setNights(pet: Pet, value: string) {
-    // Never force a minimum onChange: an empty string is an expected editing state.
-    if (value !== "" && !/^\d+$/.test(value)) return;
-    setCustomNights((prev) => ({ ...prev, [pet.id]: value }));
-    setTouchedNights((prev) => ({ ...prev, [pet.id]: true }));
-    const current = selectionFor(pet);
-    const rateId = current?.packagePricingId ?? durationRateId[pet.id];
-    const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
-    if (rate) {
-      const nights = validNights(value);
-      updateSelection(pet, { kennelId: null, packageId: rate.package_id, packagePricingId: rate.id, boardingNights: nights,
-        lineAmount: (rate.is_per_night ? rate.price * (nights ?? 0) : rate.price) + addonTotalFor(current) });
-    }
-  }
-  function toggleAddon(pet: Pet, addonId: string) {
-    const sel = selectionFor(pet);
-    if (!sel) return;
-    const addonIds = sel.addonIds.includes(addonId) ? sel.addonIds.filter((id) => id !== addonId) : [...sel.addonIds, addonId];
-    const rateId = sel.packagePricingId ?? durationRateId[pet.id];
-    const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
-    const addonTotal = addonIds.reduce((sum, id) => sum + (addonPrices.find((p) => p.addon_id === id)?.price ?? 0), 0);
-    updateSelection(pet, { addonIds, lineAmount: rate ? lineAmountFor(rate, pet.id, addonTotal) : addonTotal });
-  }
-  function computeTotals() {
-    onChange(selections.map((sel) => {
-      const rateId = sel.packagePricingId ?? durationRateId[sel.pet.id];
-      const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
-      if (!rate) return { ...sel, kennelId: null, packagePricingId: null, lineAmount: addonTotalFor(sel) };
-      return { ...sel, kennelId: null, packageId: rate.package_id, packagePricingId: rate.id,
-        boardingNights: isSevenDaysOrMore(rate) ? getNights(sel.pet.id) : rate.nights ?? null,
-        lineAmount: lineAmountFor(rate, sel.pet.id, addonTotalFor(sel)) };
-    }));
-  }
-  const allPetsHaveKennelSize = pets.every((pet) => !!selectionFor(pet)?.boardingKennelSize);
-  const allRatesChosen = pets.every((pet) => {
-    const sel = selectionFor(pet);
-    const rateId = sel?.packagePricingId ?? durationRateId[pet.id];
-    const rate = rateId ? pricing.find((p) => p.id === rateId) : null;
-    return !!sel?.boardingKennelSize && !!rate && (!isSevenDaysOrMore(rate) || getNights(pet.id) !== null);
-  });
-  if (loading) return <p className="py-16 text-center text-zinc-400">Loading boarding options…</p>;
-  return (
-    <div className="mx-auto max-w-3xl">
-      <h2 className="text-center text-2xl font-bold text-brand-pink">Pet Hotel / Boarding</h2>
-      <p className="mt-1 text-center text-sm text-zinc-500">Choose the kennel size for each pet, then select the boarding duration.</p>
-      <div className="mt-5 rounded-2xl border-2 border-pink-100 p-4">
-        <p className="text-sm font-bold text-brand-pink">Pet Hotel Inclusions</p>
-        <ul className="mt-2 space-y-1">{INCLUSIONS.map((inc) => <li key={inc} className="text-xs text-zinc-600">✓ {inc}</li>)}</ul>
-      </div>
-      <div className="mt-5 rounded-xl bg-sky-50 px-4 py-3 text-xs text-sky-700"><strong>Kennel assignment:</strong> Choose Small or Big here. Staff assigns the exact kennel number at check-in. Multiple pets can share one kennel only when their saved size combination fits the kennel capacity.</div>
-      <p className="mt-6 font-bold text-zinc-800">Kennel Size</p>
-      <div className="mt-2 space-y-3">
-        {pets.map((pet) => {
-          const sel = selectionFor(pet);
-          const selectedSize = sel?.boardingKennelSize;
-          const selectedRateId = sel?.packagePricingId ?? durationRateId[pet.id];
-          const selectedRate = pricing.find((rate) => rate.id === selectedRateId);
-          return <div key={pet.id} className="rounded-xl border border-pink-100 bg-white p-4">
-            <p className="text-sm font-semibold text-zinc-800">{pet.name}<span className="font-normal text-zinc-400"> ({pet.size_label})</span></p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(["small", "big"] as BoardingKennelSize[]).map((size) => <button key={size} type="button" onClick={() => selectKennelSize(pet, size)} className={["rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-colors", selectedSize === size ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-zinc-700 hover:border-brand-pink hover:bg-pink-50"].join(" ")}>{labelForSize(size)}</button>)}
-            </div>
-            {selectedSize && <div className="mt-4">
-              <p className="text-xs font-semibold text-zinc-500">{labelForSize(selectedSize)} duration</p>
-              <div className="mt-2 flex flex-wrap gap-2">{pricingFor(selectedSize).map((rate) => <button key={rate.id} type="button" onClick={() => selectRate(pet, selectedSize, rate)} className={["rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-colors", selectedRateId === rate.id ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 text-zinc-700 hover:border-brand-pink"].join(" ")}>{rate.size_detail ?? rate.size_label} — ₱{rate.price.toLocaleString()}{rate.is_per_night ? " / night" : ""}</button>)}</div>
-              {selectedRate && isSevenDaysOrMore(selectedRate) && <div className="mt-3 rounded-xl bg-pink-50 p-3">
-                <label htmlFor={`boarding-nights-${pet.id}`} className="block text-xs font-semibold text-zinc-700">Number of nights (7 or more)</label>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input id={`boarding-nights-${pet.id}`} type="number" min={7} step={1} inputMode="numeric" placeholder="Enter nights" value={customNights[pet.id] ?? ""} onChange={(event) => setNights(pet, event.target.value)} aria-invalid={touchedNights[pet.id] && getNights(pet.id) === null} className="w-36 rounded-lg border border-pink-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 outline-none focus:border-brand-pink focus:ring-2 focus:ring-pink-100" />
-                  <span className="text-xs text-zinc-500">₱{selectedRate.price.toLocaleString()} per night</span>
-                </div>
-                {touchedNights[pet.id] && getNights(pet.id) === null && <p role="alert" className="mt-1 text-xs text-red-600">Enter a whole number of at least 7 nights.</p>}
-                {getNights(pet.id) !== null && <p className="mt-1 text-xs text-zinc-500">{getNights(pet.id)} nights = ₱{(selectedRate.price * (getNights(pet.id) ?? 0)).toLocaleString()}</p>}
-              </div>}
-            </div>}
-          </div>;
-        })}
-      </div>
-      {addons.length > 0 && allPetsHaveKennelSize && <>
-        <p className="mt-6 font-bold text-zinc-800">Add-Ons <span className="text-sm font-normal text-zinc-400">(Optional)</span></p>
-        {pets.map((pet) => {
-          const sel = selectionFor(pet);
-          const alreadyGroomed = alreadyGroomedPetIds?.includes(pet.id);
-          const petAddons = alreadyGroomed ? addons.filter((a) => !a.name.toLowerCase().includes("groom")) : addons;
-          return <div key={pet.id} className="mt-2">
-            <p className="text-xs font-semibold text-zinc-500">{pet.name}</p>
-            {alreadyGroomed && addons.length !== petAddons.length && <p className="text-[11px] text-zinc-400">Already availed grooming in this booking.</p>}
-            <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">{petAddons.map((addon) => {
-              const priceRow = addonPrices.find((p) => p.addon_id === addon.id);
-              const selected = sel?.addonIds.includes(addon.id);
-              return <button key={addon.id} type="button" onClick={() => toggleAddon(pet, addon.id)} className={["rounded-xl border-2 px-3 py-2 text-left text-xs transition-colors", selected ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700 hover:border-pink-200"].join(" ")}>
-                <p className="font-semibold">{addon.name}</p>{priceRow && <p className={selected ? "text-white/80" : "text-zinc-400"}>+₱{priceRow.price}</p>}
-              </button>;
-            })}</div>
-          </div>;
-        })}
-      </>}
-      <div className="mt-8 flex gap-3">
-        <button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 transition-colors hover:border-zinc-400">Back</button>
-        <button type="button" onClick={() => { computeTotals(); onNext(); }} disabled={!allPetsHaveKennelSize || !allRatesChosen} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white transition-colors hover:bg-brand-pink-dark disabled:cursor-not-allowed disabled:opacity-40">Next</button>
-      </div>
-    </div>
-  );
+type KennelSize="small"|"big";
+function fixedNights(rate:PackagePricing):number|null {if(rate.is_per_night)return null;if(rate.nights&&rate.nights>0)return rate.nights;const match=`${rate.size_detail??""} ${rate.size_label}`.match(/(\d+)\s*nights?/i);return match?Number(match[1]):null;}
+function openEnded(rate:PackagePricing){return rate.is_per_night||/7\s*(?:days|nights)|week/i.test(`${rate.size_label} ${rate.size_detail??""}`);}
+export default function BoardingSelectionStep({pets,selections,onChange,scheduledDate:_scheduledDate,onBack,onNext,alreadyGroomedPetIds=[]}:{pets:Pet[];selections:DraftPetSelection[];onChange:(items:DraftPetSelection[])=>void;scheduledDate:string|null;onBack:()=>void;onNext:()=>void;alreadyGroomedPetIds?:string[]}){
+ const [packages,setPackages]=useState<Package[]>([]),[pricing,setPricing]=useState<PackagePricing[]>([]),[addons,setAddons]=useState<Addon[]>([]),[addonPrices,setAddonPrices]=useState<AddonPrice[]>([]);const [loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null);const [custom,setCustom]=useState<Record<string,string>>({});
+ const load=useCallback(async()=>{setLoading(true);try{const [p,a]=await Promise.all([fetchPackagesFull("boarding"),fetchAddonsByCategory("Boarding Add-ons")]);if(p.error||a.error)throw new Error(p.error || a.error || "Unable to load service data");setPackages(p.packages.filter(pkg=>pkg.is_active));setPricing(p.pricing);setAddons(a.addons.filter(addon=>addon.is_active));setAddonPrices(a.prices);}catch(e){setError(e instanceof Error?e.message:"Could not load boarding rates");}finally{setLoading(false)}},[]);useEffect(()=>{void load()},[load]);
+ const forPet=(pet:Pet)=>selections.find(s=>s.pet.id===pet.id);
+ const rateFor=(s?:DraftPetSelection)=>pricing.find(p=>p.id===s?.packagePricingId);
+ const nightsFor=(s?:DraftPetSelection)=>s?.boardingNights??(rateFor(s)?fixedNights(rateFor(s)!):null);
+ function addonPrice(id:string){return addonPrices.find(p=>p.addon_id===id)?.price??0;}
+ function filteredAddons(sel:DraftPetSelection, nights:number|null){return sel.addonIds.filter(id=>{const addon=addons.find(a=>a.id===id);return addon&&!blockingReason(addon.name,nights,alreadyGroomedPetIds.includes(sel.pet.id));});}
+ function computed(sel:DraftPetSelection){const rate=rateFor(sel);const nights=nightsFor(sel);const clean=filteredAddons(sel,nights);const base=rate?(openEnded(rate)?rate.price*(nights??0):rate.price):0;return {...sel,addonIds:clean,lineAmount:base+clean.reduce((n,id)=>n+addonPrice(id),0)};}
+ function update(pet:Pet,patch:Partial<DraftPetSelection>){const base:DraftPetSelection=forPet(pet)??{pet,packageId:null,packagePricingId:null,sizeId:null,kennelId:null,groomerId:null,addonIds:[],lineAmount:0};const newSel=computed({...base,...patch});onChange([...selections.filter(s=>s.pet.id!==pet.id),newSel]);}
+ function chooseSize(pet:Pet,size:KennelSize){const pkg=packages.find(p=>p.name.toLowerCase().includes(size==="small"?"small":"big"));update(pet,{boardingKennelSize:size,packageId:pkg?.id??null,packagePricingId:null,boardingNights:null,addonIds:[]});}
+ function chooseRate(pet:Pet,rate:PackagePricing){const nights=openEnded(rate)?((Number(custom[pet.id])>=7&&Number.isInteger(Number(custom[pet.id])))?Number(custom[pet.id]):null):fixedNights(rate);update(pet,{packageId:rate.package_id,packagePricingId:rate.id,boardingNights:nights});}
+ function changeNights(pet:Pet,text:string){if(text&&!/^\d+$/.test(text))return;setCustom(v=>({...v,[pet.id]:text}));const nights=/^\d+$/.test(text)&&Number(text)>=7&&Number.isSafeInteger(Number(text))?Number(text):null;update(pet,{boardingNights:nights});}
+ function toggle(pet:Pet,id:string){const sel=forPet(pet);if(!sel)return;const list=sel.addonIds.includes(id)?sel.addonIds.filter(x=>x!==id):[...sel.addonIds,id];update(pet,{addonIds:list});}
+ const valid=pets.length>0&&pets.every(pet=>{const s=forPet(pet);const rate=rateFor(s);const nights=nightsFor(s);return !!s?.boardingKennelSize&&!!rate&&typeof nights==="number"&&Number.isInteger(nights)&&nights>0&&(!openEnded(rate)||nights>=7)});
+ if(loading)return <p className="py-12 text-center text-zinc-500">Loading boarding packages…</p>;
+ return <section className="mx-auto max-w-3xl"><h2 className="text-center text-2xl font-bold text-brand-pink">Pet Hotel / Boarding</h2><p className="mt-2 text-center text-sm text-zinc-500">Choose kennel size and duration for each pet. Free Bath & Dry applies at 4+ nights.</p>{error&&<p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+ <div className="mt-5 rounded-2xl border border-pink-200 bg-pink-50/50 p-4 text-sm text-zinc-700"><strong>Boarding includes:</strong> staff supervision, air-conditioned accommodation, drinking water, and complimentary Bath & Dry at 4 or more nights. Only one grooming treatment will be scheduled per pet.</div>
+ {pets.map(pet=>{const sel=forPet(pet);const size=sel?.boardingKennelSize;const rates=packages.filter(p=>p.name.toLowerCase().includes(size==="small"?"small":"big")).flatMap(p=>pricing.filter(rate=>rate.package_id===p.id)).sort((a,b)=>(fixedNights(a)??999)-(fixedNights(b)??999));const rate=rateFor(sel);const nights=nightsFor(sel);const hasGrooming=alreadyGroomedPetIds.includes(pet.id);return <div key={pet.id} className="mt-5 rounded-2xl border border-pink-100 bg-white p-5"><h3 className="font-bold text-zinc-800">{pet.name} <span className="text-sm font-normal text-zinc-500">({pet.size_label})</span></h3>
+ <p className="mt-4 text-sm font-semibold">Kennel size</p><div className="mt-2 grid grid-cols-2 gap-2">{(["small","big"] as KennelSize[]).map(k=><button type="button" key={k} onClick={()=>chooseSize(pet,k)} className={`rounded-xl border-2 p-3 text-sm font-semibold ${size===k?"border-brand-pink bg-brand-pink text-white":"border-pink-100 text-zinc-700"}`}>{k==="small"?"Small Kennel":"Big Kennel"}</button>)}</div>
+ {size&&<><p className="mt-5 text-sm font-semibold">Boarding duration</p><div className="mt-2 flex flex-wrap gap-2">{rates.map(r=><button type="button" key={r.id} onClick={()=>chooseRate(pet,r)} className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold ${rate?.id===r.id?"border-brand-pink bg-brand-pink text-white":"border-pink-100 text-zinc-700"}`}>{r.size_detail||r.size_label} — ₱{r.price.toLocaleString()}{openEnded(r)?"/night":""}</button>)}</div></>}
+ {rate&&openEnded(rate)&&<label className="mt-4 block text-xs font-semibold text-zinc-700">Number of nights (7 or more)<input type="number" min="7" step="1" placeholder="Nights" value={custom[pet.id]??(sel?.boardingNights&&sel.boardingNights>=7?String(sel.boardingNights):"")} onChange={e=>changeNights(pet,e.target.value)} className="mt-2 block w-36 rounded-xl border border-pink-200 px-3 py-2 text-sm"/></label>}
+ {rate&&nights&&<div className="mt-4 rounded-xl bg-pink-50 p-3 text-sm">{hasFreeBathDry(nights)?<span className="font-semibold text-emerald-700">✓ Complimentary Bath & Dry included</span>:<span className="text-zinc-500">Bath & Dry promotion starts at 4 nights.</span>}</div>}
+ {rate&&<><p className="mt-5 text-sm font-semibold">Optional boarding add-ons</p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{addons.map(addon=>{const reason=blockingReason(addon.name,nights,hasGrooming);const selected=sel?.addonIds.includes(addon.id)??false;return <button type="button" key={addon.id} disabled={!!reason} title={reason??undefined} onClick={()=>toggle(pet,addon.id)} className={`rounded-xl border-2 p-3 text-left text-xs ${reason?"cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400":selected?"border-brand-pink bg-brand-pink text-white":"border-pink-100 text-zinc-700"}`}><span className="block font-semibold">{addon.name}</span>{reason?<span className="mt-1 block">{isBathDry(addon.name)?"Included free":"Unavailable · Grooming booked"}</span>:<span className="mt-1 block">+₱{addonPrice(addon.id).toLocaleString()}</span>}</button>})}</div></>}
+ {sel&&<p className="mt-4 text-right text-sm font-bold text-brand-pink">Subtotal: ₱{computed(sel).lineAmount.toLocaleString()}</p>}
+ </div>})}
+ <div className="mt-8 grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="rounded-full border-2 border-zinc-300 py-3 font-semibold text-zinc-600">Back</button><button type="button" disabled={!valid} onClick={()=>{onChange(selections.map(computed));onNext()}} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next</button></div></section>;
 }

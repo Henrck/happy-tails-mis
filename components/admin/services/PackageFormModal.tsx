@@ -1,183 +1,23 @@
 "use client";
-// Add/Edit package: name + dynamic inclusions list + pricing. For
-// dog/cat grooming, pricing rows are driven by the service's active
-// pet_sizes (so pricing always stays in sync with the shared Size
-// Guide). For boarding, pricing rows are free-text duration labels
-// since there's no shared "size" concept there.
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Package, PackageInclusion, PackagePricing, PetSize, ServiceType } from "@/lib/types/services";
-
-type PriceDraft = { size_id: string | null; size_label: string; price: string; is_per_night: boolean; nights: string };
-
-export default function PackageFormModal({
-  serviceType,
-  sizes,
-  existing,
-  existingInclusions,
-  existingPricing,
-  onClose,
-  onSaved,
-}: {
-  serviceType: ServiceType;
-  sizes: PetSize[];
-  existing?: Package;
-  existingInclusions?: PackageInclusion[];
-  existingPricing?: PackagePricing[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(existing?.name ?? "");
-  const [inclusions, setInclusions] = useState<string[]>(existingInclusions?.map((i) => i.label) ?? [""]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const isSizeBased = serviceType !== "boarding";
-
-  const [prices, setPrices] = useState<PriceDraft[]>(() => {
-    if (isSizeBased) {
-      return sizes
-        .filter((s) => s.is_active)
-        .map((s) => {
-          const found = existingPricing?.find((p) => p.size_id === s.id);
-          return { size_id: s.id, size_label: s.label, price: found ? String(found.price) : "", is_per_night: false, nights: "" };
-        });
-    }
-    return existingPricing?.length
-      ? existingPricing.map((p) => ({ size_id: null, size_label: p.size_label, price: String(p.price), is_per_night: p.is_per_night, nights: p.nights ? String(p.nights) : "" }))
-      : [{ size_id: null, size_label: "", price: "", is_per_night: false, nights: "" }];
-  });
-
-  function updateInclusion(i: number, val: string) {
-    setInclusions((prev) => prev.map((v, idx) => (idx === i ? val : v)));
-  }
-  function addInclusion() {
-    setInclusions((prev) => [...prev, ""]);
-  }
-  function removeInclusion(i: number) {
-    setInclusions((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  function updatePrice(i: number, field: keyof PriceDraft, val: string | boolean) {
-    setPrices((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
-  }
-  function addDurationRow() {
-    setPrices((prev) => [...prev, { size_id: null, size_label: "", price: "", is_per_night: false, nights: "" }]);
-  }
-  function removeDurationRow(i: number) {
-    setPrices((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  async function handleSave() {
-    if (!name.trim()) return;
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-
-    let packageId = existing?.id;
-
-    if (existing) {
-      const { error: err } = await supabase.from("packages").update({ name }).eq("id", existing.id);
-      if (err) { setSaving(false); setError(err.message); return; }
-      // Simplest correct approach for edits: replace inclusions/pricing
-      // wholesale rather than diffing row-by-row.
-      await supabase.from("package_inclusions").delete().eq("package_id", existing.id);
-      await supabase.from("package_pricing").delete().eq("package_id", existing.id);
-    } else {
-      const { data, error: err } = await supabase.from("packages").insert({ service_type: serviceType, name, sort_order: 99 }).select().single();
-      if (err || !data) { setSaving(false); setError(err?.message ?? "Failed to create package"); return; }
-      packageId = data.id;
-    }
-
-    const cleanInclusions = inclusions.filter((i) => i.trim());
-    if (cleanInclusions.length > 0) {
-      await supabase.from("package_inclusions").insert(
-        cleanInclusions.map((label, i) => ({ package_id: packageId, label, sort_order: i }))
-      );
-    }
-
-    const cleanPrices = prices.filter((p) => p.size_label.trim() && p.price);
-    if (cleanPrices.length > 0) {
-      await supabase.from("package_pricing").insert(
-        cleanPrices.map((p) => ({
-          package_id: packageId,
-          size_id: p.size_id,
-          size_label: p.size_label,
-          price: parseFloat(p.price) || 0,
-          is_per_night: p.is_per_night,
-          nights: p.is_per_night ? null : (parseInt(p.nights) || null),
-        }))
-      );
-    }
-
-    setSaving(false);
-    onSaved();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-brand-pink px-5 py-3 sticky top-0">
-          <h3 className="text-white font-bold text-sm">{existing ? "Edit Package" : "Add Package"}</h3>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Package Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Diamond" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Inclusions</label>
-            <div className="mt-1 space-y-1.5">
-              {inclusions.map((inc, i) => (
-                <div key={i} className="flex gap-1.5">
-                  <input value={inc} onChange={(e) => updateInclusion(i, e.target.value)} placeholder="e.g. Bath & Dry" className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  <button onClick={() => removeInclusion(i)} className="text-red-400 hover:text-red-600 px-1">✕</button>
-                </div>
-              ))}
-            </div>
-            <button onClick={addInclusion} className="mt-1.5 text-xs font-semibold text-brand-pink hover:underline">+ Add inclusion</button>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Pricing</label>
-            <div className="mt-1 space-y-1.5">
-              {prices.map((p, i) => (
-                <div key={i} className="flex gap-1.5 items-center">
-                  {isSizeBased ? (
-                    <span className="flex-1 text-sm text-zinc-700 px-1">{p.size_label}</span>
-                  ) : (
-                    <input value={p.size_label} onChange={(e) => updatePrice(i, "size_label", e.target.value)} placeholder="e.g. 4 Days & 3 Nights" className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  )}
-                  {!isSizeBased && !p.is_per_night && (
-                    <input type="number" min="1" value={p.nights} onChange={(e) => updatePrice(i, "nights", e.target.value)} placeholder="Nights" title="Number of nights this tier covers — used to auto-calculate the pick-up date" className="w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  )}
-                  <input type="number" value={p.price} onChange={(e) => updatePrice(i, "price", e.target.value)} placeholder="₱0" className="w-24 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  {!isSizeBased && <button onClick={() => removeDurationRow(i)} className="text-red-400 hover:text-red-600 px-1">✕</button>}
-                </div>
-              ))}
-            </div>
-            {!isSizeBased && (
-              <button onClick={addDurationRow} className="mt-1.5 text-xs font-semibold text-brand-pink hover:underline">+ Add duration tier</button>
-            )}
-            {isSizeBased && (
-              <p className="mt-1.5 text-[11px] text-zinc-400">
-                Rows come from the active Size Guide — add/edit sizes there, not here.
-              </p>
-            )}
-          </div>
-
-          {error && <p className="text-xs text-red-600">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold text-sm py-2 rounded-full hover:border-zinc-400 transition-colors">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-50 text-white font-semibold text-sm py-2 rounded-full transition-colors">
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+type PriceDraft={size_id:string|null;size_label:string;price:string;is_per_night:boolean;nights:string};
+export default function PackageFormModal({serviceType,sizes,existing,existingInclusions,existingPricing,onClose,onSaved}:{serviceType:ServiceType;sizes:PetSize[];existing?:Package;existingInclusions?:PackageInclusion[];existingPricing?:PackagePricing[];onClose:()=>void;onSaved:()=>void}){
+ const boarding=serviceType==="boarding";
+ const [name,setName]=useState(existing?.name??"");const [inclusions,setInclusions]=useState<string[]>(existingInclusions?.map(i=>i.label)??[""]);
+ const [prices,setPrices]=useState<PriceDraft[]>(()=>boarding?(existingPricing?.length?existingPricing.map(p=>({size_id:null,size_label:p.size_label,price:String(p.price),is_per_night:p.is_per_night,nights:p.nights?String(p.nights):""})):[{size_id:null,size_label:"",price:"",is_per_night:false,nights:""}]):sizes.filter(s=>s.is_active).map(s=>{const p=existingPricing?.find(p=>p.size_id===s.id||p.size_label.toLowerCase()===s.label.toLowerCase());return {size_id:s.id,size_label:s.label,price:p?String(p.price):"",is_per_night:false,nights:""}}));
+ const [saving,setSaving]=useState(false),[error,setError]=useState<string|null>(null);
+ function patch(i:number,update:Partial<PriceDraft>){setPrices(prev=>prev.map((p,j)=>j===i?{...p,...update}:p));}
+ async function save(){if(saving)return;setError(null);if(!name.trim()){setError("Enter a package name.");return;}const clean=prices.filter(p=>p.size_label.trim()||p.price.trim()||p.nights.trim());if(!clean.length){setError("Add at least one rate.");return;}for(const p of clean){if(!p.size_label.trim()||!p.price.trim()||!Number.isFinite(Number(p.price))||Number(p.price)<0){setError("Every rate needs a valid label and nonnegative price.");return;}if(boarding&&!p.is_per_night&&(!Number.isInteger(Number(p.nights))||Number(p.nights)<1)){setError("Enter a whole-number night count for each fixed duration. This determines the boarding promotion.");return;}}if(boarding&&clean.filter(p=>p.is_per_night).length>1){setError("Only one open-ended per-night rate is allowed.");return;}
+ setSaving(true);const db=createClient();try{let id=existing?.id;if(existing){const {error}=await db.from("packages").update({name:name.trim()}).eq("id",existing.id);if(error)throw error;}else{const {data,error}=await db.from("packages").insert({service_type:serviceType,name:name.trim(),sort_order:99,is_active:true}).select("id").single();if(error||!data)throw error??Error("Package could not be created");id=data.id;}if(!id)throw Error("Missing package ID");
+ // Validate all input before touching existing rows. Database RLS / FK failures must be visible.
+ if(existing){const a=await db.from("package_inclusions").delete().eq("package_id",id);if(a.error)throw a.error;const b=await db.from("package_pricing").delete().eq("package_id",id);if(b.error)throw b.error;}
+ if(!boarding){const rows=inclusions.map(s=>s.trim()).filter(Boolean).map((label,i)=>({package_id:id,label,sort_order:i}));if(rows.length){const {error}=await db.from("package_inclusions").insert(rows);if(error)throw error;}}
+ const {error}=await db.from("package_pricing").insert(clean.map(p=>({package_id:id,size_id:p.size_id,size_label:p.size_label.trim(),price:Number(p.price),is_per_night:p.is_per_night,nights:boarding&&!p.is_per_night?Number(p.nights):null})));if(error)throw error;onSaved();}catch(e){setError(`${e instanceof Error?e.message:"Saving failed"}. If editing, please review saved pricing before retrying.`)}finally{setSaving(false)}}
+ return <div role="dialog" aria-modal="true" aria-label={existing?"Edit package":"Add package"} className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"><div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><div className="shrink-0 bg-brand-pink px-6 py-4 text-base font-bold text-white">{existing?"Edit":"Add"} {boarding?"Boarding ":""}Package</div><div className="space-y-5 overflow-y-auto p-6"><label className="block text-sm font-semibold text-zinc-700">Package name<input value={name} onChange={e=>setName(e.target.value)} placeholder={boarding?"Small Kennel":"e.g. Diamond"} className="mt-2 w-full rounded-xl border border-zinc-300 px-3 py-3 text-sm"/></label>
+ {!boarding&&<div><h3 className="text-sm font-semibold text-zinc-700">Inclusions</h3><div className="mt-2 space-y-2">{inclusions.map((s,i)=><div key={i} className="flex gap-2"><input value={s} onChange={e=>setInclusions(v=>v.map((x,j)=>j===i?e.target.value:x))} placeholder="Bath & Dry" className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-sm"/><button type="button" onClick={()=>setInclusions(v=>v.filter((_,j)=>j!==i))} aria-label="Remove inclusion" className="px-2 text-rose-500">✕</button></div>)}</div><button type="button" onClick={()=>setInclusions(v=>[...v,""])} className="mt-2 text-sm font-semibold text-brand-pink">+ Add inclusion</button></div>}
+ <div><h3 className="text-sm font-semibold text-zinc-700">{boarding?"Boarding duration and pricing":"Pricing by size"}</h3>{boarding&&<p className="mt-1 text-xs text-zinc-500">Nights is required for fixed-duration packages. Bath & Dry is free automatically at 4+ nights. No boarding inclusions need to be entered.</p>}
+ <div className="mt-3 space-y-3">{prices.map((p,i)=><div key={i} className="rounded-xl border border-pink-100 p-3"><div className="flex flex-wrap items-center gap-2">{boarding?<input aria-label="Duration label" placeholder="4 Days & 3 Nights" value={p.size_label} onChange={e=>patch(i,{size_label:e.target.value})} className="min-w-36 flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm"/>:<span className="min-w-28 flex-1 text-sm text-zinc-700">{p.size_label}</span>}{boarding&&!p.is_per_night&&<input aria-label="Nights" type="number" min="1" step="1" placeholder="Nights" value={p.nights} onChange={e=>patch(i,{nights:e.target.value})} className="w-20 rounded-lg border border-zinc-300 px-2 py-2 text-sm"/>}<input aria-label="Price" type="number" min="0" step="0.01" placeholder="₱" value={p.price} onChange={e=>patch(i,{price:e.target.value})} className="w-28 rounded-lg border border-zinc-300 px-3 py-2 text-sm"/>{boarding&&<button type="button" aria-label="Remove duration" onClick={()=>setPrices(v=>v.filter((_,j)=>j!==i))} className="px-1 text-rose-500">✕</button>}</div>{boarding&&<label className="mt-2 flex items-center gap-2 text-xs text-zinc-600"><input type="checkbox" checked={p.is_per_night} onChange={e=>patch(i,{is_per_night:e.target.checked,nights:e.target.checked?"":p.nights})}/> Open-ended per-night rate (7+ nights)</label>}</div>)}</div>{boarding?<button type="button" onClick={()=>setPrices(v=>[...v,{size_id:null,size_label:"",price:"",is_per_night:false,nights:""}])} className="mt-3 text-sm font-semibold text-brand-pink">+ Add duration tier</button>:<p className="mt-2 text-xs text-zinc-500">Price tiers are drawn from the active Size Guide.</p>}</div>
+ {error&&<p role="alert" className="rounded-lg bg-rose-50 p-3 text-xs text-rose-700">{error}</p>}</div><div className="grid shrink-0 grid-cols-2 gap-3 border-t border-zinc-100 bg-white p-5"><button type="button" disabled={saving} onClick={onClose} className="rounded-full border-2 border-zinc-300 py-3 text-sm font-semibold text-zinc-600">Cancel</button><button type="button" disabled={saving} onClick={()=>void save()} className="rounded-full bg-brand-pink py-3 text-sm font-semibold text-white disabled:opacity-50">{saving?"Saving…":"Save"}</button></div></div></div>;
 }

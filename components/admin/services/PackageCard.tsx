@@ -1,71 +1,20 @@
 import type { Package, PackageInclusion, PackagePricing } from "@/lib/types/services";
+import { Archive, Pencil } from "lucide-react";
 
-export default function PackageCard({
-  pkg,
-  inclusions,
-  pricing,
-  onEdit,
-  onToggleActive,
-  onArchive,
-}: {
-  pkg: Package;
-  inclusions: PackageInclusion[];
-  pricing: PackagePricing[];
-  onEdit: () => void;
-  onToggleActive: () => void;
-  onArchive: () => void;
+export default function PackageCard({ pkg, inclusions, pricing, onEdit, onToggleActive, onArchive }: {
+  pkg: Package; inclusions: PackageInclusion[]; pricing: PackagePricing[];
+  onEdit: () => void; onToggleActive: () => void; onArchive: () => void;
 }) {
-  return (
-    <div className={`rounded-2xl overflow-hidden shadow-sm border transition-shadow hover:shadow-md ${pkg.is_active ? "border-pink-100" : "border-zinc-200 opacity-70"}`}>
-      <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-5 py-3">
-        <h3 className="text-white font-bold text-lg">{pkg.name}</h3>
+  const sorted = [...pricing].sort((a,b) => (a.nights ?? Number.MAX_SAFE_INTEGER) - (b.nights ?? Number.MAX_SAFE_INTEGER) || a.size_label.localeCompare(b.size_label, undefined, {numeric:true}));
+  return <article className={`flex h-full min-h-[390px] flex-col overflow-hidden rounded-3xl border bg-white shadow-sm transition-shadow hover:shadow-md ${pkg.is_active ? "border-pink-100" : "border-zinc-200 opacity-75"}`}>
+    <div className="bg-gradient-to-r from-brand-pink to-brand-pink-dark px-6 py-4"><h3 className="text-xl font-extrabold text-white">{pkg.name}</h3></div>
+    <div className="flex flex-1 flex-col p-5">
+      {inclusions.length > 0 && <ul className="mb-4 space-y-2">{inclusions.map(i => <li key={i.id} className="flex gap-2 text-sm text-zinc-700"><span className="font-bold text-brand-pink">✓</span><span>{i.label}</span></li>)}</ul>}
+      {inclusions.length === 0 && <p className="mb-4 text-xs text-zinc-500">{pkg.service_type === "boarding" ? "Select a duration from the rates below." : "No inclusions configured."}</p>}
+      <div className="mt-auto rounded-2xl bg-brand-tint p-4"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-pink">Pricing</p>
+        {sorted.length ? sorted.map(p => <div key={p.id} className="flex justify-between gap-3 py-1 text-sm"><span className="text-zinc-600">{p.size_detail || p.size_label}</span><span className="shrink-0 font-bold text-zinc-800">₱{p.price.toLocaleString()}{p.is_per_night ? "/night" : ""}</span></div>) : <p className="text-sm text-zinc-500">No rates configured</p>}
       </div>
-
-      <div className="bg-white px-5 py-4">
-        {inclusions.length > 0 && (
-          <ul className="space-y-1">
-            {inclusions.map((inc) => (
-              <li key={inc.id} className="flex items-center gap-1.5 text-sm text-zinc-700">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="text-brand-pink shrink-0">
-                  <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                {inc.label}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-3 bg-brand-tint rounded-xl p-3">
-          <p className="text-xs font-bold text-brand-pink uppercase tracking-wide mb-1.5">Pricing</p>
-          {pricing.map((p) => (
-            <div key={p.id} className="flex justify-between text-sm py-0.5">
-              <span className="text-zinc-600">{p.size_label}</span>
-              <span className="font-semibold text-zinc-800">
-                ₱{p.price.toLocaleString()}{p.is_per_night ? "/night" : ""}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button onClick={onEdit} aria-label="Edit" className="w-8 h-8 rounded-full border-2 border-brand-pink text-brand-pink flex items-center justify-center hover:bg-brand-pink hover:text-white transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <button onClick={onArchive} aria-label="Archive" className="w-8 h-8 rounded-full border-2 border-red-300 text-red-400 flex items-center justify-center hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4" strokeLinecap="round" /></svg>
-            </button>
-          </div>
-          <button
-            onClick={onToggleActive}
-            className={`text-xs font-semibold px-4 py-1.5 rounded-full transition-colors ${
-              pkg.is_active ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-zinc-200 text-zinc-500 hover:bg-zinc-300"
-            }`}
-          >
-            {pkg.is_active ? "Active" : "Inactive"}
-          </button>
-        </div>
-      </div>
+      <div className="mt-5 flex items-center justify-between gap-2"><div className="flex gap-2"><button type="button" onClick={onEdit} aria-label={`Edit ${pkg.name}`} className="rounded-full border-2 border-brand-pink p-2 text-brand-pink hover:bg-pink-50"><Pencil size={16}/></button><button type="button" onClick={onArchive} disabled={!pkg.is_active} title={pkg.is_active ? "Archive package" : "Already archived"} aria-label={`Archive ${pkg.name}`} className="rounded-full border-2 border-rose-300 p-2 text-rose-500 hover:bg-rose-50 disabled:opacity-30"><Archive size={16}/></button></div><button type="button" onClick={onToggleActive} className={`rounded-full px-4 py-2 text-xs font-bold ${pkg.is_active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-600"}`}>{pkg.is_active ? "Active" : "Inactive · Reactivate"}</button></div>
     </div>
-  );
+  </article>;
 }

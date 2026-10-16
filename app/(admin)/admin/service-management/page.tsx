@@ -1,11 +1,7 @@
 "use client";
-
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory,
-  togglePackageActive, toggleSizeActive, toggleAddonActive,
-} from "@/lib/supabase/services";
+import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory, togglePackageActive, toggleSizeActive, toggleAddonActive } from "@/lib/supabase/services";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
 import ServiceTabs from "@/components/admin/services/ServiceTabs";
 import PackageCard from "@/components/admin/services/PackageCard";
@@ -15,110 +11,36 @@ import PackageFormModal from "@/components/admin/services/PackageFormModal";
 import SizeFormModal from "@/components/admin/services/SizeFormModal";
 import AddOnFormModal from "@/components/admin/services/AddOnFormModal";
 
-// Pet avatar configuration lives in Website Management, not Service Management.
 export default function ServiceManagementPage() {
-  const [tab, setTab] = useState<ServiceType>("dog_grooming");
-  const [search, setSearch] = useState("");
-  const [packages, setPackages] = useState<Package[]>([]);
-  const [inclusions, setInclusions] = useState<PackageInclusion[]>([]);
-  const [pricing, setPricing] = useState<PackagePricing[]>([]);
-  const [sizes, setSizes] = useState<PetSize[]>([]);
-  const [addons, setAddons] = useState<Addon[]>([]);
-  const [addonPrices, setAddonPrices] = useState<AddonPrice[]>([]);
-  const [aLaCarteAddons, setALaCarteAddons] = useState<Addon[]>([]);
-  const [aLaCartePrices, setALaCartePrices] = useState<AddonPrice[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [packageModal, setPackageModal] = useState<{ mode: "add" | "edit"; pkg?: Package } | null>(null);
-  const [sizeModal, setSizeModal] = useState<{ mode: "add" | "edit"; size?: PetSize } | null>(null);
-  const [addonModal, setAddonModal] = useState<{ mode: "add" | "edit"; addon?: Addon; categoryId: string } | null>(null);
-
-  const addonCategoryName = tab === "boarding" ? "Boarding Add-ons" : "Grooming Add-ons";
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const [pkgResult, sizeResult, addonResult, alaCarteResult] = await Promise.all([
-      fetchPackagesFull(tab),
-      tab !== "boarding" ? fetchPetSizes(tab) : Promise.resolve({ sizes: [], error: null }),
-      fetchAddonsByCategory(addonCategoryName),
-      fetchAddonsByCategory("Ala Carte"),
-    ]);
-    setPackages(pkgResult.packages);
-    setInclusions(pkgResult.inclusions);
-    setPricing(pkgResult.pricing);
-    setSizes(sizeResult.sizes);
-    setAddons(addonResult.addons);
-    setAddonPrices(addonResult.prices);
-    setALaCarteAddons(alaCarteResult.addons);
-    setALaCartePrices(alaCarteResult.prices);
-    if (pkgResult.error) setError(pkgResult.error);
-    setLoading(false);
-  }, [tab, addonCategoryName]);
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const filteredPackages = packages.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()));
-  async function handleTogglePackage(pkg: Package) { await togglePackageActive(pkg.id, !pkg.is_active); loadData(); }
-  async function handleToggleSize(size: PetSize) { await toggleSizeActive(size.id, !size.is_active); loadData(); }
-  async function handleToggleAddon(addon: Addon) { await toggleAddonActive(addon.id, !addon.is_active); loadData(); }
-  async function handleArchivePackage(pkg: Package) {
-    if (!confirm(`Archive "${pkg.name}"? This hides it from customers but keeps its history.`)) return;
-    await togglePackageActive(pkg.id, false); loadData();
-  }
-  async function handleArchiveSize(size: PetSize) {
-    if (!confirm(`Archive "${size.label}"? Existing packages keep their pricing, but this size won't be offered for new packages.`)) return;
-    await toggleSizeActive(size.id, false); loadData();
-  }
-  async function handleArchiveAddon(addon: Addon) {
-    if (!confirm(`Archive "${addon.name}"?`)) return;
-    await toggleAddonActive(addon.id, false); loadData();
-  }
-
-  return (
-    <div>
-      <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400">
-            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" strokeLinecap="round" />
-          </svg>
-          <input type="text" placeholder="Search packages" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-full border border-pink-200 bg-white py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-        </div>
-      </div>
-      <h1 className="mt-6 text-2xl font-bold text-brand-pink">Service Management</h1>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><ServiceTabs active={tab} onChange={setTab} /></div>
-      {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
-      {loading ? <p className="mt-10 text-center text-zinc-400">Loading...</p> : (
-        <>
-          <div className="mt-6 flex items-center justify-between">
-            <h2 className="font-bold text-zinc-800">Package</h2>
-            <button onClick={() => setPackageModal({ mode: "add" })} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-pink hover:text-white">Add Package</button>
-          </div>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredPackages.length === 0 ? <p className="col-span-full py-8 text-center text-zinc-400">No packages yet for this service.</p> : filteredPackages.map((pkg) => (
-              <PackageCard key={pkg.id} pkg={pkg} inclusions={inclusions.filter((i) => i.package_id === pkg.id)} pricing={pricing.filter((p) => p.package_id === pkg.id)} onEdit={() => setPackageModal({ mode: "edit", pkg })} onToggleActive={() => handleTogglePackage(pkg)} onArchive={() => handleArchivePackage(pkg)} />
-            ))}
-          </div>
-          {tab !== "boarding" && (
-            <div className="mt-8">
-              <div className="flex items-center justify-between">
-                <h2 className="font-bold text-zinc-800">Size Guide</h2>
-                <button onClick={() => setSizeModal({ mode: "add" })} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink hover:bg-brand-pink hover:text-white">Add Size</button>
-              </div>
-              <div className="mt-3"><SizeGuideTable sizes={sizes} onEdit={(size) => setSizeModal({ mode: "edit", size })} onToggleActive={handleToggleSize} onArchive={handleArchiveSize} /></div>
-            </div>
-          )}
-          <div className="mt-8">
-            <div className="flex items-center justify-between">
-              <div />
-              <button onClick={async () => { const supabase = createClient(); const { data } = await supabase.from("addon_categories").select("id").eq("name", addonCategoryName).single(); if (data) setAddonModal({ mode: "add", categoryId: data.id }); }} className="rounded-full border-2 border-brand-pink px-5 py-1.5 text-sm font-semibold text-brand-pink hover:bg-brand-pink hover:text-white">Add Add-Ons</button>
-            </div>
-            <div className="mt-3"><AddOnsSection title={addonCategoryName} addons={addons} prices={addonPrices} onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })} onToggleActive={handleToggleAddon} onArchive={handleArchiveAddon} /></div>
-          </div>
-          <div className="mt-8"><AddOnsSection title="Ala Carte" addons={aLaCarteAddons} prices={aLaCartePrices} onEdit={(addon) => setAddonModal({ mode: "edit", addon, categoryId: addon.category_id })} onToggleActive={handleToggleAddon} onArchive={handleArchiveAddon} /></div>
-        </>
-      )}
-      {packageModal && <PackageFormModal serviceType={tab} sizes={sizes} existing={packageModal.pkg} existingInclusions={packageModal.pkg ? inclusions.filter((i) => i.package_id === packageModal.pkg!.id) : undefined} existingPricing={packageModal.pkg ? pricing.filter((p) => p.package_id === packageModal.pkg!.id) : undefined} onClose={() => setPackageModal(null)} onSaved={() => { setPackageModal(null); loadData(); }} />}
-      {sizeModal && <SizeFormModal serviceType={tab} existing={sizeModal.size} onClose={() => setSizeModal(null)} onSaved={() => { setSizeModal(null); loadData(); }} />}
-      {addonModal && <AddOnFormModal categoryId={addonModal.categoryId} existing={addonModal.addon} existingPrices={addonModal.addon ? [...addonPrices, ...aLaCartePrices].filter((p) => p.addon_id === addonModal.addon!.id) : undefined} onClose={() => setAddonModal(null)} onSaved={() => { setAddonModal(null); loadData(); }} />}
-    </div>
-  );
+ const [tab,setTab]=useState<ServiceType>("dog_grooming"); const [search,setSearch]=useState("");
+ const [packages,setPackages]=useState<Package[]>([]),[inclusions,setInclusions]=useState<PackageInclusion[]>([]),[pricing,setPricing]=useState<PackagePricing[]>([]),[sizes,setSizes]=useState<PetSize[]>([]),[addons,setAddons]=useState<Addon[]>([]),[addonPrices,setAddonPrices]=useState<AddonPrice[]>([]),[aLaCarteAddons,setALaCarteAddons]=useState<Addon[]>([]),[aLaCartePrices,setALaCartePrices]=useState<AddonPrice[]>([]);
+ const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null);
+ const [packageModal,setPackageModal]=useState<{mode:"add"|"edit";pkg?:Package}|null>(null),[sizeModal,setSizeModal]=useState<{mode:"add"|"edit";size?:PetSize}|null>(null),[addonModal,setAddonModal]=useState<{mode:"add"|"edit";addon?:Addon;categoryId:string}|null>(null);
+ const addonCategoryName=tab==="boarding"?"Boarding Add-ons":"Grooming Add-ons";
+ const loadData=useCallback(async()=>{setLoading(true);setError(null);try {const [pk,sz,ad,ala]=await Promise.all([fetchPackagesFull(tab),tab!=="boarding"?fetchPetSizes(tab):Promise.resolve({sizes:[] as PetSize[],error:null}),fetchAddonsByCategory(addonCategoryName),fetchAddonsByCategory("Ala Carte")]);setPackages(pk.packages);setInclusions(pk.inclusions);setPricing(pk.pricing);setSizes(sz.sizes);setAddons(ad.addons);setAddonPrices(ad.prices);setALaCarteAddons(ala.addons);setALaCartePrices(ala.prices);const message=[pk.error,sz.error,ad.error,ala.error].filter(Boolean).join("; ");if(message)setError(message);}catch(e){setError(e instanceof Error?e.message:"Unable to load services");}finally{setLoading(false)}},[tab,addonCategoryName]);
+ useEffect(()=>{void loadData()},[loadData]);
+ async function updateStatus(label:string,active:boolean,fn:()=>PromiseLike<{error?:{message:string}|null;data?:unknown}>,verb:string){if(busy)return;setBusy(true);setError(null);setNotice(null);try {const result=await fn();if(result.error)throw Error(result.error.message);setNotice(`${label} ${verb}.`);await loadData();}catch(e){setError(`Couldn't update ${label}: ${e instanceof Error?e.message:"Please check database permissions."}`)}finally{setBusy(false)}}
+ function togglePackage(pkg:Package){void updateStatus(pkg.name,!pkg.is_active,()=>togglePackageActive(pkg.id,!pkg.is_active),pkg.is_active?"deactivated":"reactivated")}
+ function toggleSize(size:PetSize){void updateStatus(size.label,!size.is_active,()=>toggleSizeActive(size.id,!size.is_active),size.is_active?"deactivated":"reactivated")}
+ function toggleAddon(addon:Addon){void updateStatus(addon.name,!addon.is_active,()=>toggleAddonActive(addon.id,!addon.is_active),addon.is_active?"deactivated":"reactivated")}
+ function archivePackage(pkg:Package){if(!pkg.is_active||!window.confirm(`Archive “${pkg.name}”? This preserves existing appointment history.`))return;void updateStatus(pkg.name,false,()=>togglePackageActive(pkg.id,false),"archived")}
+ function archiveSize(size:PetSize){if(!size.is_active||!window.confirm(`Archive “${size.label}”?`))return;void updateStatus(size.label,false,()=>toggleSizeActive(size.id,false),"archived")}
+ function archiveAddon(addon:Addon){if(!addon.is_active||!window.confirm(`Archive “${addon.name}”?`))return;void updateStatus(addon.name,false,()=>toggleAddonActive(addon.id,false),"archived")}
+ async function addAddon(categoryName:string){setError(null);const {data,error:e}=await createClient().from("addon_categories").select("id").eq("name",categoryName).single();if(e||!data){setError(e?.message??`Missing category: ${categoryName}`);return;}setAddonModal({mode:"add",categoryId:data.id});}
+ const filtered=packages.filter(p=>p.name.toLowerCase().includes(search.trim().toLowerCase()));
+ return <div className="mx-auto max-w-7xl pb-12">
+   <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-extrabold text-brand-pink">Service Management</h1><p className="mt-1 text-sm text-zinc-500">Manage packages, rates, and optional pet services.</p></div><input aria-label="Search packages" placeholder="Search packages…" value={search} onChange={e=>setSearch(e.target.value)} className="w-full max-w-xs rounded-full border border-pink-200 bg-white px-4 py-2 text-sm"/></div>
+   <div className="mt-6"><ServiceTabs active={tab} onChange={setTab}/></div>
+   {error&&<p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+   {notice&&!error&&<p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
+   {loading?<p className="mt-8 text-zinc-500">Loading services…</p>:<>
+     <section className="mt-7"><div className="flex items-center justify-between"><h2 className="font-bold text-zinc-800">Packages</h2><button type="button" disabled={busy} onClick={()=>setPackageModal({mode:"add"})} className="rounded-full border-2 border-brand-pink px-5 py-2 text-sm font-semibold text-brand-pink">+ Add Package</button></div><div className="mt-4 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(pkg=><PackageCard key={pkg.id} pkg={pkg} inclusions={inclusions.filter(i=>i.package_id===pkg.id)} pricing={pricing.filter(p=>p.package_id===pkg.id)} onEdit={()=>setPackageModal({mode:"edit",pkg})} onToggleActive={()=>togglePackage(pkg)} onArchive={()=>archivePackage(pkg)}/>)}{filtered.length===0&&<p className="col-span-full py-10 text-center text-sm text-zinc-500">No packages found.</p>}</div></section>
+     {tab!=="boarding"&&<section className="mt-10"><div className="flex items-center justify-between"><h2 className="font-bold text-zinc-800">Size Guide</h2><button type="button" onClick={()=>setSizeModal({mode:"add"})} className="rounded-full border-2 border-brand-pink px-5 py-2 text-sm font-semibold text-brand-pink">+ Add Size</button></div><div className="mt-4"><SizeGuideTable sizes={sizes} onEdit={size=>setSizeModal({mode:"edit",size})} onToggleActive={toggleSize} onArchive={archiveSize}/></div></section>}
+     <section className="mt-10"><div className="mb-3 flex justify-end"><button type="button" onClick={()=>void addAddon(addonCategoryName)} className="rounded-full border-2 border-brand-pink px-5 py-2 text-sm font-semibold text-brand-pink">+ Add Add-on</button></div><AddOnsSection title={addonCategoryName} addons={addons} prices={addonPrices} onEdit={addon=>setAddonModal({mode:"edit",addon,categoryId:addon.category_id})} onToggleActive={toggleAddon} onArchive={archiveAddon}/></section>
+     <section className="mt-10"><div className="mb-3 flex justify-end"><button type="button" onClick={()=>void addAddon("Ala Carte")} className="rounded-full border-2 border-brand-pink px-5 py-2 text-sm font-semibold text-brand-pink">+ Add À La Carte</button></div><AddOnsSection title="Ala Carte" addons={aLaCarteAddons} prices={aLaCartePrices} onEdit={addon=>setAddonModal({mode:"edit",addon,categoryId:addon.category_id})} onToggleActive={toggleAddon} onArchive={archiveAddon}/></section>
+   </>}
+   {packageModal&&<PackageFormModal serviceType={tab} sizes={sizes} existing={packageModal.pkg} existingInclusions={packageModal.pkg?inclusions.filter(i=>i.package_id===packageModal.pkg!.id):undefined} existingPricing={packageModal.pkg?pricing.filter(p=>p.package_id===packageModal.pkg!.id):undefined} onClose={()=>setPackageModal(null)} onSaved={()=>{setPackageModal(null);void loadData()}}/>}
+   {sizeModal&&<SizeFormModal serviceType={tab} existing={sizeModal.size} onClose={()=>setSizeModal(null)} onSaved={()=>{setSizeModal(null);void loadData()}}/>}
+   {addonModal&&<AddOnFormModal categoryId={addonModal.categoryId} existing={addonModal.addon} existingPrices={addonModal.addon?[...addonPrices,...aLaCartePrices].filter(p=>p.addon_id===addonModal.addon!.id):undefined} onClose={()=>setAddonModal(null)} onSaved={()=>{setAddonModal(null);void loadData()}}/>}
+ </div>
 }

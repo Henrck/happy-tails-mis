@@ -2,101 +2,12 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Addon, AddonPrice } from "@/lib/types/services";
-
-export default function AddOnFormModal({
-  categoryId,
-  existing,
-  existingPrices,
-  onClose,
-  onSaved,
-}: {
-  categoryId: string;
-  existing?: Addon;
-  existingPrices?: AddonPrice[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(existing?.name ?? "");
-  const [priceNote, setPriceNote] = useState(existing?.price_note ?? "");
-  const [prices, setPrices] = useState<{ size_label: string; price: string }[]>(
-    existingPrices?.length ? existingPrices.map((p) => ({ size_label: p.size_label, price: String(p.price) })) : [{ size_label: "Standard", price: "" }]
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function updateRow(i: number, field: "size_label" | "price", val: string) {
-    setPrices((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
-  }
-  function addRow() {
-    setPrices((prev) => [...prev, { size_label: "", price: "" }]);
-  }
-  function removeRow(i: number) {
-    setPrices((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  async function handleSave() {
-    if (!name.trim()) return;
-    setSaving(true);
-    setError(null);
-    const supabase = createClient();
-
-    let addonId = existing?.id;
-    if (existing) {
-      const { error: err } = await supabase.from("addons").update({ name, price_note: priceNote || null }).eq("id", existing.id);
-      if (err) { setSaving(false); setError(err.message); return; }
-      await supabase.from("addon_prices").delete().eq("addon_id", existing.id);
-    } else {
-      const { data, error: err } = await supabase.from("addons").insert({ category_id: categoryId, name, price_note: priceNote || null, sort_order: 99 }).select().single();
-      if (err || !data) { setSaving(false); setError(err?.message ?? "Failed to create add-on"); return; }
-      addonId = data.id;
-    }
-
-    const cleanPrices = prices.filter((p) => p.size_label.trim() && p.price);
-    if (cleanPrices.length > 0) {
-      await supabase.from("addon_prices").insert(cleanPrices.map((p) => ({ addon_id: addonId, size_label: p.size_label, price: parseFloat(p.price) || 0 })));
-    }
-
-    setSaving(false);
-    onSaved();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="bg-brand-pink px-5 py-3 sticky top-0">
-          <h3 className="text-white font-bold text-sm">{existing ? "Edit Add-on" : "Add Add-on"}</h3>
-        </div>
-        <div className="p-5 space-y-3">
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Price Note (optional, use instead of fixed prices)</label>
-            <input value={priceNote} onChange={(e) => setPriceNote(e.target.value)} placeholder="e.g. Free for 4+ nights" className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-zinc-600">Prices by size</label>
-            <div className="mt-1 space-y-1.5">
-              {prices.map((p, i) => (
-                <div key={i} className="flex gap-1.5">
-                  <input value={p.size_label} onChange={(e) => updateRow(i, "size_label", e.target.value)} placeholder="e.g. Small-Medium" className="flex-1 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  <input type="number" value={p.price} onChange={(e) => updateRow(i, "price", e.target.value)} placeholder="₱0" className="w-20 rounded-lg border border-zinc-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
-                  <button onClick={() => removeRow(i)} className="text-red-400 hover:text-red-600 px-1">✕</button>
-                </div>
-              ))}
-            </div>
-            <button onClick={addRow} className="mt-1.5 text-xs font-semibold text-brand-pink hover:underline">+ Add size tier</button>
-          </div>
-          {error && <p className="text-xs text-red-600">{error}</p>}
-          <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold text-sm py-2 rounded-full hover:border-zinc-400 transition-colors">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-50 text-white font-semibold text-sm py-2 rounded-full transition-colors">
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+type Row={size_label:string;price:string};
+export default function AddOnFormModal({categoryId,existing,existingPrices,onClose,onSaved}:{categoryId:string;existing?:Addon;existingPrices?:AddonPrice[];onClose:()=>void;onSaved:()=>void}){
+ const [name,setName]=useState(existing?.name??""),[priceNote,setPriceNote]=useState(existing?.price_note??"");
+ const [prices,setPrices]=useState<Row[]>(existingPrices?.length?existingPrices.map(p=>({size_label:p.size_label,price:String(p.price)})):[{size_label:"Standard",price:""}]);const [saving,setSaving]=useState(false),[error,setError]=useState<string|null>(null);
+ function update(i:number,patch:Partial<Row>){setPrices(old=>old.map((r,j)=>j===i?{...r,...patch}:r));}
+ async function save(){if(saving)return;setError(null);if(!name.trim()){setError("Enter an add-on name.");return;}const rows=prices.filter(p=>p.size_label.trim()||p.price.trim());if(!priceNote.trim()&&!rows.length){setError("Enter prices or a pricing note.");return;}if(rows.some(p=>!p.size_label.trim()||p.price.trim()===""||!Number.isFinite(Number(p.price))||Number(p.price)<0)){setError("All rows need a size label and a valid, nonnegative price.");return;}
+ setSaving(true);const db=createClient();try{let id=existing?.id;if(existing){const {error}=await db.from("addons").update({name:name.trim(),price_note:priceNote.trim()||null}).eq("id",existing.id);if(error)throw error;}else{const {data,error}=await db.from("addons").insert({category_id:categoryId,name:name.trim(),price_note:priceNote.trim()||null,sort_order:99,is_active:true}).select("id").single();if(error||!data)throw error??Error("Could not add service");id=data.id;}if(!id)throw Error("Missing add-on ID");if(existing){const {error}=await db.from("addon_prices").delete().eq("addon_id",id);if(error)throw error;}if(rows.length){const {error}=await db.from("addon_prices").insert(rows.map(p=>({addon_id:id,size_label:p.size_label.trim(),price:Number(p.price)})));if(error)throw error;}onSaved();}catch(e){setError(`${e instanceof Error?e.message:"Unable to save"}. Check saved rates before retrying.`)}finally{setSaving(false)}}
+ return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label={existing?"Edit add-on":"Add add-on"}><div className="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"><header className="bg-brand-pink px-6 py-4 text-base font-bold text-white">{existing?"Edit":"Add"} Add-on / À La Carte</header><div className="space-y-5 overflow-y-auto p-6"><label className="block text-sm font-semibold text-zinc-700">Service name<input value={name} onChange={e=>setName(e.target.value)} className="mt-2 w-full rounded-xl border border-zinc-300 px-3 py-3 text-sm"/></label><label className="block text-sm font-semibold text-zinc-700">Price note (optional)<input value={priceNote} onChange={e=>setPriceNote(e.target.value)} placeholder="e.g. Variable pricing" className="mt-2 w-full rounded-xl border border-zinc-300 px-3 py-3 text-sm"/></label><div><h3 className="text-sm font-semibold text-zinc-700">Prices by size</h3><p className="mt-1 text-xs text-zinc-500">For grooming, use Small–Medium and Large. XL and 2XL bookings use the Large rate.</p><div className="mt-3 space-y-2">{prices.map((row,i)=><div key={i} className="flex gap-2"><input aria-label="Size tier" placeholder="Small-Medium / Large" value={row.size_label} onChange={e=>update(i,{size_label:e.target.value})} className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-sm"/><input aria-label="Price" type="number" min="0" step="0.01" placeholder="₱" value={row.price} onChange={e=>update(i,{price:e.target.value})} className="w-28 rounded-xl border border-zinc-300 px-3 py-2 text-sm"/><button type="button" onClick={()=>setPrices(v=>v.filter((_,j)=>j!==i))} aria-label="Remove price row" className="px-2 text-rose-500">✕</button></div>)}</div><button type="button" onClick={()=>setPrices(v=>[...v,{size_label:"",price:""}])} className="mt-3 text-sm font-semibold text-brand-pink">+ Add price tier</button></div>{error&&<p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}</div><div className="grid grid-cols-2 gap-3 border-t border-zinc-100 bg-white p-5"><button type="button" disabled={saving} onClick={onClose} className="rounded-full border-2 border-zinc-300 py-3 text-sm font-semibold text-zinc-600">Cancel</button><button type="button" disabled={saving} onClick={()=>void save()} className="rounded-full bg-brand-pink py-3 text-sm font-semibold text-white disabled:opacity-50">{saving?"Saving…":"Save"}</button></div></div></div>;
 }
