@@ -20,7 +20,7 @@ import CustomerGroomingSelectionStep from "@/components/dashboard/booking/Custom
 import BoardingSelectionStep from "@/components/admin/pos/walk-in/BoardingSelectionStep";
 import AlaCarteSelectionStep from "@/components/admin/pos/walk-in/AlaCarteSelectionStep";
 import CustomerGroomingScheduleStep from "@/components/dashboard/booking/CustomerGroomingScheduleStep";
-import BoardingScheduleStep from "@/components/admin/pos/walk-in/BoardingScheduleStep";
+import BoardingScheduleStep from "@/components/dashboard/booking/CustomerBoardingScheduleStep";
 import AddAnotherServicePrompt from "@/components/dashboard/booking/AddAnotherServicePrompt";
 import MultiServiceSummaryStep from "@/components/dashboard/booking/MultiServiceSummaryStep";
 import CurrentLegSidebar from "@/components/dashboard/booking/CurrentLegSidebar";
@@ -129,13 +129,8 @@ export default function BookAppointmentPage() {
     setCompletedLegs((prev) => prev.filter((l) => l.id !== legId));
     setCurrentLeg(leg); loadLookupsForChoice(leg.serviceChoice); setStep("selection");
   }
-  // Customer online booking: once any grooming leg has been added, do not
-  // offer a second grooming appointment in the More Services step.
-  // Keep boarding and a-la-carte available when otherwise eligible.
   const hasGroomingLeg = completedLegs.some((leg) =>
-    leg.serviceChoice === "grooming" ||
-    leg.serviceChoice === "dog_grooming" ||
-    leg.serviceChoice === "cat_grooming"
+    leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming"
   );
   const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs)
     .filter((choice) => !hasGroomingLeg || !["grooming", "dog_grooming", "cat_grooming"].includes(choice));
