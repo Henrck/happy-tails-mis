@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPetsByCustomer, subscribeToCustomerPets } from "@/lib/supabase/appointments";
 import { insertCustomerPet } from "@/lib/utils/pet-size-guide";
 import type { Pet } from "@/lib/types/appointments";
+import Link from "next/link";
+import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import DashboardPetCard from "@/components/dashboard/DashboardPetCard";
 import { CustomerPetFields, useCustomerPetForm, blankCustomerPet } from "@/components/dashboard/CustomerPetFields";
 
@@ -30,7 +32,7 @@ function NewPetForm({ customerId, onClose, onSaved }: { customerId: string; onCl
     <form noValidate onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="add-pet-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
       <div className="mb-5 flex items-center justify-between"><h2 id="add-pet-title" className="text-xl font-bold">Add New Pet</h2><button type="button" disabled={saving} onClick={onClose} aria-label="Close">✕</button></div>
       <CustomerPetFields state={state}/>
-      {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
+    {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
       <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={saving} onClick={onClose} className="rounded-xl border px-5 py-3 text-sm">Cancel</button><button type="submit" disabled={saving || (!!state.form.weight.trim() ? false : state.loadingGuide || !!state.guideError)} className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Add Pet"}</button></div>
     </form>
   </div>;
@@ -43,6 +45,7 @@ export default function PetsListPage() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [page, setPage] = useState(1);
+  const [phoneComplete, setPhoneComplete] = useState(false);
   const totalPages = Math.max(1, Math.ceil(pets.length / PETS_PER_PAGE));
   const currentPage = Math.min(page, totalPages);
   const visiblePets = pets.slice((currentPage - 1) * PETS_PER_PAGE, currentPage * PETS_PER_PAGE);
@@ -55,7 +58,12 @@ export default function PetsListPage() {
     void createClient().auth.getUser().then(async ({ data }) => {
       if (!active) return;
       const id = data.user?.id;
-      if (id) { setUserId(id); await load(id); }
+      if (id) {
+        setUserId(id);
+        const { data: contact } = await createClient().from("customers").select("phone_number").eq("id", id).maybeSingle();
+        setPhoneComplete(hasValidCustomerPhone(contact?.phone_number));
+        await load(id);
+      }
       if (active) setLoading(false);
     });
     return () => { active = false; };
@@ -64,10 +72,11 @@ export default function PetsListPage() {
   return <div className="space-y-6 pb-8">
     <section className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-pink-100 bg-white p-6 shadow-sm">
       <div><p className="text-xs font-semibold uppercase tracking-widest text-brand-pink">Happy Tails / Customer</p><h1 className="mt-1 text-3xl font-bold text-slate-800">My Pets</h1><p className="mt-1 text-sm text-zinc-500">Manage your registered pets and keep their details updated.</p></div>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-full bg-brand-pink px-6 py-3 text-sm font-semibold text-white">+ Add New Pet</button>
+      <button type="button" onClick={() => { if (phoneComplete) setOpen(true); }} disabled={!phoneComplete} className="rounded-full bg-brand-pink px-6 py-3 text-sm font-semibold text-white">+ Add New Pet</button>
     </section>
+    {!loading && !phoneComplete && <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">Please <Link href="/account/profile" className="font-bold underline">add your phone number in My Account</Link> before registering a new pet. Your existing pet records remain accessible.</section>}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-600">{error}</p>}
-    {loading ? <p className="py-10 text-center text-zinc-500">Loading your pets…</p> : pets.length === 0 ? <section className="rounded-2xl border border-pink-100 bg-white p-12 text-center"><p className="font-semibold text-zinc-700">No pets registered yet.</p><button onClick={() => setOpen(true)} className="mt-4 rounded-full bg-brand-pink px-5 py-2 text-white">Add Pet</button></section> : <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{visiblePets.map((pet) => <DashboardPetCard key={pet.id} pet={pet}/>)}</div>}
+    {loading ? <p className="py-10 text-center text-zinc-500">Loading your pets…</p> : pets.length === 0 ? <section className="rounded-2xl border border-pink-100 bg-white p-12 text-center"><p className="font-semibold text-zinc-700">No pets registered yet.</p><button onClick={() => { if (phoneComplete) setOpen(true); }} disabled={!phoneComplete} className="mt-4 rounded-full bg-brand-pink px-5 py-2 text-white">Add Pet</button></section> : <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">{visiblePets.map((pet) => <DashboardPetCard key={pet.id} pet={pet}/>)}</div>}
     {!loading && pets.length > PETS_PER_PAGE && (
       <nav aria-label="My Pets pagination" className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-pink-100 bg-white px-4 py-3 sm:flex-row">
         <p className="text-xs font-medium text-zinc-500">
@@ -85,5 +94,5 @@ export default function PetsListPage() {
         </div>
       </nav>
     )}
-    {open && userId && <NewPetForm customerId={userId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); void load(userId); }}/>}</div>;
+    {open && userId && phoneComplete && <NewPetForm customerId={userId} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); void load(userId); }}/>}</div>;
 }

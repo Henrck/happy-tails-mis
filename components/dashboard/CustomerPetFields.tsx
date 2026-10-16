@@ -56,7 +56,7 @@ export function CustomerPetFields({ state }: { state: ReturnType<typeof useCusto
     <div className="sm:col-span-2 rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm">
       <span className="font-semibold text-zinc-700">Size Identifier: </span>
       <span className="font-bold text-brand-pink">{!form.weight.trim() ? "To be measured at the shop" : loadingGuide ? "Loading guide…" : size ? size.label : "Not determined"}</span>
-      {size && <p className="mt-1 text-xs text-zinc-500">Weight bracket: {size.weight_range} · Linked to Service Management</p>}
+      {size && <p className="mt-1 text-xs text-zinc-500">Weight bracket: {size.weight_range} · {form.species === "Cat" ? "HappyTails cat size policy" : "Linked to Service Management"}</p>}
       {form.weight.trim() && guideError && <p role="alert" className="mt-1 text-xs text-red-600">{guideError}</p>}
     </div>
     <p className="sm:col-span-2 text-xs text-zinc-500"><span className="text-red-500">*</span> Required fields. Weight and age may be entered or updated by staff during your visit.</p>

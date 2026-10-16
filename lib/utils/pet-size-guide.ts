@@ -2,6 +2,16 @@ import { createClient } from "@/lib/supabase/client";
 import type { PetSize } from "@/lib/types/services";
 import type { Species } from "@/lib/types/appointments";
 
+// HappyTails grooming pricing policy (not a universal veterinary classification).
+// Use only the shop's existing Small/Large cat tier IDs; no database changes.
+export const CAT_SMALL_MAX_KG = 5;
+export function catGroomingSizeGuide(rows: PetSize[]): PetSize[] {
+  return rows.filter((s) => ["small", "large"].includes(s.label.trim().toLowerCase()))
+    .map((s) => ({ ...s, weight_range: s.label.trim().toLowerCase() === "small"
+      ? `Up to ${CAT_SMALL_MAX_KG} kg` : `Above ${CAT_SMALL_MAX_KG} kg` }))
+    .sort((a,b) => (a.label.trim().toLowerCase() === "small" ? -1 : 1) - (b.label.trim().toLowerCase() === "small" ? -1 : 1));
+}
+
 export type SizeMatch = { id: string; label: string; weight_range: string };
 
 export async function getActiveSizeGuide(species: Species): Promise<PetSize[]> {
@@ -10,7 +20,15 @@ export async function getActiveSizeGuide(species: Species): Promise<PetSize[]> {
   const { data, error } = await supabase.from("pet_sizes").select("*")
     .eq("service_type", serviceType).eq("is_active", true).order("sort_order");
   if (error) throw new Error(`Unable to load ${species.toLowerCase()} size guide: ${error.message}`);
-  return (data ?? []) as PetSize[];
+  const rows = (data ?? []) as PetSize[];
+  if (species !== "Cat") return rows;
+  // Cat grooming has only Small and Large service tiers. Never select Medium.
+  const cats = catGroomingSizeGuide(rows);
+  if (!cats.some((s) => s.label.trim().toLowerCase() === "small") ||
+      !cats.some((s) => s.label.trim().toLowerCase() === "large")) {
+    throw new Error("Cat grooming requires active Small and Large tiers in Service Management.");
+  }
+  return cats;
 }
 
 // Reads editable Service Management weight ranges, not hardcoded size tiers.

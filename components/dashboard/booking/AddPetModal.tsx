@@ -1,6 +1,8 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { insertCustomerPet } from "@/lib/utils/pet-size-guide";
+import { createClient } from "@/lib/supabase/client";
+import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Pet } from "@/lib/types/appointments";
 import { CustomerPetFields, useCustomerPetForm } from "@/components/dashboard/CustomerPetFields";
 export default function AddPetModal({ customerId, onClose, onAdded }: { customerId: string; onClose: () => void; onAdded: (pet: Pet) => void }) {
@@ -11,6 +13,10 @@ export default function AddPetModal({ customerId, onClose, onAdded }: { customer
     e.preventDefault();
     if (saving || !state.validate()) return;
     setSaving(true); setError("");
+    const { data: contact, error: contactError } = await createClient().from("customers").select("phone_number").eq("id", customerId).maybeSingle();
+    if (contactError || !hasValidCustomerPhone(contact?.phone_number)) {
+      setError("Add a valid phone number in My Account before registering a pet."); setSaving(false); return;
+    }
     const { form, size } = state;
     const { data, error: saveError } = await insertCustomerPet({
       customer_id: customerId, name: form.name.trim(), species: form.species,

@@ -8,6 +8,8 @@ import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 import type { Customer } from "@/lib/types/users";
+import Link from "next/link";
+import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon, AddonPrice, PackagePricing } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg } from "@/lib/types/booking-leg";
@@ -127,8 +129,25 @@ export default function BookAppointmentPage() {
     setCompletedLegs((prev) => prev.filter((l) => l.id !== legId));
     setCurrentLeg(leg); loadLookupsForChoice(leg.serviceChoice); setStep("selection");
   }
-  const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs);
+  // Customer online booking: once any grooming leg has been added, do not
+  // offer a second grooming appointment in the More Services step.
+  // Keep boarding and a-la-carte available when otherwise eligible.
+  const hasGroomingLeg = completedLegs.some((leg) =>
+    leg.serviceChoice === "grooming" ||
+    leg.serviceChoice === "dog_grooming" ||
+    leg.serviceChoice === "cat_grooming"
+  );
+  const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs)
+    .filter((choice) => !hasGroomingLeg || !["grooming", "dog_grooming", "cat_grooming"].includes(choice));
   if (loading || !customer) return <p className="py-10 text-center text-sm text-zinc-400 sm:py-16">Loading…</p>;
+  if (!hasValidCustomerPhone(customer.phone_number)) return (
+    <section className="mx-auto max-w-xl rounded-3xl border border-rose-200 bg-white p-7 text-center shadow-sm">
+      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">!</span>
+      <h1 className="mt-4 text-xl font-bold text-zinc-800">Phone number required</h1>
+      <p className="mt-2 text-sm leading-6 text-zinc-600">Please add a valid mobile number to My Account before booking an appointment. HappyTails staff use it to contact you about your pet and appointment.</p>
+      <Link href="/account/profile" className="mt-5 inline-flex rounded-full bg-brand-pink px-6 py-3 text-sm font-semibold text-white">Complete My Account</Link>
+    </section>
+  );
   const legPets = currentLeg ? pets.filter((p) => currentLeg.petIds.includes(p.id)) : [];
   const isGrooming = currentLeg?.serviceChoice === "grooming" || currentLeg?.serviceChoice === "dog_grooming" || currentLeg?.serviceChoice === "cat_grooming";
   const showSidebar = (step === "selection" || step === "schedule") && legPets.length > 0;

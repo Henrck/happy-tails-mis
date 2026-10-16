@@ -7,6 +7,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { fetchUnreadNotificationCount, subscribeToNotifications } from "@/lib/supabase/notifications";
 import type { Customer } from "@/lib/types/users";
+import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 
 const topNavLinks = [
   { href: "/", label: "Home" },
@@ -46,6 +47,19 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+  const [phoneComplete, setPhoneComplete] = useState(hasValidCustomerPhone(customer.phone_number));
+  useEffect(() => {
+    let active = true;
+    const refreshPhone = async () => {
+      const { data } = await createClient().from("customers").select("phone_number").eq("id", customer.id).maybeSingle();
+      if (active) setPhoneComplete(hasValidCustomerPhone(data?.phone_number));
+    };
+    void refreshPhone();
+    window.addEventListener("happytails:contact-updated", refreshPhone);
+    const channel = createClient().channel(`customer-contact-${customer.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "customers", filter: `id=eq.${customer.id}` }, refreshPhone).subscribe();
+    return () => { active = false; window.removeEventListener("happytails:contact-updated", refreshPhone); void createClient().removeChannel(channel); };
+  }, [customer.id]);
 
   const loadUnreadCount = useCallback(async () => {
     const { count } = await fetchUnreadNotificationCount(customer.id);
@@ -106,7 +120,7 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
             {accountOpen && (
               <div className="absolute right-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-56 overflow-hidden rounded-2xl border border-pink-100 bg-white py-1 shadow-xl sm:w-56">
                 <div className="border-b border-pink-50 px-4 py-3"><p className="truncate text-sm font-semibold text-zinc-800">{customer.full_name}</p></div>
-                <Link href="/account/profile" onClick={() => setAccountOpen(false)} className="block px-4 py-3 text-sm text-zinc-600 hover:bg-brand-tint">My Account</Link>
+                <Link href="/account/profile" onClick={() => setAccountOpen(false)} className="block px-4 py-3 text-sm text-zinc-600 hover:bg-brand-tint">My Account{!phoneComplete && <span title="Phone number required" className="ml-2 inline-block h-2.5 w-2.5 rounded-full bg-red-500" />}</Link>
                 <button type="button" onClick={() => { setAccountOpen(false); setSignOutError(""); setLogoutOpen(true); }} className="w-full px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50">Sign Out</button>
               </div>
             )}
@@ -122,6 +136,7 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
               const isActive = pathname === tab.href || (tab.href === "/account/pets" && pathname.startsWith("/account/pets/"));
               return <Link key={tab.href} href={tab.href} aria-current={isActive ? "page" : undefined} className={`relative flex min-h-[48px] shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-xs font-medium transition-colors sm:px-4 sm:text-sm ${isActive ? "border-brand-pink text-brand-pink" : "border-transparent text-zinc-500 hover:text-brand-pink"}`}>
                 <TabIcon name={tab.icon} /><span>{tab.label}</span>
+                {tab.icon === "user" && !phoneComplete && <span aria-label="Phone number required" title="Complete your phone number" className="ml-1 inline-block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
                 {tab.icon === "bell" && unreadCount > 0 && <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-pink px-1 text-[10px] font-bold text-white">{unreadCount > 9 ? "9+" : unreadCount}</span>}
               </Link>;
             })}

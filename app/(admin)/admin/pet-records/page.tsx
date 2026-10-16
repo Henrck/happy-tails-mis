@@ -1,9 +1,5 @@
 "use client";
-// Real Pet's Record page — two tabs per your requested split: pets tied
-// to a registered customer account, and walk-in-only pets with no
-// account (pets.customer_id is null). This is a genuine schema
-// distinction, not a UI-only filter — customer_id was made nullable
-// from the start specifically for this case.
+
 import { useState, useEffect, useCallback } from "react";
 import { fetchPetsWithAccounts, fetchPetsWithoutAccounts } from "@/lib/supabase/appointments";
 import { fetchCustomers } from "@/lib/supabase/users";
@@ -16,6 +12,7 @@ import OwnerPanel from "@/components/admin/pet-records/OwnerPanel";
 import OwnerDetailModal from "@/components/admin/pet-records/OwnerDetailModal";
 
 type Tab = "registered" | "walk-in";
+const PAGE_SIZE = 9;
 
 export default function PetRecordsPage() {
   const [tab, setTab] = useState<Tab>("registered");
@@ -24,19 +21,18 @@ export default function PetRecordsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-
   const [filters, setFilters] = useState<PetFilterState>({ search: "", species: "all", ageSort: "none", breed: "" });
   const [ownerFilter, setOwnerFilter] = useState<string | "all">("all");
+  const [pages, setPages] = useState<Record<Tab, number>>({ registered: 1, "walk-in": 1 });
   const [selectedPet, setSelectedPet] = useState<Pet | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   const loadData = useCallback(async () => {
     const [regResult, walkResult, custResult] = await Promise.all([
-      fetchPetsWithAccounts(),
-      fetchPetsWithoutAccounts(),
-      fetchCustomers(),
+      fetchPetsWithAccounts(), fetchPetsWithoutAccounts(), fetchCustomers(),
     ]);
     if (regResult.error) { setLoadError(regResult.error); return; }
+    if (walkResult.error) { setLoadError(walkResult.error); return; }
     setLoadError(null);
     setRegisteredPets(regResult.pets);
     setWalkInPets(walkResult.pets);
@@ -45,7 +41,7 @@ export default function PetRecordsPage() {
 
   useEffect(() => {
     setLoading(true);
-    loadData().finally(() => setLoading(false));
+    void loadData().finally(() => setLoading(false));
   }, [loadData]);
 
   const pets = tab === "registered" ? registeredPets : walkInPets;
@@ -66,19 +62,35 @@ export default function PetRecordsPage() {
       const matchesOwner = tab === "walk-in" || ownerFilter === "all" || pet.customer_id === ownerFilter;
       return matchesSearch && matchesSpecies && matchesBreed && matchesOwner;
     });
-
     if (filters.ageSort === "youngest") result = [...result].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
     if (filters.ageSort === "oldest") result = [...result].sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
-
     return result;
   })();
 
+  const pageCount = Math.max(1, Math.ceil(filteredPets.length / PAGE_SIZE));
+  const currentPage = Math.min(pages[tab], pageCount);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const visiblePets = filteredPets.slice(startIndex, startIndex + PAGE_SIZE);
+
+  function setPage(next: number) {
+    setPages((previous) => ({ ...previous, [tab]: Math.max(1, Math.min(next, pageCount)) }));
+  }
+  function resetCurrentPage() {
+    setPages((previous) => ({ ...previous, [tab]: 1 }));
+  }
+  function changeFilters(next: PetFilterState) {
+    setFilters(next);
+    resetCurrentPage();
+  }
+  function changeOwnerFilter(next: string | "all") {
+    setOwnerFilter(next);
+    resetCurrentPage();
+  }
   function handlePetUpdated(updated: Pet) {
     const setter = tab === "registered" ? setRegisteredPets : setWalkInPets;
     setter((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     setSelectedPet(updated);
   }
-
   function switchTab(next: Tab) {
     setTab(next);
     setOwnerFilter("all");
@@ -94,83 +106,64 @@ export default function PetRecordsPage() {
   return (
     <div>
       <h1 className="text-3xl font-bold text-brand-pink">Pet's Record</h1>
-
-      <div className="mt-4 flex rounded-full border border-pink-200 bg-white p-1 w-fit">
-        <button
-          onClick={() => switchTab("registered")}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === "registered" ? "bg-brand-pink text-white" : "text-zinc-600"}`}
-        >
+      <div className="mt-4 flex w-fit rounded-full border border-pink-200 bg-white p-1">
+        <button type="button" onClick={() => switchTab("registered")} className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${tab === "registered" ? "bg-brand-pink text-white" : "text-zinc-600"}`}>
           Registered Owners <span className="ml-1 opacity-80">({registeredPets.length})</span>
         </button>
-        <button
-          onClick={() => switchTab("walk-in")}
-          className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors ${tab === "walk-in" ? "bg-brand-pink text-white" : "text-zinc-600"}`}
-        >
+        <button type="button" onClick={() => switchTab("walk-in")} className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${tab === "walk-in" ? "bg-brand-pink text-white" : "text-zinc-600"}`}>
           Walk-in Only <span className="ml-1 opacity-80">({walkInPets.length})</span>
         </button>
       </div>
-
-      {loadError && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{loadError}</p>}
-
-      <div className="mt-6 flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0">
-          <PetFilters filters={filters} onChange={setFilters} />
-
+      {loadError && <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{loadError}</p>}
+      <div className="mt-6 flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1">
+          <PetFilters filters={filters} onChange={changeFilters} />
           {tab === "registered" && ownerFilter !== "all" && (
             <div className="mt-3 flex items-center gap-2 text-sm text-zinc-600">
               Showing pets for <strong>{customerById(ownerFilter)?.full_name}</strong>
-              <button onClick={() => setOwnerFilter("all")} className="text-brand-pink hover:underline text-xs font-semibold">
-                Clear
-              </button>
+              <button type="button" onClick={() => changeOwnerFilter("all")} className="text-xs font-semibold text-brand-pink hover:underline">Clear</button>
             </div>
           )}
-
-          <div className="mt-4 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 content-start">
+          <div className="mt-4 grid grid-cols-1 content-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {loading ? (
-              <p className="col-span-full text-center text-zinc-400 py-10">Loading pets…</p>
+              <p className="col-span-full py-10 text-center text-zinc-400">Loading pets…</p>
             ) : filteredPets.length === 0 ? (
-              <p className="col-span-full text-center text-zinc-400 py-10">
-                {tab === "walk-in" ? "No walk-in-only pets recorded yet." : "No pets match your search/filter."}
+              <p className="col-span-full py-10 text-center text-zinc-400">
+                {tab === "walk-in" ? "No walk-in-only pets match your filters." : "No pets match your search/filter."}
               </p>
-            ) : (
-              filteredPets.map((pet) => (
-                <PetCard key={pet.id} pet={pet} ownerName={ownerNameFor(pet)} onView={() => setSelectedPet(pet)} />
-              ))
-            )}
+            ) : visiblePets.map((pet) => (
+              <PetCard key={pet.id} pet={pet} ownerName={ownerNameFor(pet)} onView={() => setSelectedPet(pet)} />
+            ))}
           </div>
+          {!loading && filteredPets.length > 0 && (
+            <nav aria-label="Pet records pagination" className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-pink-100 bg-white px-4 py-3">
+              <p className="text-xs text-zinc-500">
+                Showing <strong>{startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filteredPets.length)}</strong> of <strong>{filteredPets.length}</strong> pets
+              </p>
+              {pageCount > 1 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage === 1} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).filter((page) => page === 1 || page === pageCount || Math.abs(page - currentPage) <= 1).map((page, index, arr) => (
+                    <span key={page} className="inline-flex items-center gap-1.5">
+                      {index > 0 && page - arr[index - 1] > 1 && <span className="px-1 text-zinc-400" aria-hidden="true">…</span>}
+                      <button type="button" aria-label={`Page ${page}`} aria-current={currentPage === page ? "page" : undefined} onClick={() => setPage(page)} className={`min-h-8 min-w-8 rounded-full px-2 text-xs font-bold ${currentPage === page ? "bg-brand-pink text-white" : "border border-pink-200 text-brand-pink hover:bg-pink-50"}`}>{page}</button>
+                    </span>
+                  ))}
+                  <button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage === pageCount} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                </div>
+              )}
+            </nav>
+          )}
         </div>
-
         {tab === "registered" && (
-          <OwnerPanel
-            customers={customers}
-            pets={registeredPets}
-            onSelectOwner={setSelectedCustomer}
-            onShowAll={() => setOwnerFilter("all")}
-          />
+          <OwnerPanel customers={customers} pets={registeredPets} onSelectOwner={setSelectedCustomer} onShowAll={() => changeOwnerFilter("all")} />
         )}
       </div>
-
       {selectedPet && selectedPetOwner && (
-        <PetDetailModal
-          pet={selectedPet}
-          ownerName={selectedPetOwner.name}
-          ownerContact={selectedPetOwner.contact}
-          ownerAddress={selectedPetOwner.address}
-          onClose={() => setSelectedPet(null)}
-          onUpdated={handlePetUpdated}
-        />
+        <PetDetailModal pet={selectedPet} ownerName={selectedPetOwner.name} ownerContact={selectedPetOwner.contact} ownerAddress={selectedPetOwner.address} onClose={() => setSelectedPet(null)} onUpdated={handlePetUpdated} />
       )}
-
       {selectedCustomer && (
-        <OwnerDetailModal
-          customer={selectedCustomer}
-          pets={registeredPets}
-          onClose={() => setSelectedCustomer(null)}
-          onViewPet={(pet) => {
-            setSelectedCustomer(null);
-            setSelectedPet(pet);
-          }}
-        />
+        <OwnerDetailModal customer={selectedCustomer} pets={registeredPets} onClose={() => setSelectedCustomer(null)} onViewPet={(pet) => { setSelectedCustomer(null); setSelectedPet(pet); }} />
       )}
     </div>
   );
