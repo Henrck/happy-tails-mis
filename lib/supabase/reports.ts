@@ -1,6 +1,5 @@
-// Service Reports are the single operational view of Grooming, Boarding,
-// and Ala Carte appointments. Transaction Reports (formerly duplicate data)
-// has been merged into this view, including each pet's service charge.
+// Service reports use permanent per-pet service codes and stable, human-readable
+// appointment numbers. UUIDs remain the database's internal relationship keys.
 import { createClient } from "./client";
 import { fetchAppointments, type AppointmentRow } from "./appointment-management";
 import type { AppointmentStatus, AppointmentServiceType } from "@/lib/types/appointments";
@@ -40,17 +39,13 @@ function displayDate(iso: string): string {
   });
 }
 
-/** Uses permanent per-pet IDs from the migration, never computes IDs from sorting. */
+/** Database-assigned identifiers never depend on UI sorting, filtering, or pagination. */
 export async function fetchServiceReports(): Promise<{ rows: ServiceReport[]; error: string | null }> {
   const { rows: appointments, error } = await fetchAppointments();
   if (error) return { rows: [], error };
+  if (appointments.length === 0) return { rows: [], error: null };
 
   const petRowIds = appointments.flatMap((a) => a.pets.map((p) => p.appointmentPetId));
-  if (petRowIds.length === 0) return { rows: [], error: null };
-
-  // Fetch report codes in bounded chunks so a big report won't create a huge
-  // URL in the PostgREST .in() request. The original appointment loader stays
-  // untouched for all other features.
   const supabase = createClient();
   const codes = new Map<string, string>();
   for (let start = 0; start < petRowIds.length; start += 150) {
@@ -59,14 +54,26 @@ export async function fetchServiceReports(): Promise<{ rows: ServiceReport[]; er
       .from("appointment_pets")
       .select("id, report_code")
       .in("id", ids);
-    if (codeError) {
-      return {
-        rows: [],
-        error: `Could not load service IDs: ${codeError.message}. Apply the report-code SQL migration first.`,
-      };
+    if (codeError) return { rows: [], error: `Could not load service IDs: ${codeError.message}. Apply the report-code SQL migration first.` };
+    for (const pet of data ?? []) if (pet.report_code) codes.set(pet.id, pet.report_code);
+  }
+
+  // A second, bounded lookup keeps the normal appointment loader unchanged.
+  // appointment_number is the permanent public-facing integer; id remains UUID.
+  const appointmentNumbers = new Map<string, string>();
+  for (let start = 0; start < appointments.length; start += 150) {
+    const ids = appointments.slice(start, start + 150).map((a) => a.id);
+    const { data, error: numberError } = await supabase
+      .from("appointments")
+      .select("id, appointment_number")
+      .in("id", ids);
+    if (numberError) {
+      return { rows: [], error: `Could not load appointment numbers: ${numberError.message}. Apply the sequential appointment-number SQL migration first.` };
     }
-    for (const pet of data ?? []) {
-      if (pet.report_code) codes.set(pet.id, pet.report_code);
+    for (const appointment of data ?? []) {
+      if (appointment.appointment_number !== null && appointment.appointment_number !== undefined) {
+        appointmentNumbers.set(appointment.id, String(appointment.appointment_number));
+      }
     }
   }
 
@@ -77,17 +84,14 @@ export async function fetchServiceReports(): Promise<{ rows: ServiceReport[]; er
 
   const rows: ServiceReport[] = [];
   for (const appt of newestFirst) {
+    const appointmentNumber = appointmentNumbers.get(appt.id);
+    if (!appointmentNumber) return { rows: [], error: `Appointment number missing for ${appt.id}. Check the sequential appointment-number migration and table permissions.` };
     for (const pet of appt.pets) {
       const reportCode = codes.get(pet.appointmentPetId);
-      if (!reportCode) {
-        return {
-          rows: [],
-          error: `Service ID missing for appointment ${appt.id}. Check the report-code migration and table permissions.`,
-        };
-      }
+      if (!reportCode) return { rows: [], error: `Service ID missing for appointment ${appointmentNumber}. Check the report-code migration and table permissions.` };
       rows.push({
         id: reportCode,
-        appointmentId: appt.id,
+        appointmentId: appointmentNumber,
         appointmentPetId: pet.appointmentPetId,
         pet: pet.name,
         owner: appt.owner_name || "—",

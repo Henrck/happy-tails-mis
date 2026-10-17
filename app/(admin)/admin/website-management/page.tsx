@@ -115,7 +115,7 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="Boarding Banner" onEdit={() => openUploadFor("boarding_banner_background")}><BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} /></EditableSection>
           <EditableSection editMode={editMode} label="Boarding Pricing Photos" onEdit={() => setManagePricingImages(true)}><BoardingPricing smallKennelImage={get("boarding_small_kennel_image")?.image_url} bigKennelImage={get("boarding_big_kennel_image")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
-          <EditableSection editMode={editMode} label="Pet Products" onEdit={() => undefined}><ProductsCarousel products={products} /></EditableSection>
+          <ProductsCarousel products={products} />
           <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><AboutUs backgroundUrl={get("about_us_background")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
         </div>
