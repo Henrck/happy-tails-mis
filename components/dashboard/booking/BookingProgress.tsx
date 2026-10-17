@@ -2,10 +2,11 @@
 import { Check } from "lucide-react";
 import "./booking-progress-mobile.css";
 import { useEffect, useRef } from "react";
-export type BookingPhase = "pet-info" | "service" | "selection" | "schedule" | "add-more" | "summary";
+export type BookingPhase = "pet-info" | "service" | "waiver" | "selection" | "schedule" | "add-more" | "summary";
 const steps = [
   { key: "pet-info", label: "Choose a Pet" },
   { key: "service", label: "Select Service" },
+  { key: "waiver", label: "Service Waiver" },
   { key: "selection", label: "Details" },
   { key: "schedule", label: "Schedule" },
   { key: "add-more", label: "More Services" },
