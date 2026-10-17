@@ -1,0 +1,37 @@
+/* Scope the correction to Admin > Account Management. */
+.happytails-profile-responsive,
+.happytails-profile-responsive * {
+  box-sizing: border-box;
+}
+
+/* iOS Safari's native date field can have a larger intrinsic width than its grid cell. */
+.happytails-profile-responsive input[type="date"] {
+  display: block;
+  inline-size: 100%;
+  width: 100%;
+  min-inline-size: 0;
+  min-width: 0;
+  max-inline-size: 16rem;
+  max-width: min(100%, 16rem);
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
+}
+
+.happytails-profile-responsive input[type="date"]::-webkit-date-and-time-value {
+  min-width: 0;
+  text-align: left;
+}
+
+/* Keep each date/phone grid child shrinkable. */
+.happytails-profile-responsive div:has(> input[type="date"]),
+.happytails-profile-responsive div:has(> input[type="date"]) + div {
+  min-width: 0;
+}
+
+/* On mobile and tablets, date of birth and phone number should stack, not squeeze. */
+@media (max-width: 1279px) {
+  .happytails-profile-responsive .grid:has(> div > input[type="date"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
