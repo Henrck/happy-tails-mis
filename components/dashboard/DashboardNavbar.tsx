@@ -22,7 +22,7 @@ const accountTabs = [
   { href: "/account/pets", label: "My Pets", icon: "paw" },
   { href: "/account/appointments", label: "Book Appointment", icon: "calendar" },
   { href: "/account/notifications", label: "Notification", icon: "bell" },
-  { href: "/account/appointments/history", label: "Appointment History", icon: "history" },
+  { href: "/account/appointments/history", label: "Appointments", icon: "history" },
   { href: "/account/profile", label: "My Account", icon: "user" },
 ];
 

@@ -1,0 +1,16 @@
+/* Additive: mobile progress follows the active step without changing desktop layouts. */
+@media (max-width: 760px) {
+  .ht-booking-v4 .ht-booking-progress ol {
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    padding: 4px 2px 8px;
+  }
+  .ht-booking-v4 .ht-booking-progress ol::-webkit-scrollbar { display: none; }
+  .ht-booking-v4 .ht-booking-progress li { scroll-snap-align: center; }
+  .ht-booking-v4 .ht-booking-progress li.active { font-weight: 800; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ht-booking-v4 .ht-booking-progress ol { scroll-behavior: auto; }
+}

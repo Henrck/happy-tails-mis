@@ -86,7 +86,7 @@ export default function AppointmentHistoryPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-zinc-800">Appointment History</h1>
+      <h1 className="text-2xl font-semibold text-zinc-800">Appointments</h1>
       <div className="mt-4 flex gap-2 overflow-x-auto">
         {tabs.map((tab) => (
           <button
@@ -157,7 +157,7 @@ export default function AppointmentHistoryPage() {
           </div>
 
           {pageCount > 1 && (
-            <nav aria-label="Appointment history pages" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-pink-100 bg-white px-4 py-3">
+            <nav aria-label="Appointments pages" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-pink-100 bg-white px-4 py-3">
               <p className="text-xs text-zinc-500">
                 Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} appointments
               </p>
@@ -182,7 +182,7 @@ export default function AppointmentHistoryPage() {
         </>
       )}
 
-      {viewingId && <CustomerAppointmentDetailModal appointmentId={viewingId} onClose={() => setViewingId(null)} />}
+      {viewingId && <CustomerAppointmentDetailModal appointmentId={viewingId} onClose={() => setViewingId(null)} onCancelled={() => { if (userId) void loadAppointments(userId); }} />}
     </div>
   );
 }
