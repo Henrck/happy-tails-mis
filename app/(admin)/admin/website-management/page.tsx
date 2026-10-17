@@ -21,7 +21,6 @@ import GroomingPricing from "@/components/landing/GroomingPricing";
 import BoardingBanner from "@/components/landing/BoardingBanner";
 import BoardingPricing from "@/components/landing/BoardingPricing";
 import SpaBanner from "@/components/landing/SpaBanner";
-import SpaBenefits from "@/components/landing/SpaBenefits";
 import ProductsCarousel from "@/components/landing/ProductsCarousel";
 import AboutUs from "@/components/landing/AboutUs";
 import Gallery from "@/components/landing/Gallery";
@@ -61,7 +60,7 @@ export default function WebsiteManagementPage() {
     if (!hero.error) setHeroSlides(hero.slides.filter((s) => s.active));
   }
 
-  useEffect(() => { loadContent().finally(() => setLoading(false)); }, []);
+  useEffect(() => { void loadContent().finally(() => setLoading(false)); }, []);
   const get = (key: SiteSettingKey) => settings.find((s) => s.key === key);
   function openUploadFor(key: SiteSettingKey) {
     setUploadTarget(key);
@@ -96,20 +95,21 @@ export default function WebsiteManagementPage() {
   if (loading) return <p className="text-zinc-400">Loading live preview...</p>;
   return (
     <PoliciesModalProvider>
-      <div>
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex-1 text-3xl font-bold text-brand-pink">Website Management</h1>
-          <Link href="/admin/website-management/login" className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-brand-pink bg-white px-5 py-2 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-tint focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink">Login Configuration</Link>
-          <button type="button" onClick={() => setManagePetAvatars(true)} className="inline-flex items-center justify-center rounded-full border-2 border-brand-pink bg-white px-5 py-2 text-sm font-semibold text-brand-pink transition-colors hover:bg-brand-tint">Configure Pet Avatars</button>
-          <button onClick={() => setEditMode((v) => !v)} className={`rounded-full border-2 px-6 py-2 text-sm font-semibold transition-colors ${editMode ? "border-brand-pink bg-brand-pink text-white" : "border-brand-pink text-brand-pink hover:bg-brand-pink hover:text-white"}`}>{editMode ? "Done Editing" : "Edit"}</button>
+          <h1 className="min-w-0 flex-1 text-2xl font-bold text-brand-pink sm:text-3xl">Website Management</h1>
+          <Link href="/admin/website-management/login" className="inline-flex min-h-11 items-center justify-center rounded-full border-2 border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint">Login Configuration</Link>
+          <button type="button" onClick={() => setManagePetAvatars(true)} className="min-h-11 rounded-full border-2 border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint">Configure Pet Avatars</button>
+          <button type="button" onClick={() => setEditMode((v) => !v)} className={`min-h-11 rounded-full border-2 px-5 py-2 text-sm font-semibold ${editMode ? "border-brand-pink bg-brand-pink text-white" : "border-brand-pink text-brand-pink"}`}>{editMode ? "Done Editing" : "Edit"}</button>
         </div>
-        {error && <p className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">{error}</p>}
         {uploading && <p className="mt-4 text-sm font-semibold text-brand-pink">Uploading...</p>}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelected} />
-        <div className="mt-6 max-h-[75vh] overflow-y-auto overflow-hidden rounded-2xl border-4 border-zinc-800 shadow-xl">
+        <div className="mt-6 max-h-[75dvh] min-w-0 overflow-auto rounded-2xl border-2 border-zinc-800 shadow-xl sm:border-4">
           <EditableSection editMode={editMode} label="Logo" onEdit={() => openUploadFor("site_logo")}><Navbar logoUrl={get("site_logo")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Hero Slides" onEdit={() => setManageHeroSlides(true)}><Hero slides={heroSlides} logoUrl={get("site_logo")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Pet Services Photos" onEdit={() => setManageServicesImages(true)}><Services groomingImage={get("services_grooming_image")?.image_url} boardingImage={get("services_boarding_image")?.image_url} spaImage={get("services_spa_image")?.image_url} /></EditableSection>
+          <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
           <EditableSection editMode={editMode} label="Grooming Banner" onEdit={() => openUploadFor("grooming_banner_background")}><GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} /></EditableSection>
           <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><GroomingPricing basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Boarding Banner" onEdit={() => openUploadFor("boarding_banner_background")}><BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} /></EditableSection>
@@ -117,7 +117,6 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
           <ProductsCarousel products={products} />
           <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><AboutUs backgroundUrl={get("about_us_background")?.image_url} /></EditableSection>
-          <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
         </div>
         <p className="mt-3 text-xs text-zinc-400">This is the live site. Toggle "Edit" to reveal edit controls over each section.</p>
         {manageHeroSlides && <HeroSlidesManager onClose={async () => { setManageHeroSlides(false); await loadContent(); }} />}
