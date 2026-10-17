@@ -69,3 +69,55 @@ h1, h2, h3, h4 { font-family: var(--font-heading), sans-serif; font-weight: 600;
 @media (max-width: 1023px) {
   main > section { min-height: 0; height: auto; max-height: none; overflow: visible; }
 }
+
+/* Admin responsive input and date rendering: iPad Safari, tablets and phones. */
+/* Grid children can otherwise retain intrinsic widths of iOS date controls. */
+  main input, main textarea, main select { box-sizing: border-box; max-width: 100%; }
+  main input[type="date"] { min-width: 0; min-height: 42px; }
+
+  /* Profile page: give every field a shrinking grid track, not an intrinsic width. */
+  main > div.max-w-5xl .grid { min-width: 0; }
+  main > div.max-w-5xl .grid > div { min-width: 0; }
+  main > div.max-w-5xl input,
+  main > div.max-w-5xl textarea { min-width: 0; width: 100%; }
+  main > div.max-w-5xl input[type="date"] { appearance: auto; -webkit-appearance: auto; }
+
+  /* Report Management: fixed-column tables must scroll rather than clip dates. */
+  main table[class*="min-w-[1120px]"] td:nth-child(7),
+  main table[class*="min-w-[1150px]"] td:nth-child(7),
+  main table[class*="min-w-[1100px]"] td:nth-child(6) {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    min-width: 150px;
+  }
+  main table[class*="min-w-[1120px]"] col:nth-child(7),
+  main table[class*="min-w-[1150px]"] col:nth-child(7) { width: 15%; }
+  main table[class*="min-w-[1120px]"] { min-width: 1280px; }
+  main table[class*="min-w-[1150px]"] { min-width: 1350px; }
+  main table[class*="min-w-[1120px]"] td:last-child,
+  main table[class*="min-w-[1150px]"] td:last-child { white-space: nowrap; }
+
+/* At tablet widths the personal-information card cannot support three inputs. */
+@media (min-width: 640px) and (max-width: 1199px) {
+  main > div.max-w-5xl .lg\:grid-cols-3 { grid-template-columns: minmax(0, 1fr); }
+  main > div.max-w-5xl .lg\:col-span-2 { grid-column: auto; }
+  main > div.max-w-5xl .sm\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 639px) {
+  main > div.max-w-5xl .sm\:grid-cols-3,
+  main > div.max-w-5xl .sm\:grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
+  main > div.max-w-5xl .rounded-2xl.p-6 { padding: 1rem; }
+}
+
+/* Date widgets must remain usable in flex-wrapped report filters. */
+@media (max-width: 1199px) {
+  main input[type="date"] { flex: 0 1 190px; width: auto; max-width: 100%; }
+  main input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+  main input[type="date"]::-webkit-datetime-edit { padding: 0; }
+}
+@media (max-width: 639px) {
+  main input[type="date"] { flex: 1 1 100%; width: 100%; }
+  main input[type="date"] + span.text-zinc-300 { display: none; }
+}
