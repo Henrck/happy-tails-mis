@@ -71,19 +71,29 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     }
     setAvailability({}); setAvailabilityLoading(true); setAvailabilityError(null);
     const controller = new AbortController();
-    // One database request calculates availability for all 30-minute starts.
-    void createClient().rpc("happytails_grooming_slot_availability", {
-      p_date: scheduledDate,
-      p_pricing_ids: petSelections.map(p => p.packagePricingId as string),
-      p_groomer_ids: petSelections.map(p => p.groomerId),
-    }).abortSignal(controller.signal).then(({ data, error }) => {
-      if (!alive) return;
-      if (error) { setAvailabilityError("Unable to load live availability. Please try another date or refresh."); return; }
-      const results = Array.isArray(data) ? data as SlotAvailability[] : [];
-      setAvailability(Object.fromEntries(results.map(item => [item.time, item])));
-    }).catch(() => {
-      if (alive) setAvailabilityError("Unable to load live availability. Please refresh.");
-    }).finally(() => { if (alive) setAvailabilityLoading(false); });
+    // Supabase's query builder is PromiseLike, so use await rather than
+    // chaining .catch() or .finally(), which are not defined on PromiseLike.
+    const loadAvailability = async () => {
+      try {
+        const { data, error: queryError } = await createClient().rpc("happytails_grooming_slot_availability", {
+          p_date: scheduledDate,
+          p_pricing_ids: petSelections.map(p => p.packagePricingId as string),
+          p_groomer_ids: petSelections.map(p => p.groomerId),
+        }).abortSignal(controller.signal);
+        if (!alive) return;
+        if (queryError) {
+          setAvailabilityError("Unable to load live availability. Please try another date or refresh.");
+          return;
+        }
+        const results = Array.isArray(data) ? data as SlotAvailability[] : [];
+        setAvailability(Object.fromEntries(results.map(item => [item.time, item])));
+      } catch {
+        if (alive) setAvailabilityError("Unable to load live availability. Please refresh.");
+      } finally {
+        if (alive) setAvailabilityLoading(false);
+      }
+    };
+    void loadAvailability();
     return () => { alive = false; controller.abort(); };
   // Values are intentionally captured from the current pet selections for each new lookup.
   // eslint-disable-next-line react-hooks/exhaustive-deps
