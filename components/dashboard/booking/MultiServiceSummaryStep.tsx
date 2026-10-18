@@ -55,11 +55,7 @@ export default function MultiServiceSummaryStep({
   const grandTotal = legs.reduce((sum, leg) => sum + leg.petSelections.reduce((n, s) => n + s.lineAmount, 0), 0);
   const saveUnits = legs.reduce((n, leg) => {
     if (leg.serviceChoice === "boarding") return n + leg.petSelections.length;
-    if (leg.serviceChoice === "grooming") {
-      const dogCount = leg.petSelections.some((sel) => sel.pet.species === "Dog") ? 1 : 0;
-      const catCount = leg.petSelections.some((sel) => sel.pet.species === "Cat") ? 1 : 0;
-      return n + dogCount + catCount;
-    }
+    if (leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") return n + leg.petSelections.length;
     return n + 1;
   }, 0);
 
@@ -73,11 +69,12 @@ export default function MultiServiceSummaryStep({
     for (const leg of legs) {
       if (leg.serviceChoice !== "boarding") {
         const groups: Array<{ serviceType: AppointmentServiceType; selections: DraftPetSelection[] }> = [];
-        if (leg.serviceChoice === "grooming") {
-          const dogSelections = leg.petSelections.filter((sel) => sel.pet.species === "Dog");
-          const catSelections = leg.petSelections.filter((sel) => sel.pet.species === "Cat");
-          if (dogSelections.length) groups.push({ serviceType: "dog_grooming", selections: dogSelections });
-          if (catSelections.length) groups.push({ serviceType: "cat_grooming", selections: catSelections });
+        if (leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") {
+          // Each online grooming pet receives an independent start time and capacity reservation.
+          for (const sel of leg.petSelections) groups.push({
+            serviceType: sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming",
+            selections: [sel],
+          });
         } else {
           groups.push({ serviceType: toAppointmentServiceType(leg.serviceChoice), selections: leg.petSelections });
         }
@@ -88,6 +85,14 @@ export default function MultiServiceSummaryStep({
           return;
         }
         for (const group of groups) {
+          const isGroomingGroup = group.serviceType === "dog_grooming" || group.serviceType === "cat_grooming";
+          const start = isGroomingGroup
+            ? (group.selections[0] as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime
+            : leg.scheduledTime;
+          if (isGroomingGroup && (!start || !/^\d{2}:\d{2}$/.test(start))) {
+            setError(`A grooming time is missing for ${group.selections[0].pet.name}. Please edit the schedule.`);
+            setSaving(false); submitLock.current = false; return;
+          }
           writes.push({
             service_type: group.serviceType,
             is_walk_in: false,
@@ -96,7 +101,7 @@ export default function MultiServiceSummaryStep({
             owner_contact: customer.phone_number ?? "",
             owner_address: customer.address ?? null,
             scheduled_date: leg.scheduledDate,
-            scheduled_time: leg.scheduledTime,
+            scheduled_time: start ?? null,
             drop_off_at: null,
             pick_up_at: null,
             special_requests: leg.specialRequests || null,
@@ -203,6 +208,8 @@ export default function MultiServiceSummaryStep({
                         <p className="text-sm text-zinc-600">Package: {pkg?.name ?? (sel.packageId ? "—" : "Ala Carte")}</p>
                         {size && <p className="text-sm text-zinc-600">Size: {size.label}</p>}
                         {groomer && <p className="text-sm text-zinc-600">Groomer: {groomer.name}</p>}
+                        {(leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") &&
+                          <p className="text-sm text-zinc-600">Start: {formatTime12h((sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime ?? null)}</p>}
                       </>
                     )}
                     {petAddons.length > 0 && <p className="text-sm text-zinc-600">Add-ons: {petAddons.join(", ")}</p>}
@@ -213,7 +220,7 @@ export default function MultiServiceSummaryStep({
               {!isBoarding && (
                 <div className="mt-3 border-t border-dashed border-pink-100 pt-3 text-sm text-zinc-600">
                   <p>Date: {formatDate(leg.scheduledDate)}</p>
-                  <p>Time: {formatTime12h(leg.scheduledTime)}</p>
+                  {leg.serviceChoice === "ala_carte" && <p>Time: {formatTime12h(leg.scheduledTime)}</p>}
                 </div>
               )}
               {leg.specialRequests && <p className="mt-2 text-sm text-zinc-600">Notes: {leg.specialRequests}</p>}

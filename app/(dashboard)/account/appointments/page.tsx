@@ -1,15 +1,15 @@
 "use client";
-// Customer booking: service-specific waiver is required before configuring each new booking leg.
+// Booking workflow: existing data sources, pricing, multiple-pet and multi-service logic preserved.
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { fetchPetsByCustomer } from "@/lib/supabase/appointments";
 import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
-import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 import type { Customer } from "@/lib/types/users";
+import Link from "next/link";
+import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon, AddonPrice, PackagePricing } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg } from "@/lib/types/booking-leg";
@@ -24,6 +24,7 @@ import BoardingScheduleStep from "@/components/dashboard/booking/CustomerBoardin
 import AddAnotherServicePrompt from "@/components/dashboard/booking/AddAnotherServicePrompt";
 import MultiServiceSummaryStep from "@/components/dashboard/booking/MultiServiceSummaryStep";
 import CurrentLegSidebar from "@/components/dashboard/booking/CurrentLegSidebar";
+import OnlineCapacityGroomingSchedule from "@/components/dashboard/booking/OnlineCapacityGroomingSchedule";
 import CustomerWaiverStep from "@/components/dashboard/booking/CustomerWaiverStep";
 import BookingProgress, { type BookingPhase } from "@/components/dashboard/booking/BookingProgress";
 
@@ -95,11 +96,7 @@ export default function BookAppointmentPage() {
   function startNextLeg(queue: BookingLeg[]) {
     if (queue.length > 0) {
       const [next, ...rest] = queue;
-      setQueuedLegs(rest);
-      setCurrentLeg(next);
-      loadLookupsForChoice(next.serviceChoice);
-      setWaiverBackStep("service");
-      setStep("waiver");
+      setQueuedLegs(rest); setCurrentLeg(next); loadLookupsForChoice(next.serviceChoice); setWaiverBackStep("service"); setStep("waiver");
     } else setStep("service");
   }
   function handlePetInfoNext() {
@@ -114,26 +111,20 @@ export default function BookAppointmentPage() {
     }).map((p) => p.id);
     const leg = emptyLeg(choice, eligiblePetIds);
     setWaiverBackStep(step === "add-more" ? "add-more" : "service");
-    setCurrentLeg(leg);
-    loadLookupsForChoice(choice);
-    setStep("waiver");
+    setCurrentLeg(leg); loadLookupsForChoice(choice); setStep("waiver");
   }
-  function handleWaiverDeclined() {
-    setCurrentLeg(null);
-    setStep(waiverBackStep);
-  }
+  function handleWaiverDeclined() { setCurrentLeg(null); setStep(waiverBackStep); }
   function handleLegSelectionChange(selections: DraftPetSelection[]) {
-    if (currentLeg) setCurrentLeg({ ...currentLeg, petSelections: selections });
+    setCurrentLeg((leg) => leg ? { ...leg, petSelections: selections } : leg);
   }
   function handleRemovePetFromLeg(petId: string) {
     if (!currentLeg || currentLeg.petIds.length <= 1) return;
     setCurrentLeg({ ...currentLeg, petIds: currentLeg.petIds.filter((id) => id !== petId),
       petSelections: currentLeg.petSelections.filter((sel) => sel.pet.id !== petId) });
   }
-  function handleLegScheduleConfirmed() {
+  function handleLegScheduleConfirmed(confirmedSelections?: DraftPetSelection[]) {
     if (!currentLeg) return;
-    setCompletedLegs((prev) => [...prev, currentLeg]);
-    setCurrentLeg(null);
+    setCompletedLegs((prev) => [...prev, confirmedSelections ? { ...currentLeg, petSelections: confirmedSelections } : currentLeg]); setCurrentLeg(null);
     if (queuedLegs.length > 0) startNextLeg(queuedLegs);
     else setStep("add-more");
   }
@@ -172,8 +163,7 @@ export default function BookAppointmentPage() {
         {step === "service" && <div className="ht-booking-services"><CustomerServiceChoiceStep choice={currentLeg?.serviceChoice ?? null}
           onChange={handleServiceChosen} onBack={() => setStep("pet-info")}
           onNext={() => setStep("waiver")} petSpecies={selectedSpecies} /></div>}
-        {step === "waiver" && currentLeg && <CustomerWaiverStep serviceType={currentLeg.serviceChoice}
-          onBack={handleWaiverDeclined} onAgree={() => setStep("selection")} />}
+        {step === "waiver" && currentLeg && <CustomerWaiverStep serviceType={currentLeg.serviceChoice} onBack={handleWaiverDeclined} onAgree={() => setStep("selection")} />}
         {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingSelectionStep
           pets={legPets} selections={currentLeg.petSelections}
           alreadyGroomedPetIds={completedLegs.filter((leg) => leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming" || leg.serviceChoice === "grooming").flatMap((leg) => leg.petIds)}
@@ -199,7 +189,15 @@ export default function BookAppointmentPage() {
           onRequestsChange={(text) => setCurrentLeg((l) => l && { ...l, specialRequests: text })}
           onSelectionsChange={handleLegSelectionChange} onBack={() => setStep("selection")}
           onConfirmed={handleLegScheduleConfirmed} /></div>}
-        {step === "schedule" && currentLeg && (currentLeg.serviceChoice === "grooming" || currentLeg.serviceChoice === "dog_grooming" || currentLeg.serviceChoice === "cat_grooming" || currentLeg.serviceChoice === "ala_carte") && <div className="ht-booking-schedule"><CustomerGroomingScheduleStep
+        {step === "schedule" && currentLeg && isGrooming && <div className="ht-booking-schedule"><OnlineCapacityGroomingSchedule
+          petSelections={currentLeg.petSelections} scheduledDate={currentLeg.scheduledDate}
+          scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
+          onDateChange={(date) => setCurrentLeg((l) => l && { ...l, scheduledDate: date })}
+          onTimeChange={(time) => setCurrentLeg((l) => l && { ...l, scheduledTime: time })}
+          onRequestsChange={(text) => setCurrentLeg((l) => l && { ...l, specialRequests: text })}
+          onSelectionsChange={handleLegSelectionChange}
+          onBack={() => setStep("selection")} onConfirmed={(items) => handleLegScheduleConfirmed(items)} /></div>}
+        {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <div className="ht-booking-schedule"><CustomerGroomingScheduleStep
           customer={customer} ownerContact={customer.phone_number ?? ""} petSelections={currentLeg.petSelections}
           groomers={groomers} scheduledDate={currentLeg.scheduledDate}
           scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
