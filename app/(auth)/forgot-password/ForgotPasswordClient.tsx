@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 type Step = "email" | "code" | "password";
 type Props = { landscapeUrl: string; portraitUrl: string; customPortrait: boolean };
 const RESEND_COOLDOWN_SECONDS = 60;
+const RECOVERY_CODE_LENGTH = 6;
 
 function validatePassword(password: string) {
   return {
@@ -64,7 +65,7 @@ export default function ForgotPasswordClient({ landscapeUrl, portraitUrl, custom
       setEmail(normalizedEmail);
       setCode("");
       setResendSeconds(RESEND_COOLDOWN_SECONDS);
-      setMessage("If an account exists for this email, a verification code has been sent.");
+      setMessage("If this email belongs to a HappyTails account, a 6-digit password reset code will arrive shortly. Check your inbox and spam folder.");
       setStep("code");
     } catch { setError("We couldn't send the code right now. Please try again."); }
     finally { setLoading(false); }
@@ -75,12 +76,12 @@ export default function ForgotPasswordClient({ landscapeUrl, portraitUrl, custom
     if (loading) return;
     clearStatus();
     const normalizedCode = code.replace(/\D/g, "");
-    if (!/^\d{8}$/.test(normalizedCode)) { setError("Enter the 8-digit verification code."); return; }
+    if (normalizedCode.length !== RECOVERY_CODE_LENGTH || !/^\d+$/.test(normalizedCode)) { setError("Enter the 6-digit password reset code from your email."); return; }
     setLoading(true);
     try {
       const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: normalizedCode, type: "recovery" });
       if (verifyError) { setError(verifyError.message); return; }
-      setMessage("Code verified. You can now create a new password.");
+      setMessage("Your reset code was verified. Set a new password for your HappyTails account.");
       setPassword(""); setConfirmPassword(""); setStep("password");
     } catch { setError("Verification failed. Please try again."); }
     finally { setLoading(false); }
@@ -104,9 +105,9 @@ export default function ForgotPasswordClient({ landscapeUrl, portraitUrl, custom
   }
 
   const subtitles: Record<Step, string> = {
-    email: "Enter your email and we'll send you a verification code.",
-    code: "Enter the 8-digit code sent to your email.",
-    password: "Create a new password to secure your account.",
+    email: "Enter the email address linked to your HappyTails account to request a password reset code.",
+    code: "Enter the 6-digit password reset code sent to your email.",
+    password: "Choose a new password and confirm it to finish resetting your account password.",
   };
 
   return (
@@ -135,10 +136,10 @@ export default function ForgotPasswordClient({ landscapeUrl, portraitUrl, custom
 
           {step === "code" && <form onSubmit={verifyCode} className="ht-recovery-form">
             <label className="ht-recovery-label" htmlFor="ht-reset-code">Verification Code</label>
-            <div className="ht-recovery-field"><KeyRound aria-hidden="true" /><input className="ht-recovery-code" id="ht-reset-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8} placeholder="00000000" required disabled={loading} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))} /></div>
-            <p className="ht-recovery-help">Check the inbox for <strong>{email}</strong>.</p>
-            <button className="ht-recovery-primary" type="submit" disabled={loading || code.length !== 8}>{loading ? "Verifying..." : "Verify Code"}<ArrowRight aria-hidden="true" size={22} /></button>
-            <div className="ht-recovery-actions"><button type="button" disabled={loading} onClick={() => { clearStatus(); setStep("email"); }}>Change email</button><button type="button" disabled={loading || resendSeconds > 0} onClick={() => void sendCode()}>{resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend code"}</button></div>
+            <div className="ht-recovery-field"><KeyRound aria-hidden="true" /><input className="ht-recovery-code" id="ht-reset-code" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={RECOVERY_CODE_LENGTH} placeholder="000000" required disabled={loading} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, RECOVERY_CODE_LENGTH))} /></div>
+            <p className="ht-recovery-help">Check the inbox and spam folder for <strong>{email}</strong>. Use the latest code if you requested another one.</p>
+            <button className="ht-recovery-primary" type="submit" disabled={loading || code.length !== RECOVERY_CODE_LENGTH}>{loading ? "Verifying..." : "Verify Code"}<ArrowRight aria-hidden="true" size={22} /></button>
+            <div className="ht-recovery-actions"><button type="button" disabled={loading} onClick={() => { clearStatus(); setStep("email"); }}>Change email</button><button type="button" disabled={loading || resendSeconds > 0} onClick={() => void sendCode()}>{resendSeconds > 0 ? `Resend in ${resendSeconds}s` : "Resend reset code"}</button></div>
           </form>}
 
           {step === "password" && <form onSubmit={updatePassword} className="ht-recovery-form">
