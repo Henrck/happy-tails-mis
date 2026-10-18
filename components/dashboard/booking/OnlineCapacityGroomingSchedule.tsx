@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { DraftPetSelection } from "@/lib/types/appointments";
@@ -42,6 +42,10 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
   onConfirmed: (items: DraftPetSelection[]) => void;
 }) {
   const [plan, setPlan] = useState<Planned[] | null>(null);
+  const planRef = useRef<Planned[] | null>(null);
+  const [availabilityRefresh, setAvailabilityRefresh] = useState(0);
+  const availabilityDateRef = useRef<string | null>(null);
+  const [availabilityNotice, setAvailabilityNotice] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Record<string, SlotAvailability>>({});
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
@@ -69,7 +73,8 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     if (!scheduledDate || !petSelections.length) {
       setAvailability({}); setAvailabilityLoading(false); setAvailabilityError(null); return;
     }
-    setAvailability({}); setAvailabilityLoading(true); setAvailabilityError(null);
+    if (availabilityDateRef.current !== scheduledDate) { setAvailability({}); availabilityDateRef.current = scheduledDate; }
+    setAvailabilityLoading(true); setAvailabilityError(null);
     const controller = new AbortController();
     // Supabase's query builder is PromiseLike, so use await rather than
     // chaining .catch() or .finally(), which are not defined on PromiseLike.
@@ -86,7 +91,20 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
           return;
         }
         const results = Array.isArray(data) ? data as SlotAvailability[] : [];
-        setAvailability(Object.fromEntries(results.map(item => [item.time, item])));
+        const next = Object.fromEntries(results.map(item => [item.time, item]));
+        setAvailability(next);
+        // Availability is only an estimate. Never silently move a previously
+        // reviewed pet to another start time after another customer books.
+        const selected = planRef.current;
+        if (selected) {
+          const demand: Record<string, number> = {};
+          for (const pet of selected) demand[pet.time] = (demand[pet.time] ?? 0) + 1;
+          if (Object.entries(demand).some(([time, count]) => (next[time]?.remaining ?? 0) < count)) {
+            planRef.current = null;
+            setPlan(null);
+            setAvailabilityNotice("Another customer booked one of your selected times. Please choose a new timeslot and review the updated schedule.");
+          }
+        }
       } catch {
         if (alive) setAvailabilityError("Unable to load live availability. Please refresh.");
       } finally {
@@ -97,6 +115,17 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     return () => { alive = false; controller.abort(); };
   // Values are intentionally captured from the current pet selections for each new lookup.
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduledDate, petSelections.length, availabilityRefresh]);
+
+  // Periodic refresh remains reliable even when Realtime publications/RLS are
+  // not configured to expose other customers' reservation events.
+  useEffect(() => {
+    if (!scheduledDate || !petSelections.length) return;
+    const refresh = () => { if (document.visibilityState === "visible") setAvailabilityRefresh(v => v + 1); };
+    const timer = window.setInterval(refresh, 10000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
   }, [scheduledDate, petSelections.length]);
 
   async function calculate(date: string, time: string): Promise<Planned[] | null> {
@@ -117,28 +146,29 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
       if (failure) throw new Error(failure.message);
       const result = data as Planned[];
       if (!Array.isArray(result) || result.length !== petSelections.length) throw new Error("Could not obtain a complete schedule for every pet.");
-      setPlan(result); return result;
+      planRef.current = result; setPlan(result); return result;
     } catch (e) {
-      setPlan(null);
+      planRef.current = null; setPlan(null);
       setError(e instanceof Error ? e.message : "Unable to calculate grooming availability.");
       return null;
     } finally { setBusy(false); }
   }
   function changeDate(date: string) {
-    setPlan(null); setError(null); onDateChange(date); onTimeChange("");
+    planRef.current = null; setPlan(null); setAvailabilityNotice(null); setError(null); onDateChange(date); onTimeChange("");
     onSelectionsChange(petSelections.map(p => ({ ...p, groomingScheduledTime: undefined })));
   }
   function changeTime(time: string) {
-    setPlan(null); setError(null); onTimeChange(time);
+    planRef.current = null; setPlan(null); setAvailabilityNotice(null); setError(null); onTimeChange(time);
     onSelectionsChange(petSelections.map(p => ({ ...p, groomingScheduledTime: undefined })));
     if (scheduledDate) void calculate(scheduledDate, time);
   }
   async function proceed() {
     if (!scheduledDate || !scheduledTime || busy) return;
+    const previous = planRef.current;
     const checked = await calculate(scheduledDate, scheduledTime);
     if (!checked) return;
-    if (plan && JSON.stringify(plan) !== JSON.stringify(checked)) {
-      setError("Availability changed. Please review the updated pet times and click Next again."); return;
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(checked)) {
+      setError("Availability changed while you were reviewing. Please check the newly proposed pet times and click Next again."); return;
     }
     const finalized = petSelections.map((pet, i) => ({ ...pet, groomingScheduledTime: checked[i].time }));
     onSelectionsChange(finalized);
@@ -166,7 +196,7 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
       <p className="mt-2 text-center text-[11px] text-zinc-500">Select a day to see available 30-minute start times.</p>
     </section>
     <div><div className="mb-2 flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-semibold text-zinc-800">Preferred first start time</p>
-      <span className="text-xs text-zinc-500" aria-live="polite">{availabilityLoading ? "Checking availability…" : scheduledDate ? "Live estimates for your selected pets" : "Select a date first"}</span></div>
+      <span className="text-xs text-zinc-500" aria-live="polite">{availabilityLoading ? "Checking availability…" : scheduledDate ? "Automatically refreshed every 10 seconds" : "Select a date first"}</span></div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="Grooming time slot availability">
         {slots.map(t => {
           const past = !scheduledDate || scheduledDate < today || (scheduledDate === today && t <= timeNow);
@@ -184,6 +214,7 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
         })}
       </div>
       <p className="mt-2 text-xs leading-5 text-zinc-500">Each time starts with 3 pet slots. Full means all 3 are taken. For multi-pet bookings, remaining pets are offered later available times. Availability is checked again when you book.</p>
+      {availabilityNotice && <p role="alert" className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{availabilityNotice}</p>}
       {availabilityError && <p role="alert" className="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">{availabilityError}</p>}
     </div>
     {busy && <p className="text-sm text-zinc-500">Checking timeslot availability and arranging pets…</p>}

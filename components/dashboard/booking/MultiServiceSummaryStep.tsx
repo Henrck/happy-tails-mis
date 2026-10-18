@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
 import { toAppointmentServiceType } from "@/lib/types/walk-in-draft";
 import type { BookingLeg } from "@/lib/types/booking-leg";
@@ -135,6 +136,32 @@ export default function MultiServiceSummaryStep({
     }
 
     try {
+      // Recheck the exact times the customer reviewed. The planning RPC can
+      // propose later starts, but checkout must NEVER accept those silently.
+      for (const leg of legs) {
+        if (!leg.scheduledDate || !["grooming", "dog_grooming", "cat_grooming"].includes(leg.serviceChoice)) continue;
+        const expected = leg.petSelections.map(sel => (sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime);
+        if (!leg.scheduledTime || expected.some(value => !value)) {
+          setError("A grooming start time is missing. Please edit the schedule before confirming.");
+          submitLock.current = false; return;
+        }
+        const { data, error: planningError } = await createClient().rpc("happytails_grooming_plan", {
+          p_date: leg.scheduledDate,
+          p_pricing_ids: leg.petSelections.map(sel => sel.packagePricingId as string),
+          p_preferred_start: leg.scheduledTime,
+          p_groomer_ids: leg.petSelections.map(sel => sel.groomerId),
+        });
+        if (planningError) {
+          setError(`Could not verify your grooming times: ${planningError.message}. Please edit the schedule.`);
+          submitLock.current = false; return;
+        }
+        const refreshed = data as Array<{time: string}>;
+        if (!Array.isArray(refreshed) || refreshed.length !== expected.length ||
+            refreshed.some((item, i) => item.time !== expected[i])) {
+          setError("One or more grooming times are no longer available. Your booking has NOT been submitted or rescheduled. Please click Edit on the grooming service, select available times, and review again.");
+          submitLock.current = false; return;
+        }
+      }
       const { appointments, error: err } = await createAppointmentsAtomic(writes);
       if (err) {
         setError(`The booking was not completed: ${err}`);
