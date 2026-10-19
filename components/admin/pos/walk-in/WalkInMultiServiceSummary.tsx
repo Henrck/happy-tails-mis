@@ -80,7 +80,9 @@ export default function WalkInMultiServiceSummary({ customer, owner, legs, packa
             }
             writes.push({ ...input(sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [sel], leg), scheduled_time: time });
           }
-        } else writes.push(input(leg.serviceChoice, leg.petSelections, leg));
+        } else if (leg.serviceChoice === "ala_carte") {
+          writes.push(input("ala_carte", leg.petSelections, leg));
+        }
       }
     }
     if (!writes.length) { setError("No appointments are ready to save."); return; }
