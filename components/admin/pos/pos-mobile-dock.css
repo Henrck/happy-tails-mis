@@ -1,0 +1,16 @@
+/* Dock applies only when there isn't enough space for the two-column POS. */
+.ht-pos-mobile-dock,.ht-pos-cart-backdrop,.ht-pos-close-cart,.ht-pos-cart-slot{display:none}
+.ht-pos-cart{width:20rem;flex-shrink:0;height:calc(100vh - 8rem);position:sticky;top:6rem}
+@media(max-width:1100px){
+  main:has(.ht-pos-cart) > div:has(> .ht-pos-cart){display:block!important}
+  main:has(.ht-pos-cart){padding-bottom:90px!important}
+  main:has(.ht-pos-cart) > div:has(> .ht-pos-cart) > div:first-child{width:100%;min-width:0}
+  .ht-pos-cart-slot{display:block;height:80px}
+  .ht-pos-mobile-dock{display:flex;align-items:center;justify-content:space-between;gap:12px;position:fixed;z-index:30;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));border-radius:16px;background:#f53d93;color:#fff;padding:13px 15px;box-shadow:0 6px 24px #80285455;text-align:left;font-size:14px;min-height:56px}
+  .ht-pos-mobile-dock-action{background:#fff;color:#d42b7c;border-radius:999px;padding:8px 11px;white-space:nowrap;font-size:12px}
+  .ht-pos-cart{display:none;position:fixed;z-index:40;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));top:auto;width:auto;height:min(78dvh,660px);max-height:calc(100dvh - 40px);box-shadow:0 12px 45px #0004}
+  .ht-pos-cart.ht-pos-cart-open{display:flex}
+  .ht-pos-cart-backdrop{display:block;position:fixed;inset:0;background:#0008;z-index:35}
+  .ht-pos-close-cart{display:inline-flex;align-items:center;justify-content:center;border:1px solid #ffffff70;border-radius:999px;width:36px;height:36px}
+}
+@media(max-width:390px){.ht-pos-mobile-dock{gap:5px;font-size:12px;padding:10px}.ht-pos-mobile-dock-action{padding:7px 9px}}

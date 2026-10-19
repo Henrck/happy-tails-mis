@@ -1,0 +1,20 @@
+/* A vertical progress rail + pet sidebar is too narrow on portrait tablets. */
+@media(max-width:1100px){
+ .ht-booking-v4 .ht-booking-shell{display:flex;flex-direction:column;gap:12px;min-width:0}
+ .ht-booking-v4 .ht-booking-left{position:static!important;width:100%;min-width:0;display:flex;flex-direction:column;gap:10px}
+ .ht-booking-v4 .ht-booking-progress{position:static!important;padding:4px 0 8px!important;width:100%;min-width:0}
+ .ht-booking-v4 .ht-booking-progress h2,.ht-booking-v4 .ht-progress-overline,.ht-booking-v4 .ht-progress-help{display:none}
+ .ht-booking-v4 .ht-booking-progress ol{display:flex!important;flex-direction:row!important;overflow-x:auto!important;max-width:100%;gap:10px;scrollbar-width:none;padding:6px 1px!important}
+ .ht-booking-v4 .ht-booking-progress li{flex:0 0 auto!important;min-height:40px!important;white-space:nowrap;gap:7px!important;font-size:12px!important}
+ .ht-booking-v4 .ht-booking-progress li:before{display:none!important}
+ .ht-booking-v4 .ht-booking-left>.ht-booking-pet-summary{width:100%!important;max-height:none!important;overflow:visible!important;margin-top:0!important}
+ .ht-booking-v4 .ht-booking-pet-list{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))!important;gap:8px}
+ .ht-booking-v4 .ht-booking-main{width:100%;min-width:0}
+ .ht-booking-v4 .ht-booking-panel{width:100%;min-width:0}
+}
+@media(max-width:560px){
+ .ht-booking-v4 .ht-booking-pet-list{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ .ht-booking-v4 .ht-booking-panel{padding:14px!important}
+ .ht-booking-v4 .ht-booking-pet-summary{padding:12px}
+}
+@media(max-width:380px){.ht-booking-v4 .ht-booking-pet-list{grid-template-columns:minmax(0,1fr)!important}}

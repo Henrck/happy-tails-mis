@@ -18,6 +18,7 @@ import { fetchActiveGalleryPhotos } from "@/lib/supabase/gallery";
 import type { SiteSetting } from "@/lib/supabase/site-settings";
 import type { HeroSlide } from "@/lib/types/hero-slides";
 import type { Product } from "@/lib/types/products";
+import "./landing-mobile.css";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -36,33 +37,35 @@ export default async function Home() {
 
   return (
     <PoliciesModalProvider>
-      <Navbar logoUrl={get("site_logo")?.image_url} />
-      <main>
-        <Hero slides={heroSlides} logoUrl={get("site_logo")?.image_url} />
-        <Services
-          groomingImage={get("services_grooming_image")?.image_url}
-          boardingImage={get("services_boarding_image")?.image_url}
-          spaImage={get("services_spa_image")?.image_url}
-        />
-        <Gallery photos={galleryPhotos} />
-        <GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} />
-        <GroomingPricing
-          basicImage={get("grooming_basic_image")?.image_url}
-          diamondImage={get("grooming_diamond_image")?.image_url}
-          premiumImage={get("grooming_premium_image")?.image_url}
-        />
-        <BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} />
-        <BoardingPricing
-          smallKennelImage={get("boarding_small_kennel_image")?.image_url}
-          bigKennelImage={get("boarding_big_kennel_image")?.image_url}
-        />
-        <SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} />
-        <SpaBenefits />
-        <ProductsCarousel products={products} />
-        <AboutUs backgroundUrl={get("about_us_background")?.image_url} />
-      </main>
-      <Footer />
-      <PoliciesModal />
+      <div className="ht-mobile-landing">
+        <Navbar logoUrl={get("site_logo")?.image_url} />
+        <main>
+          <Hero slides={heroSlides} logoUrl={get("site_logo")?.image_url} />
+          <Services
+            groomingImage={get("services_grooming_image")?.image_url}
+            boardingImage={get("services_boarding_image")?.image_url}
+            spaImage={get("services_spa_image")?.image_url}
+          />
+          <Gallery photos={galleryPhotos} />
+          <GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} />
+          <GroomingPricing
+            basicImage={get("grooming_basic_image")?.image_url}
+            diamondImage={get("grooming_diamond_image")?.image_url}
+            premiumImage={get("grooming_premium_image")?.image_url}
+          />
+          <BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} />
+          <BoardingPricing
+            smallKennelImage={get("boarding_small_kennel_image")?.image_url}
+            bigKennelImage={get("boarding_big_kennel_image")?.image_url}
+          />
+          <SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} />
+          <SpaBenefits />
+          <ProductsCarousel products={products} />
+          <AboutUs backgroundUrl={get("about_us_background")?.image_url} />
+        </main>
+        <Footer />
+        <PoliciesModal />
+      </div>
     </PoliciesModalProvider>
   );
 }

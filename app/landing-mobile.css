@@ -1,0 +1,145 @@
+/* HappyTails mobile landing improvements. Scoped to the public homepage. */
+@media (max-width: 639px) {
+  .ht-mobile-landing { width: 100%; min-width: 0; overflow-x: clip; }
+  .ht-mobile-landing main { min-width: 0; }
+  .ht-mobile-landing main > section { min-width: 0; max-width: 100%; }
+
+  /* HERO: render the full active slide rather than cropping it severely.
+     Inactive slides are still stacked by the carousel but never occupy layout space. */
+  .ht-mobile-landing main > section:first-child > div:first-child {
+    aspect-ratio: 1 / 1 !important;
+    min-height: 0 !important;
+    max-height: 470px;
+    background: #f8d8e7;
+    isolation: isolate;
+  }
+  .ht-mobile-landing main > section:first-child > div:first-child > div[aria-hidden] img {
+    object-fit: contain !important;
+    object-position: center !important;
+  }
+  .ht-mobile-landing main > section:first-child > div:first-child > div.pointer-events-none {
+    padding: 20px 45px 28px;
+  }
+  .ht-mobile-landing main > section:first-child > div:first-child > div.pointer-events-none img {
+    width: clamp(118px, 36vw, 190px) !important;
+    max-width: 58%;
+    height: auto;
+    max-height: 48%;
+    object-fit: contain;
+  }
+  .ht-mobile-landing main > section:first-child > div:first-child > div.pointer-events-none button {
+    margin-top: 14px;
+    min-height: 44px;
+    padding: 10px 22px;
+    font-size: 14px;
+  }
+  .ht-mobile-landing main > section:first-child > div:first-child > button[aria-label$="slide"] {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* SERVICES: maintain the original aspect ratio; never stretch uploaded photos. */
+  .ht-mobile-landing #services { padding-block: 36px; }
+  .ht-mobile-landing #services .site-container { padding-inline: 16px; }
+  .ht-mobile-landing #services .grid > div > .relative.aspect-\[16\/11\] {
+    aspect-ratio: 16 / 10;
+    background: #fdf1f7;
+    overflow: hidden;
+  }
+  .ht-mobile-landing #services .grid > div > .relative.aspect-\[16\/11\] img {
+    width: 100%; height: 100%; object-fit: cover; object-position: center;
+  }
+  .ht-mobile-landing #services .grid > div { min-width: 0; }
+
+  /* Pricing card mobile photos: fill the frame without stretching or side gutters.
+     The edges may crop slightly on narrow screens, unlike object-fit: contain. */
+  .ht-mobile-landing article > div.md\:hidden > .relative {
+    width: 100%;
+    height: clamp(220px, 70vw, 310px);
+    overflow: hidden;
+    background: #fff5f9;
+  }
+  .ht-mobile-landing article > div.md\:hidden > .relative img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: center 44% !important;
+  }
+
+  /* ABOUT US: content-driven height rather than a cramped image aspect ratio. */
+  .ht-mobile-landing #about > div:first-child {
+    aspect-ratio: auto !important;
+    height: auto !important;
+    min-height: 430px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    padding: 54px 0 30px;
+  }
+  .ht-mobile-landing #about > div:first-child > img {
+    object-fit: cover;
+    object-position: center;
+  }
+  .ht-mobile-landing #about > div:first-child > .absolute.inset-0.flex {
+    position: relative !important;
+    inset: auto !important;
+    flex: 1 0 auto;
+    padding: 12px 22px 22px !important;
+    z-index: 1;
+  }
+  .ht-mobile-landing #about > div:first-child > .absolute.inset-0.flex h2 {
+    font-size: clamp(26px, 7vw, 34px);
+    line-height: 1.2;
+  }
+  .ht-mobile-landing #about > div:first-child > .absolute.inset-0.flex p {
+    max-width: 35rem;
+    margin-top: 20px;
+    font-size: clamp(14px, 3.7vw, 16px);
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+  }
+  .ht-mobile-landing #about > div:first-child > p.absolute { display: none; }
+  .ht-mobile-landing #about > div:first-child > .absolute.bottom-3 {
+    position: relative !important;
+    inset: auto !important;
+    padding-inline: 16px;
+    z-index: 1;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 7px 16px;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  /* FOOTER: two compact information groups with a smaller brand mark. */
+  .ht-mobile-landing #footer { padding: 26px 0 30px !important; }
+  .ht-mobile-landing #footer > .site-container {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.65fr);
+    gap: 16px 14px;
+    align-items: start;
+    padding-inline: 18px;
+  }
+  .ht-mobile-landing #footer > .site-container > img {
+    grid-column: 1 / -1;
+    width: 78px;
+    margin-inline: auto;
+  }
+  .ht-mobile-landing #footer > .site-container > div { text-align: left; min-width: 0; }
+  .ht-mobile-landing #footer h3 { font-size: 15px; }
+  .ht-mobile-landing #footer ul { margin-top: 10px; font-size: 12px; line-height: 1.6; }
+  .ht-mobile-landing #footer li { justify-content: flex-start !important; align-items: flex-start; min-width: 0; overflow-wrap: anywhere; }
+  .ht-mobile-landing #footer li span[aria-hidden] { flex: 0 0 auto; }
+}
+
+@media (max-width: 360px) {
+  .ht-mobile-landing #footer > .site-container { grid-template-columns: minmax(0, 1fr); }
+  .ht-mobile-landing #footer > .site-container > div { text-align: center; }
+  .ht-mobile-landing #footer li { justify-content: center !important; }
+}
+
+@media (min-width: 640px) and (max-width: 820px) {
+  .ht-mobile-landing #about > div:first-child { min-height: 400px; aspect-ratio: auto; }
+  .ht-mobile-landing #about > div:first-child > .absolute.inset-0.flex p { line-height: 1.65; }
+}

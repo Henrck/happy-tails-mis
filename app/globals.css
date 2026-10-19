@@ -35,89 +35,70 @@ body {
 h1, h2, h3, h4 { font-family: var(--font-heading), sans-serif; font-weight: 600; }
 
 @layer components {
-  .site-container {
-    width: 100%;
-    max-width: 72rem;
-    margin-inline: auto;
-    padding-inline: 1rem;
-  }
-
-  @media (min-width: 640px) {
-    .site-container { padding-inline: 1.5rem; }
-  }
-
-  @media (min-width: 768px) {
-    .site-container { padding-inline: 2rem; }
-  }
-
-  @media (min-width: 1280px) {
-    .site-container { padding-inline: 2.5rem; }
-  }
-
-  main > section {
-    width: 100%;
-    box-sizing: border-box;
-    scroll-margin-top: 4rem;
-  }
+  .site-container { width: 100%; max-width: 72rem; margin-inline: auto; padding-inline: 1rem; }
+  @media (min-width: 640px) { .site-container { padding-inline: 1.5rem; } }
+  @media (min-width: 768px) { .site-container { padding-inline: 2rem; } }
+  @media (min-width: 1280px) { .site-container { padding-inline: 2.5rem; } }
+  main > section { width: 100%; box-sizing: border-box; scroll-margin-top: 4rem; }
 }
+@media (max-width: 1023px) { main > section { min-height: 0; height: auto; max-height: none; overflow: visible; } }
 
-/*
- * Landing pages should grow with their content. Do not force every section
- * to viewport height: pricing, service cards, benefits and galleries can be
- * taller than the viewport, especially on tablets and phones.
- */
+/* Responsive admin navigation: desktop sidebar; mobile off-canvas drawer. */
+.ht-admin-shell { min-width: 0; }
+.ht-admin-navigation { flex: none; }
+.ht-admin-content { min-width: 0; max-width: 100%; }
+.ht-admin-mobile-bar { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+.ht-admin-menu-button { width:42px; height:42px; display:flex; align-items:center; justify-content:center; background:#fff; color:#e02b83; border:1px solid #f5c5da; border-radius:12px; }
+.ht-admin-backdrop { position:fixed; inset:0; z-index:70; background:rgba(15,23,42,.45); }
+@media (max-width: 767px) {
+  .ht-admin-navigation { position:fixed; z-index:80; top:0; bottom:0; left:0; transform:translateX(-105%); transition:transform .2s ease; box-shadow:6px 0 24px rgba(0,0,0,.12); }
+  .ht-admin-navigation-open { transform:translateX(0); }
+  .ht-admin-navigation aside { width:14rem !important; }
+  .ht-admin-navigation aside > div { width:14rem !important; }
+  .ht-admin-content { width:100%; padding:14px !important; }
+  .ht-admin-content h1 { overflow-wrap:anywhere; font-size:clamp(1.4rem,5vw,1.9rem); }
+}
+@media (min-width:768px) { .ht-admin-mobile-bar { display:none; } }
+
+/* POS: use stacked product/catalog and checkout on tablet portrait, not split columns. */
 @media (max-width: 1023px) {
-  main > section { min-height: 0; height: auto; max-height: none; overflow: visible; }
+  .ht-admin-content:has(input[placeholder="Search items"]) > div.flex.flex-col { flex-direction:column !important; height:auto !important; gap:1rem; }
+  .ht-admin-content:has(input[placeholder="Search items"]) > div.flex.flex-col > div:first-child { width:100%; }
+  .ht-admin-content:has(input[placeholder="Search items"]) > div.flex.flex-col > div:first-child > div.grid { max-height:none; overflow:visible; }
+  .ht-admin-content:has(input[placeholder="Search items"]) > div.flex.flex-col > div:last-of-type { position:static !important; width:100% !important; height:auto !important; min-height:250px; max-height:none; }
+  .ht-admin-content:has(input[placeholder="Search items"]) .grid.grid-cols-2 { grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr)); }
+}
+@media (max-width: 480px) {
+  .ht-admin-content:has(input[placeholder="Search items"]) .grid.grid-cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ht-admin-content:has(input[placeholder="Search items"]) h1 { font-size:1.55rem; }
 }
 
-/* Admin responsive input and date rendering: iPad Safari, tablets and phones. */
-/* Grid children can otherwise retain intrinsic widths of iOS date controls. */
-  main input, main textarea, main select { box-sizing: border-box; max-width: 100%; }
-  main input[type="date"] { min-width: 0; min-height: 42px; }
-
-  /* Profile page: give every field a shrinking grid track, not an intrinsic width. */
-  main > div.max-w-5xl .grid { min-width: 0; }
-  main > div.max-w-5xl .grid > div { min-width: 0; }
-  main > div.max-w-5xl input,
-  main > div.max-w-5xl textarea { min-width: 0; width: 100%; }
-  main > div.max-w-5xl input[type="date"] { appearance: auto; -webkit-appearance: auto; }
-
-  /* Report Management: fixed-column tables must scroll rather than clip dates. */
-  main table[class*="min-w-[1120px]"] td:nth-child(7),
-  main table[class*="min-w-[1150px]"] td:nth-child(7),
-  main table[class*="min-w-[1100px]"] td:nth-child(6) {
-    overflow: visible;
-    text-overflow: clip;
-    white-space: nowrap;
-    min-width: 150px;
-  }
-  main table[class*="min-w-[1120px]"] col:nth-child(7),
-  main table[class*="min-w-[1150px]"] col:nth-child(7) { width: 15%; }
-  main table[class*="min-w-[1120px]"] { min-width: 1280px; }
-  main table[class*="min-w-[1150px]"] { min-width: 1350px; }
-  main table[class*="min-w-[1120px]"] td:last-child,
-  main table[class*="min-w-[1150px]"] td:last-child { white-space: nowrap; }
-
-/* At tablet widths the personal-information card cannot support three inputs. */
-@media (min-width: 640px) and (max-width: 1199px) {
-  main > div.max-w-5xl .lg\:grid-cols-3 { grid-template-columns: minmax(0, 1fr); }
-  main > div.max-w-5xl .lg\:col-span-2 { grid-column: auto; }
-  main > div.max-w-5xl .sm\:grid-cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Booking: at iPad portrait widths, turn the narrow sidebar into a horizontal step strip.
+   Let selected pets use full-width cards instead of compressed avatars. */
+@media (max-width: 1023px) {
+  .ht-booking-v4 .ht-booking-shell { display:block; min-width:0; }
+  .ht-booking-v4 .ht-booking-left { position:static; width:100%; margin-bottom:16px; }
+  .ht-booking-v4 .ht-booking-progress { position:static; padding:8px 0 12px; }
+  .ht-booking-v4 .ht-booking-progress .ht-progress-overline,
+  .ht-booking-v4 .ht-booking-progress h2,
+  .ht-booking-v4 .ht-booking-progress .ht-progress-help { display:none; }
+  .ht-booking-v4 .ht-booking-progress ol { display:flex; gap:8px; overflow-x:auto; padding:4px 0 10px; scrollbar-width:thin; }
+  .ht-booking-v4 .ht-booking-progress li { flex:0 0 auto; min-height:36px; gap:7px; font-size:12px; white-space:nowrap; }
+  .ht-booking-v4 .ht-booking-progress li:before { display:none; }
+  .ht-booking-v4 .ht-progress-marker { width:24px; height:24px; flex-basis:24px; }
+  .ht-booking-v4 .ht-booking-left > div:last-child:not(.ht-booking-progress) { width:100%; max-height:none; overflow:visible; margin:8px 0 0; }
+  .ht-booking-v4 .ht-booking-left > div:last-child:not(.ht-booking-progress) > div:last-child { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); gap:8px; }
+  .ht-booking-v4 .ht-booking-main { display:block; width:100%; min-width:0; }
+  .ht-booking-v4 .ht-booking-panel { width:100%; min-width:0; }
+}
+@media (max-width: 600px) {
+  .ht-booking-v4 .ht-booking-left > div:last-child:not(.ht-booking-progress) > div:last-child { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ht-booking-v4 .ht-booking-panel { padding:14px; }
 }
 
-@media (max-width: 639px) {
-  main > div.max-w-5xl .sm\:grid-cols-3,
-  main > div.max-w-5xl .sm\:grid-cols-2 { grid-template-columns: minmax(0, 1fr); }
-  main > div.max-w-5xl .rounded-2xl.p-6 { padding: 1rem; }
-}
-
-/* Date widgets must remain usable in flex-wrapped report filters. */
-@media (max-width: 1199px) {
-  main input[type="date"] { flex: 0 1 190px; width: auto; max-width: 100%; }
-  main input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
-  main input[type="date"]::-webkit-datetime-edit { padding: 0; }
-}
-@media (max-width: 639px) {
-  main input[type="date"] { flex: 1 1 100%; width: 100%; }
-  main input[type="date"] + span.text-zinc-300 { display: none; }
+/* Universal narrow device safeguards for forms and content cards. */
+@media (max-width: 767px) {
+  .ht-admin-content input, .ht-admin-content select, .ht-admin-content textarea { max-width:100%; min-width:0; }
+  .ht-admin-content input[type="date"] { min-width:0; }
+  .ht-admin-content .overflow-x-auto { -webkit-overflow-scrolling:touch; }
 }
