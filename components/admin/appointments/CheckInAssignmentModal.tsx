@@ -31,19 +31,19 @@ export default function CheckInAssignmentModal({appointment,onClose,onSuccess}:{
    })));
    setSaving(false);if(r.error){setError(r.error);return} onSuccess();
  }
- return <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
-  <div className="w-full max-w-lg rounded-3xl bg-brand-tint overflow-hidden shadow-xl" onClick={e=>e.stopPropagation()}>
-   <div className="bg-brand-pink px-6 py-4 flex justify-between items-center">
-    <div><h3 className="font-bold text-white">{boarding?"Assign Kennels":"Assign Groomers"}</h3>
+ return <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/60 p-3 sm:p-5" onClick={()=>{if(!saving)onClose()}}>
+  <div role="dialog" aria-modal="true" aria-label={boarding?"Assign kennels for check-in":"Assign groomers for check-in"} className="flex w-full max-w-lg max-h-[calc(100dvh-1.5rem)] flex-col overflow-hidden rounded-3xl bg-brand-tint shadow-2xl sm:max-h-[calc(100dvh-2.5rem)]" onClick={e=>e.stopPropagation()}>
+   <div className="shrink-0 bg-brand-pink px-4 py-4 sm:px-6 flex justify-between items-center gap-3">
+    <div className="min-w-0"><h3 className="font-bold text-white">{boarding?"Assign Kennels":"Assign Groomers"}</h3>
     <p className="text-xs text-white/80 mt-1">{boarding?"Choose an available kennel for each pet.":"One groomer can handle one pet per active session."}</p></div>
-    <button onClick={onClose} className="text-white text-2xl">×</button>
+    <button type="button" disabled={saving} aria-label="Close check-in" onClick={onClose} className="shrink-0 text-white text-2xl disabled:opacity-40">×</button>
    </div>
-   <div className="p-6">
+   <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
     {loading?<p className="py-8 text-center text-zinc-400">Loading availability…</p>:<>
      <div className="space-y-3">{appointment.pets.map(p=><div key={p.appointmentPetId} className="bg-white rounded-2xl border border-pink-100 p-4">
-      <div className="flex justify-between mb-2"><div><b className="text-zinc-800">{p.name}</b><p className="text-xs text-zinc-400">{p.breed} · {p.size_label}</p></div>
-      <span className="text-[11px] bg-pink-50 text-brand-pink px-2 py-1 rounded-full">{boarding?"Boarding":"Grooming"}</span></div>
-      <select value={chosen[p.appointmentPetId]??""} onChange={e=>setChosen({...chosen,[p.appointmentPetId]:e.target.value})} className="w-full rounded-xl border border-pink-200 px-3 py-2.5 text-sm">
+      <div className="flex justify-between mb-2 gap-2"><div className="min-w-0"><b className="text-zinc-800 break-words">{p.name}</b><p className="text-xs text-zinc-400 break-words">{p.breed} · {p.size_label}</p></div>
+      <span className="shrink-0 text-[11px] bg-pink-50 text-brand-pink px-2 py-1 rounded-full self-start">{boarding?"Boarding":"Grooming"}</span></div>
+      <select value={chosen[p.appointmentPetId]??""} onChange={e=>setChosen({...chosen,[p.appointmentPetId]:e.target.value})} className="w-full min-w-0 rounded-xl border border-pink-200 px-3 py-2.5 text-sm">
        <option value="">Select {boarding?"a kennel":"a groomer"}</option>
        {boarding?kennelOptions(p).map(k=><option key={k.id} value={k.id}>{k.size==="small"?"Small":"Big"} Kennel #{k.number}</option>)
        :groomers.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
@@ -53,7 +53,7 @@ export default function CheckInAssignmentModal({appointment,onClose,onSuccess}:{
      </div>)}</div>
      {error&&<p className="mt-3 bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-600">{error}</p>}
      {((boarding&&!kennels.length)||(!boarding&&!groomers.length))&&<p className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-700">No available {boarding?"kennels":"groomers"} right now.</p>}
-     <div className="flex gap-2 mt-5"><button onClick={onClose} className="flex-1 border-2 border-zinc-300 rounded-full py-2.5 text-sm">Cancel</button>
+     <div className="flex gap-2 mt-5"><button disabled={saving} onClick={onClose} className="flex-1 border-2 border-zinc-300 rounded-full py-2.5 text-sm disabled:opacity-40">Cancel</button>
      <button disabled={saving||!complete} onClick={save} className="flex-1 bg-brand-pink text-white rounded-full py-2.5 text-sm font-semibold disabled:opacity-40">{saving?"Starting…":"Check In & Start Session"}</button></div>
     </>}
    </div>
