@@ -1,0 +1,15 @@
+/* POS-only: do not depend on the customer account route's scoped CSS. */
+.ht-pos-booking { min-width:0; }
+.ht-pos-booking .ht-pos-progress-wrap { padding:14px 18px; overflow:hidden; }
+.ht-pos-booking .ht-booking-progress { min-width:0; display:flex; align-items:center; gap:18px; }
+.ht-pos-booking .ht-booking-progress > .ht-progress-overline { display:none; }
+.ht-pos-booking .ht-booking-progress > h2 { color:#182b44; font-size:13px; white-space:nowrap; font-weight:800; }
+.ht-pos-booking .ht-booking-progress ol { display:flex; flex:1; min-width:0; align-items:center; justify-content:space-between; gap:5px; list-style:none; padding:2px 0; margin:0; overflow-x:auto; scrollbar-width:thin; }
+.ht-pos-booking .ht-booking-progress li { display:flex; align-items:center; gap:6px; flex:0 0 auto; font-size:11px; font-weight:600; color:#7d8594; white-space:nowrap; }
+.ht-pos-booking .ht-progress-marker { width:25px; height:25px; flex:0 0 25px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#f3edf1; color:#858293; font-size:11px; font-weight:800; }
+.ht-pos-booking .ht-booking-progress li.active { color:#bd2970; }
+.ht-pos-booking .ht-booking-progress li.active .ht-progress-marker,.ht-pos-booking .ht-booking-progress li.completed .ht-progress-marker { color:#fff; background:#f33291; }
+.ht-pos-booking .ht-booking-progress li.completed { color:#ac577e; }
+.ht-pos-booking .ht-progress-help { display:none; }
+@media (max-width: 1100px) { .ht-pos-booking .ht-booking-progress {display:block;} .ht-pos-booking .ht-booking-progress > h2 {margin-bottom:10px;} }
+@media (max-width: 600px) { .ht-pos-booking .ht-pos-progress-wrap {padding:12px;} .ht-pos-booking .ht-booking-progress li {font-size:10px;} .ht-pos-booking .ht-progress-marker {width:22px;height:22px;flex-basis:22px;} }

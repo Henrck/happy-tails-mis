@@ -19,15 +19,19 @@ import BoardingScheduleStep from "@/components/admin/pos/walk-in/BoardingSchedul
 import CustomerServiceChoiceStep from "@/components/dashboard/booking/CustomerServiceChoiceStep";
 import CustomerGroomingSelectionStep from "@/components/dashboard/booking/CustomerGroomingSelectionStep";
 import CustomerGroomingScheduleStep from "@/components/dashboard/booking/CustomerGroomingScheduleStep";
+import HolidayAwareGroomingSchedule from "@/components/admin/pos/walk-in/HolidayAwareGroomingSchedule";
+import BookingProgress from "@/components/dashboard/booking/BookingProgress";
 import AddAnotherServicePrompt from "@/components/dashboard/booking/AddAnotherServicePrompt";
 import CurrentLegSidebar from "@/components/dashboard/booking/CurrentLegSidebar";
 import WalkInMultiServiceSummary from "@/components/admin/pos/walk-in/WalkInMultiServiceSummary";
+import "./pos-booking.css";
 
 type Step = "verify" | "pet-info" | "service" | "waiver" | "selection" | "schedule" | "add-more" | "summary";
 
 export default function WalkInPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("verify");
+  const [waiverBackStep, setWaiverBackStep] = useState<"service" | "add-more">("service");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [owner, setOwner] = useState({ name: "", contact: "", address: "" });
   const [pets, setPets] = useState<Pet[]>([]);
@@ -84,6 +88,7 @@ export default function WalkInPage() {
   function chooseService(choice: WalkInServiceChoice) {
     const ids = pets.filter(p => choice === "dog_grooming" ? p.species === "Dog" : choice === "cat_grooming" ? p.species === "Cat" : true).map(p => p.id);
     if (!ids.length) return;
+    setWaiverBackStep(step === "add-more" ? "add-more" : "service");
     setCurrentLeg(emptyLeg(choice, ids));
     loadForChoice(choice);
     setStep("waiver");
@@ -91,9 +96,10 @@ export default function WalkInPage() {
   function updateSelections(selections: DraftPetSelection[]) {
     setCurrentLeg(prev => prev && { ...prev, petSelections: selections });
   }
-  function confirmSchedule() {
+  function confirmSchedule(selections?: DraftPetSelection[]) {
     if (!currentLeg) return;
-    setCompletedLegs(prev => [...prev.filter(l => l.id !== currentLeg.id), currentLeg]);
+    const confirmedLeg = selections ? { ...currentLeg, petSelections: selections } : currentLeg;
+    setCompletedLegs(prev => [...prev.filter(l => l.id !== currentLeg.id), confirmedLeg]);
     setCurrentLeg(null);
     setStep("add-more");
   }
@@ -103,12 +109,9 @@ export default function WalkInPage() {
     setCompletedLegs(prev => prev.filter(l => l.id !== id));
     setCurrentLeg(found); loadForChoice(found.serviceChoice); setStep("selection");
   }
-  function backFromSelection() {
-    if (completedLegs.length) { setCurrentLeg(null); setStep("add-more"); }
-    else setStep("service");
-  }
+  function backFromSelection() { setStep("waiver"); }
 
-  return <div className="min-h-screen bg-[#FDF1F7] p-4 sm:p-6 md:p-10">
+  return <div className="ht-pos-booking min-h-screen bg-[#FDF1F7] p-4 sm:p-6 md:p-10">
     <button type="button" onClick={() => router.push("/admin/pos")} className="text-sm font-semibold text-zinc-500 hover:text-brand-pink">← Back to POS</button>
     <div className="mt-6 mx-auto max-w-5xl">
       <div className="mb-5 rounded-2xl border border-pink-100 bg-white px-5 py-4">
@@ -116,6 +119,7 @@ export default function WalkInPage() {
         <p className="mt-1 text-sm text-zinc-500">Same multi-pet and multi-service booking process as customer appointments, with walk-in records.</p>
         {completedLegs.length > 0 && <p className="mt-2 text-sm font-semibold text-zinc-700">Services ready: {completedLegs.length} · Pets: {pets.length}</p>}
       </div>
+      {step !== "verify" && <div className="ht-pos-progress-wrap mb-5 rounded-2xl border border-pink-100 bg-white p-3 sm:p-4"><BookingProgress step={step} hasCompletedServices={completedLegs.length > 0} /></div>}
       {lookupError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{lookupError}</p>}
       {step === "verify" && <CustomerVerifyStep onSelectExisting={c => {
         setCustomer(c); setOwner({ name: c.full_name, contact: c.phone_number ?? "", address: c.address ?? "" }); setStep("pet-info");
@@ -127,7 +131,7 @@ export default function WalkInPage() {
       }} />}
       {step === "service" && <CustomerServiceChoiceStep choice={null} petSpecies={pets.map(p => p.species)} onChange={chooseService}
         onBack={() => setStep(completedLegs.length ? "add-more" : "pet-info")} onNext={() => {}} />}
-      {step === "waiver" && currentLeg && <WaiverStep serviceType={currentLeg.serviceChoice} onBack={() => setStep("service")} onAgree={() => setStep("selection")} />}
+      {step === "waiver" && currentLeg && <WaiverStep serviceType={currentLeg.serviceChoice} onBack={() => { setCurrentLeg(null); setStep(waiverBackStep); }} onAgree={() => setStep("selection")} />}
       {(step === "selection" || step === "schedule") && legPets.length > 1 && <div className="mb-5"><CurrentLegSidebar pets={legPets} onRemove={id => setCurrentLeg(prev => prev && prev.petIds.length > 1 ? { ...prev, petIds: prev.petIds.filter(x => x !== id), petSelections: prev.petSelections.filter(s => s.pet.id !== id) } : prev)} /></div>}
       {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingSelectionStep pets={legPets} selections={currentLeg.petSelections}
         alreadyGroomedPetIds={completedLegs.filter(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice)).flatMap(l => l.petIds)}
@@ -144,7 +148,15 @@ export default function WalkInPage() {
         onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
         onSelectionsChange={updateSelections} onBack={() => setStep("selection")} onConfirmed={confirmSchedule} />}
-      {step === "schedule" && currentLeg && (grooming || currentLeg.serviceChoice === "ala_carte") && <CustomerGroomingScheduleStep
+      {step === "schedule" && currentLeg && grooming && <HolidayAwareGroomingSchedule
+        petSelections={currentLeg.petSelections} scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime}
+        specialRequests={currentLeg.specialRequests}
+        onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
+        onTimeChange={v => setCurrentLeg(l => l && { ...l, scheduledTime: v })}
+        onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
+        onSelectionsChange={updateSelections} onBack={() => setStep("selection")}
+        onConfirmed={confirmSchedule} />}
+      {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <CustomerGroomingScheduleStep
         customer={customer} ownerContact={owner.contact} petSelections={currentLeg.petSelections} groomers={groomers}
         scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
         onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}

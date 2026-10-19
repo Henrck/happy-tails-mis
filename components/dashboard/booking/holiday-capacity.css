@@ -1,0 +1,3 @@
+/* The closure-aware calendar above replaces the planner's old calendar.
+   Its live capacity and scheduling controls remain fully functional. */
+.ht-closure-capacity-inner section[aria-label="Preferred grooming date calendar"] { display: none; }

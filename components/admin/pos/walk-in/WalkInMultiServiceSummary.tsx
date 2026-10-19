@@ -2,6 +2,8 @@
 
 import { useRef, useState } from "react";
 import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
+import { checkBookingClosedDate } from "@/lib/supabase/booking-closures";
+import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/lib/types/users";
 import type { BookingLeg } from "@/lib/types/booking-leg";
 import type { AppointmentServiceType, DraftPetSelection } from "@/lib/types/appointments";
@@ -25,6 +27,7 @@ const labels: Record<string, string> = { grooming: "Grooming", dog_grooming: "Do
 export default function WalkInMultiServiceSummary({ customer, owner, legs, packagesByService, sizesByService, addonsByService, groomers, onBack, onEditLeg, onDone }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [acknowledgedWeightPolicy, setAcknowledgedWeightPolicy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
   const total = legs.reduce((sum, leg) => sum + leg.petSelections.reduce((n, p) => n + p.lineAmount, 0), 0);
@@ -48,7 +51,7 @@ export default function WalkInMultiServiceSummary({ customer, owner, legs, packa
   }
 
   async function save() {
-    if (lock.current || saved) return;
+    if (lock.current || saved || (grooming && !acknowledgedWeightPolicy)) return;
     setError(null);
     if (!legs.length || !owner.name.trim() || !owner.contact.trim()) {
       setError("Owner details and at least one service are required."); return;
@@ -68,17 +71,42 @@ export default function WalkInMultiServiceSummary({ customer, owner, legs, packa
         if (!leg.scheduledDate || !leg.scheduledTime) {
           setError(`Select a date and time for ${labels[leg.serviceChoice]}.`); return;
         }
-        if (leg.serviceChoice === "grooming") {
-          const dogs = leg.petSelections.filter(s => s.pet.species === "Dog");
-          const cats = leg.petSelections.filter(s => s.pet.species === "Cat");
-          if (dogs.length) writes.push(input("dog_grooming", dogs, leg));
-          if (cats.length) writes.push(input("cat_grooming", cats, leg));
+        if (["grooming", "dog_grooming", "cat_grooming"].includes(leg.serviceChoice)) {
+          // As in Customer Booking, each grooming pet reserves its own verified start time.
+          for (const sel of leg.petSelections) {
+            const time = (sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime;
+            if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+              setError(`Verify a start time for ${sel.pet.name} before saving.`); return;
+            }
+            writes.push({ ...input(sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [sel], leg), scheduled_time: time });
+          }
         } else writes.push(input(leg.serviceChoice, leg.petSelections, leg));
       }
     }
     if (!writes.length) { setError("No appointments are ready to save."); return; }
     lock.current = true; setSaving(true);
     try {
+      // Validate closures again at checkout in case Superadmin closed a day during booking.
+      for (const date of new Set(writes.map(w => w.scheduled_date))) {
+        const closure = await checkBookingClosedDate(date);
+        if (closure.error) { setError(`Could not verify closed dates: ${closure.error}`); lock.current = false; return; }
+        if (closure.closed) { setError(`${date} is closed (${closure.name ?? "Holiday / closure"}). Please edit the schedule.`); lock.current = false; return; }
+      }
+      // Confirm exact reviewed grooming times before writing records; do not silently shift pets.
+      for (const leg of legs.filter(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice))) {
+        if (!leg.scheduledDate || !leg.scheduledTime) { setError("A grooming schedule is incomplete."); lock.current = false; return; }
+        const { data, error: planError } = await createClient().rpc("happytails_grooming_plan", {
+          p_date: leg.scheduledDate,
+          p_pricing_ids: leg.petSelections.map(s => s.packagePricingId as string),
+          p_preferred_start: leg.scheduledTime,
+          p_groomer_ids: leg.petSelections.map(s => s.groomerId),
+        });
+        if (planError) { setError(`Could not recheck grooming availability: ${planError.message}`); lock.current = false; return; }
+        const revised = data as Array<{time:string}>;
+        if (!Array.isArray(revised) || revised.length !== leg.petSelections.length || revised.some((item, i) => item.time !== (leg.petSelections[i] as DraftPetSelection & {groomingScheduledTime?:string}).groomingScheduledTime)) {
+          setError("Grooming availability has changed. Edit the schedule and review the new times before saving."); lock.current = false; return;
+        }
+      }
       const result = await createAppointmentsAtomic(writes);
       if (result.error) { setError(`Walk-in booking could not be saved: ${result.error}`); lock.current = false; return; }
       if (result.appointments.length !== writes.length) throw new Error("Unexpected number of saved appointments. Verify appointments before retrying.");
@@ -131,9 +159,15 @@ export default function WalkInMultiServiceSummary({ customer, owner, legs, packa
       <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{leg.petSelections.reduce((n,s) => n + s.lineAmount, 0).toLocaleString()}</p>
     </section>)}
     <div className="mt-5 flex justify-between rounded-2xl bg-pink-100 px-5 py-4 font-bold text-zinc-800"><span>{grooming ? "Estimated Total" : "Grand Total"}</span><span className="text-brand-pink">₱{total.toLocaleString()}</span></div>
-    {grooming && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">Grooming amounts are estimates until staff verify the pet's actual weight and size and confirm any price adjustment before service.</p>}
+    {grooming && <section className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p>Grooming amounts are estimates until staff verify the pet's actual weight and size and confirm any price adjustment before service.</p>
+      <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg bg-white p-3 text-sm text-zinc-800">
+        <input type="checkbox" checked={acknowledgedWeightPolicy} onChange={e => setAcknowledgedWeightPolicy(e.target.checked)} className="mt-1 accent-pink-500" />
+        <span>Staff have explained that the final grooming price may change after actual weight and size verification.</span>
+      </label>
+    </section>}
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
     <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" disabled={saving} onClick={onBack} className="rounded-full border-2 border-pink-200 bg-white py-3 font-semibold text-brand-pink disabled:opacity-50">Back</button>
-      <button type="button" disabled={saving || !legs.length} onClick={save} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Complete Walk-in Booking"}</button></div>
+      <button type="button" disabled={saving || !legs.length || (grooming && !acknowledgedWeightPolicy)} onClick={save} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Complete Walk-in Booking"}</button></div>
   </div>;
 }
