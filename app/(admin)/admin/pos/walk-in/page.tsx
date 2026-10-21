@@ -98,7 +98,7 @@ export default function WalkInPage() {
   }
   function confirmSchedule(selections?: DraftPetSelection[]) {
     if (!currentLeg) return;
-    const confirmedLeg = selections ? { ...currentLeg, petSelections: selections } : currentLeg;
+    const confirmedLeg = Array.isArray(selections) ? { ...currentLeg, petSelections: selections } : currentLeg;
     setCompletedLegs(prev => [...prev.filter(l => l.id !== currentLeg.id), confirmedLeg]);
     setCurrentLeg(null);
     setStep("add-more");
@@ -147,7 +147,7 @@ export default function WalkInPage() {
         onPickUpChange={v => setCurrentLeg(l => l && { ...l, pickUpAt: v })}
         onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
-        onSelectionsChange={updateSelections} onBack={() => setStep("selection")} onConfirmed={confirmSchedule} />}
+        onSelectionsChange={updateSelections} onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} />}
       {step === "schedule" && currentLeg && grooming && <HolidayAwareGroomingSchedule
         petSelections={currentLeg.petSelections} scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime}
         specialRequests={currentLeg.specialRequests}
@@ -162,12 +162,12 @@ export default function WalkInPage() {
         onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
         onTimeChange={v => setCurrentLeg(l => l && { ...l, scheduledTime: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
-        onBack={() => setStep("selection")} onConfirmed={confirmSchedule} />}
+        onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} />}
       {step === "add-more" && <AddAnotherServicePrompt eligibleServices={eligible} onAddService={chooseService}
         onDone={() => setStep("summary")} onBack={() => { const last = completedLegs[completedLegs.length - 1]; if (last) editLeg(last.id); else setStep("service"); }} />}
       {step === "summary" && <WalkInMultiServiceSummary customer={customer} owner={owner} legs={completedLegs} packagesByService={packagesByService}
         sizesByService={sizesByService} addonsByService={addonsByService} groomers={groomers}
-        onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => router.push("/admin/pos")} />}
+        onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => window.location.assign("/admin/pos")} />}
     </div>
   </div>;
 }
