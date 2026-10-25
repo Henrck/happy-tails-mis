@@ -1,9 +1,3 @@
-// Query + mutation helpers for groomers (Grooming) and kennels
-// (Boarding). Both are genuinely simple right now — no sessions to join
-// against, since there's no appointments table yet. Adding a
-// fetchGroomingSessions()/fetchBoardingSessions() later, once real
-// bookings exist, is the natural next step and won't require changing
-// anything here.
 import { createClient } from "./client";
 import type { Groomer, Kennel, KennelSize } from "@/lib/types/pet-services";
 
@@ -14,29 +8,29 @@ export async function fetchGroomers(options?: { activeOnly?: boolean }) {
   const { data, error } = await query;
   return { groomers: (data ?? []) as Groomer[], error: error?.message };
 }
-
 export async function addGroomer(name: string) {
-  const supabase = createClient();
-  return supabase.from("groomers").insert({ name }).select().single();
+  return createClient().from("groomers").insert({ name }).select().single();
 }
-
 export async function setGroomerStatus(id: string, status: "active" | "archived") {
-  const supabase = createClient();
-  return supabase.from("groomers").update({ status }).eq("id", id);
+  return createClient().from("groomers").update({ status }).eq("id", id);
 }
 
-export async function fetchKennels() {
-  const supabase = createClient();
-  const { data, error } = await supabase.from("kennels").select("*").order("size").order("number");
+/** Normal booking screens only see active capacity. Staff management sees both. */
+export async function fetchKennels(options?: { includeInactive?: boolean }) {
+  let query = createClient().from("kennels").select("*").order("size").order("number");
+  if (!options?.includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query;
   return { kennels: (data ?? []) as Kennel[], error: error?.message };
 }
-
 export async function addKennel(size: KennelSize, number: number) {
-  const supabase = createClient();
-  return supabase.from("kennels").insert({ size, number }).select().single();
+  return createClient().from("kennels").insert({ size, number, is_active: true }).select().single();
 }
-
-export async function removeKennel(id: string) {
-  const supabase = createClient();
-  return supabase.from("kennels").delete().eq("id", id);
+/** The database checks permissions and prevents disabling reserved kennels. */
+export async function setKennelActive(id: string, active: boolean) {
+  const { error } = await createClient().rpc("happytails_set_kennel_active", {
+    p_kennel_id: id, p_active: active,
+  });
+  return { error };
 }
+/** Legacy call now soft-disables rather than deleting kennel history. */
+export async function removeKennel(id: string) { return setKennelActive(id, false); }

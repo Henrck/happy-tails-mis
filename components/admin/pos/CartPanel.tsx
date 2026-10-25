@@ -5,19 +5,16 @@ import "./pos-mobile-dock.css";
 
 export type CartLine = { product: Product; qty: number };
 
-export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, onClear, onProcessPayment, onReturnExchange }: {
+export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, onClear, onProcessPayment }: {
   cart: CartLine[];
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onProcessPayment: () => void;
-  onReturnExchange: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
-  const discount = 0;
-  const total = subtotal - discount;
   const itemCount = cart.reduce((sum, line) => sum + line.qty, 0);
 
   const contents = (
@@ -47,15 +44,11 @@ export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, on
       </div>
       <div className="px-4 py-3 border-t border-white/20 text-sm space-y-1 shrink-0">
         <div className="flex justify-between"><span className="opacity-80">Subtotal :</span><span>₱{subtotal.toFixed(2)}</span></div>
-        <div className="flex justify-between"><span className="opacity-80">Discount :</span><span>₱{discount.toFixed(2)}</span></div>
-        <div className="flex justify-between text-base font-bold pt-1"><span>Total Price</span><span>₱{total.toFixed(2)}</span></div>
+        <div className="flex justify-between text-base font-bold pt-1"><span>Total Price</span><span>₱{subtotal.toFixed(2)}</span></div>
       </div>
       <div className="px-4 pb-4 pt-2 space-y-2 shrink-0">
         <button type="button" onClick={() => { if (cart.length) { setMobileOpen(false); onProcessPayment(); } }} disabled={cart.length === 0} className="w-full bg-white text-brand-pink font-bold py-3 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-pink-50 transition-colors">Process Payment</button>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClear} disabled={cart.length === 0} className="flex-1 bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2.5 rounded-full transition-colors">Clear</button>
-          <button type="button" onClick={() => { setMobileOpen(false); onReturnExchange(); }} className="flex-1 bg-white/15 hover:bg-white/25 font-semibold text-sm py-2.5 rounded-full transition-colors">Return / Exchange</button>
-        </div>
+        <button type="button" onClick={onClear} disabled={cart.length === 0} className="w-full bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2.5 rounded-full transition-colors">Clear Cart</button>
       </div>
     </>
   );
@@ -65,7 +58,7 @@ export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, on
       <div className="ht-pos-cart-slot" aria-hidden="true" />
       <button type="button" aria-haspopup="dialog" aria-expanded={mobileOpen} aria-controls="ht-pos-cart-drawer" onClick={() => setMobileOpen(true)} className="ht-pos-mobile-dock">
         <span className="font-bold">🛒 Cart ({itemCount})</span>
-        <span className="font-bold tabular-nums">₱{total.toFixed(2)}</span>
+        <span className="font-bold tabular-nums">₱{subtotal.toFixed(2)}</span>
         <span className="ht-pos-mobile-dock-action">View cart <span aria-hidden="true">↑</span></span>
       </button>
       {mobileOpen && <div className="ht-pos-cart-backdrop" onClick={() => setMobileOpen(false)} aria-hidden="true" />}

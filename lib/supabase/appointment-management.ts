@@ -46,9 +46,6 @@ async function fetchRaw(filter?:{customerId?:string;appointmentId?:string}){
 }
 export async function fetchAppointments(){return fetchRaw()}
 export async function fetchAppointmentsByCustomer(id:string){return fetchRaw({customerId:id})}
-// Used by the "View" button on ongoing Grooming/Boarding sessions — looks up
-// the one appointment (with its pets/addons/package info already joined by
-// fetchRaw) instead of pulling the whole appointments table just to find it.
 export async function fetchAppointmentDetail(appointmentId:string){
  const {rows,error}=await fetchRaw({appointmentId});
  if(error)return {row:null as AppointmentRow|null,error};
@@ -67,13 +64,15 @@ export async function fetchTodaysTransactionTotal(){
 const ORDER:AppointmentStatus[]=["pending","confirmed","checked_in","completed"];
 export function nextValidStatus(s:AppointmentStatus){const i=ORDER.indexOf(s);return i<0||i===ORDER.length-1?null:ORDER[i+1]}
 export async function updateAppointmentStatus(id:string,status:AppointmentStatus){
+ if(status === "confirmed" || status === "completed") {
+  try {
+   const response = await fetch("/api/admin/appointment-status", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({appointmentId:id,status})});
+   const result = await response.json();
+   return {data:response.ok?{id,status}:null,error:response.ok?null:{message:result.error??"Appointment update failed"}};
+  } catch { return {data:null,error:{message:"Network error. Please try again."}}; }
+ }
  const s=createClient();const {data,error}=await s.from("appointments").update({status}).eq("id",id).select().single();return {data,error};
 }
-// Marks one pet within a multi-pet appointment as done, independently
-// of its siblings — e.g. one boarding pet finishing a day before
-// another. Clears the assigned groomer/kennel so that resource becomes
-// available again; a DB trigger (045_appointment_pets_status.sql)
-// auto-completes the parent appointment once every pet is done.
 export async function completeAppointmentPet(appointmentPetId:string,resourceType:"groomer"|"kennel"){
  const s=createClient();
  const patch=resourceType==="groomer"?{status:"completed" as const,groomer_id:null}:{status:"completed" as const,kennel_id:null};

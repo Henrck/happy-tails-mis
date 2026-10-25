@@ -2,165 +2,33 @@
 
 import { useState } from "react";
 import { calendarEvents, type CalendarEvent } from "@/lib/data/admin-mock";
+import { useBookingClosures, manilaToday } from "@/lib/booking/use-booking-closures";
 
-const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-// IMPORTANT: Calendar color is determined ONLY by the selected service.
-// Walk-in is not a service category and therefore has no separate color.
-type ServiceColor = "grooming" | "boarding";
-
-const dotColor: Record<ServiceColor, string> = {
-  grooming: "bg-brand-pink",
-  boarding: "bg-sky-400",
-};
-
-const legendLabel: Record<ServiceColor, string> = {
-  grooming: "Grooming",
-  boarding: "Boarding",
-};
-
-function getServiceColor(service: string): ServiceColor {
-  return /boarding|kennel/i.test(service) ? "boarding" : "grooming";
-}
-
-function getEventColor(event: CalendarEvent): ServiceColor {
-  return getServiceColor(event.service);
-}
-
-export default function DashboardCalendar() {
-  const [viewDate, setViewDate] = useState(new Date(2026, 6, 1));
-  const [scheduleModalDay, setScheduleModalDay] = useState<number | null>(null);
-
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const firstDayOfWeek = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevMonthDays = new Date(year, month, 0).getDate();
-
-  function changeMonth(delta: number) {
-    setViewDate(new Date(year, month + delta, 1));
-  }
-
-  const cells: { day: number; inMonth: boolean }[] = [];
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    cells.push({ day: prevMonthDays - i, inMonth: false });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    cells.push({ day: d, inMonth: true });
-  }
-  while (cells.length < 42) {
-    cells.push({ day: cells.length - daysInMonth - firstDayOfWeek + 1, inMonth: false });
-  }
-
-  const modalEvents = scheduleModalDay ? calendarEvents[scheduleModalDay] ?? [] : [];
-
-  return (
-    <div className="bg-white rounded-2xl border border-pink-100 shadow-sm p-4 h-full flex flex-col">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-brand-pink text-sm">Calendar</h3>
-        <span className="text-[11px] font-semibold text-zinc-400">Click a day for its schedule</span>
-      </div>
-
-      <div className="mt-2 flex items-center justify-between">
-        <button onClick={() => changeMonth(-1)} className="text-zinc-400 hover:text-brand-pink px-1" aria-label="Previous month">‹</button>
-        <p className="text-sm font-bold text-zinc-800">
-          {viewDate.toLocaleString("default", { month: "long", year: "numeric" })}
-        </p>
-        <button onClick={() => changeMonth(1)} className="text-zinc-400 hover:text-brand-pink px-1" aria-label="Next month">›</button>
-      </div>
-
-      <div className="mt-2 grid grid-cols-7 text-center">
-        {weekDays.map((d) => (
-          <div key={d} className="text-[10px] font-semibold text-zinc-400 py-1">{d}</div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 grid-rows-6 gap-y-0.5 flex-1">
-        {cells.map((cell, i) => {
-          const events = cell.inMonth ? calendarEvents[cell.day] ?? [] : [];
-          const hasEvents = events.length > 0;
-          const isToday =
-            cell.inMonth && cell.day === 22 && month === 6 && year === 2026;
-
-          return (
-            <button
-              key={i}
-              disabled={!cell.inMonth}
-              onClick={() => cell.inMonth && hasEvents && setScheduleModalDay(cell.day)}
-              className={`flex flex-col items-center justify-center rounded-lg text-xs transition-colors ${
-                !cell.inMonth
-                  ? "text-zinc-200"
-                  : isToday
-                    ? "border border-brand-pink text-brand-pink font-semibold"
-                    : hasEvents
-                      ? "text-zinc-700 hover:bg-brand-tint cursor-pointer"
-                      : "text-zinc-700"
-              }`}
-            >
-              {cell.day}
-              {hasEvents && (
-                <span
-                  className={`mt-0.5 w-1 h-1 rounded-full ${dotColor[getEventColor(events[0])]}`}
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-2 pt-2 border-t border-pink-50 flex flex-wrap gap-x-3 gap-y-1 justify-center">
-        {(Object.keys(legendLabel) as ServiceColor[]).map((type) => (
-          <span key={type} className="flex items-center gap-1 text-[10px] text-zinc-500">
-            <span className={`w-1.5 h-1.5 rounded-full ${dotColor[type]}`} />
-            {legendLabel[type]}
-          </span>
-        ))}
-      </div>
-
-      {scheduleModalDay && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          onClick={() => setScheduleModalDay(null)}
-        >
-          <div
-            className="w-full max-w-xs bg-white rounded-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="bg-brand-pink px-5 py-3 flex items-center justify-between">
-              <h4 className="text-white font-bold text-sm">
-                {viewDate.toLocaleString("default", { month: "long" })} {scheduleModalDay}, {year}
-              </h4>
-              <button
-                onClick={() => setScheduleModalDay(null)}
-                className="text-white hover:opacity-80"
-                aria-label="Close"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-4 space-y-2.5 max-h-80 overflow-y-auto">
-              {modalEvents.map((event, i) => {
-                const serviceColor = getEventColor(event);
-
-                return (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor[serviceColor]}`} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800">
-                        {event.time} — {event.petName}
-                      </p>
-                      <p className="text-[11px] text-zinc-500">{event.service}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+const weekdays=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function serviceColor(service:string){return /boarding|kennel/i.test(service)?"bg-sky-400":"bg-brand-pink";}
+export default function DashboardCalendar(){
+  const closures=useBookingClosures();
+  const [month,setMonth]=useState(()=>{const [y,m]=manilaToday().split("-").map(Number);return new Date(y,m-1,1);});
+  const [selected,setSelected]=useState<string|null>(null);
+  const year=month.getFullYear(),m=month.getMonth();
+  const key=`${year}-${String(m+1).padStart(2,"0")}`;
+  const offset=new Date(year,m,1).getDay(),num=new Date(year,m+1,0).getDate();
+  const cells=Array.from({length:42},(_,i)=>i-offset+1);
+  const selectedEvents=selected ? calendarEvents[Number(selected.slice(-2))]??[] : [];
+  const selectedReason=closures.nameFor(selected);
+  return <section className="flex h-full flex-col rounded-2xl border border-pink-100 bg-white p-4 shadow-sm">
+    <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-brand-pink">Calendar</h3><span className="text-[11px] text-zinc-400">Shop closure dates marked in red</span></div>
+    <div className="mt-3 flex items-center justify-between"><button type="button" aria-label="Previous month" onClick={()=>setMonth(new Date(year,m-1,1))} className="rounded-full px-2 py-1 text-zinc-500 hover:bg-pink-50">‹</button><p className="text-sm font-bold">{month.toLocaleDateString("en-PH",{month:"long",year:"numeric"})}</p><button type="button" aria-label="Next month" onClick={()=>setMonth(new Date(year,m+1,1))} className="rounded-full px-2 py-1 text-zinc-500 hover:bg-pink-50">›</button></div>
+    <div className="mt-3 grid grid-cols-7 text-center">{weekdays.map(day=><span key={day} className="py-1 text-[10px] font-semibold text-zinc-400">{day}</span>)}</div>
+    <div className="grid flex-1 grid-cols-7 grid-rows-6 gap-1">{cells.map((day,i)=>{
+      const inside=day>=1&&day<=num;const date=inside?`${key}-${String(day).padStart(2,"0")}`:"";
+      const closed=closures.nameFor(date);const events=inside?calendarEvents[day]??[]:[];
+      return <button type="button" key={i} disabled={!inside} title={closed?`Closed: ${closed}`:date} onClick={()=>setSelected(date)} aria-label={closed?`${date} Closed: ${closed}`:date||"Outside month"}
+        className={`flex min-h-8 flex-col items-center justify-center rounded-lg text-[11px] ${closed?"border border-rose-200 bg-rose-50 font-semibold text-rose-700":inside?"text-zinc-700 hover:bg-pink-50":"text-zinc-200"}`}>
+        {inside?day:""}{closed?<span className="text-[8px] font-bold text-rose-600">Closed</span>:events.length>0?<span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${serviceColor(events[0].service)}`}/>:null}
+      </button>})}</div>
+    {closures.error&&<p role="alert" className="mt-2 text-xs text-rose-600">Calendar unavailable: {closures.error}</p>}
+    <p className="mt-2 border-t border-pink-100 pt-2 text-center text-[10px] text-zinc-500">Pink: Grooming · Blue: Boarding · Red: Closed</p>
+    {selected&&<div role="presentation" className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" onClick={()=>setSelected(null)}><section role="dialog" aria-modal="true" className="w-full max-w-sm overflow-hidden rounded-2xl bg-white" onClick={e=>e.stopPropagation()}><div className="flex items-center justify-between bg-brand-pink px-5 py-3 text-white"><h4 className="font-bold">{selected}</h4><button type="button" onClick={()=>setSelected(null)} aria-label="Close">✕</button></div><div className="max-h-80 space-y-3 overflow-y-auto p-5">{selectedReason&&<p className="rounded-lg bg-rose-50 p-3 text-sm font-semibold text-rose-700">Closed — {selectedReason}</p>}{selectedEvents.length?selectedEvents.map((ev:CalendarEvent,i)=><div key={i} className="flex gap-3 text-sm"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${serviceColor(ev.service)}`}/><div><b>{ev.time} · {ev.petName}</b><p className="text-xs text-zinc-500">{ev.service}</p></div></div>):<p className="text-sm text-zinc-500">No displayed schedule events for this day.</p>}</div></section></div>}
+  </section>;
 }

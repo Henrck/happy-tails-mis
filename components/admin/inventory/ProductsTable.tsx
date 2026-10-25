@@ -1,158 +1,36 @@
 import type { Product, ProductBatch } from "@/lib/types/products";
-import { computeTotalStock, computeStatus } from "@/lib/supabase/products";
+import { computeStatus } from "@/lib/supabase/products";
+import { batchHealth, sellableStock, physicalStock } from "@/lib/utils/inventory-expiration";
 import SortableHeader, { type SortDirection } from "@/components/admin/reports/SortableHeader";
-
-const COLUMN_WIDTHS = [
-  "w-[14%]",
-  "w-[22%]",
-  "w-[10%]",
-  "w-[14%]",
-  "w-[12%]",
-  "w-[12%]",
-  "w-[10%]",
-  "w-[6%]",
+const cols = [
+  { key: "product_code", label: "Product ID" }, { key: "name", label: "Product Name" },
+  { key: "category", label: "Category" }, { key: "totalStock", label: "Sellable" },
+  { key: "min_stock", label: "Min Stock" }, { key: "statusLabel", label: "Stock Status" },
+  { key: "expiryRisk", label: "Expiration" },
 ];
-
-export default function ProductsTable({
-  products,
-  batches,
-  onView,
-  sortKey,
-  sortDirection,
-  onSort,
-}: {
-  products: Product[];
-  batches: ProductBatch[];
-  onView: (product: Product) => void;
-  sortKey: string | null;
-  sortDirection: SortDirection;
-  onSort: (key: string) => void;
+export default function ProductsTable({ products, batches, onView, sortKey, sortDirection, onSort }: {
+  products: Product[]; batches: ProductBatch[]; onView: (p: Product) => void;
+  sortKey: string | null; sortDirection: SortDirection; onSort: (key: string) => void;
 }) {
-  const columns = [
-    { key: "product_code", label: "Product ID" },
-    { key: "name", label: "Product Name" },
-    { key: "unit", label: "Unit" },
-    { key: "category", label: "Category" },
-    { key: "totalStock", label: "Total Stocks" },
-    { key: "min_stock", label: "Min Stocks" },
-    { key: "statusLabel", label: "Status" },
-  ];
-
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-pink-100">
-      <table className="w-full min-w-[880px] text-sm table-fixed">
-        <colgroup>
-          {COLUMN_WIDTHS.map((w, i) => (
-            <col key={i} className={w} />
-          ))}
-        </colgroup>
-
-        <thead>
-          <tr className="bg-brand-pink text-white">
-            {columns.map((col) => (
-              <SortableHeader
-                key={col.key}
-                label={col.label}
-                sortKey={col.key}
-                activeSortKey={sortKey}
-                direction={sortDirection}
-                onSort={onSort}
-                variant="light"
-              />
-            ))}
-            <th className="text-left font-semibold px-4 py-3 text-white">
-              Action
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {products.length === 0 ? (
-            <tr>
-              <td colSpan={8} className="text-center text-zinc-400 py-10">
-                No products match your search/filter.
-              </td>
-            </tr>
-          ) : (
-            products.map((product) => {
-              const total = computeTotalStock(product.id, batches);
-              const status = computeStatus(total, product.min_stock);
-
-              const statusClass =
-                status === "Out of Stock"
-                  ? "bg-red-100 text-red-700"
-                  : status === "Low Stock"
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-green-100 text-green-700";
-
-              return (
-                <tr
-                  key={product.id}
-                  className={`border-t border-pink-50 hover:bg-brand-tint/50 ${
-                    status === "Out of Stock" ? "bg-red-50/30" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3 font-medium text-zinc-700 truncate">
-                    {product.product_code}
-                  </td>
-                  <td
-                    className="px-4 py-3 text-zinc-800 font-semibold truncate"
-                    title={product.name}
-                  >
-                    {product.name}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 truncate">
-                    {product.unit}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 truncate">
-                    {product.category}
-                  </td>
-                  <td
-                    className={`px-4 py-3 font-semibold truncate ${
-                      status === "Out of Stock" ? "text-red-600" : "text-zinc-800"
-                    }`}
-                  >
-                    {total}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-600 truncate">
-                    {product.min_stock}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block max-w-full truncate text-xs font-semibold px-3 py-1 rounded-full ${statusClass}`}
-                    >
-                      {status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => onView(product)}
-                      aria-label={`View ${product.name}`}
-                      className="text-brand-pink hover:text-brand-pink-dark border border-brand-pink rounded-full p-1.5 transition-colors"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path
-                          d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <div className="overflow-x-auto rounded-2xl border border-pink-100 bg-white"><table className="w-full min-w-[900px] text-sm">
+    <thead><tr className="bg-brand-pink text-white">{cols.map(c => <SortableHeader key={c.key} label={c.label} sortKey={c.key} activeSortKey={sortKey} direction={sortDirection} onSort={onSort} variant="light" />)}<th className="px-3 py-3 text-left">Action</th></tr></thead>
+    <tbody>{products.length === 0 ? <tr><td colSpan={8} className="py-10 text-center text-zinc-400">No products found.</td></tr> : products.map(p => {
+      const stock = sellableStock(p.id, batches);
+      const status = computeStatus(stock,p.min_stock);
+      const related = batches.filter(b => b.product_id === p.id);
+      const hasExpired = related.some(b => batchHealth(b) === "expired");
+      const hasSoon = related.some(b => batchHealth(b) === "expiring");
+      const atRisk = hasExpired ? "Expired batch" : hasSoon ? "Expiring Soon" : related.some(b => batchHealth(b) === "unknown") ? "Missing dates" : "Clear";
+      return <tr key={p.id} className={`border-t border-pink-50 ${hasExpired ? "bg-rose-50/50" : "hover:bg-pink-50/50"}`}>
+        <td className="px-3 py-3 text-zinc-600">{p.product_code}</td>
+        <td className="px-3 py-3 font-semibold text-zinc-800">{p.name}<span className="block text-[11px] font-normal text-zinc-400">{p.unit}{p.package_size?` · ${p.package_size}`:""}</span></td>
+        <td className="px-3 py-3 text-zinc-600">{p.category}</td>
+        <td className="px-3 py-3 font-semibold tabular-nums">{stock}<span className="block text-[11px] font-normal text-zinc-500">{physicalStock(p.id,batches)} physical</span></td>
+        <td className="px-3 py-3 tabular-nums">{p.min_stock}</td>
+        <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-[11px] font-bold ${status === "In Stock"?"bg-emerald-100 text-emerald-700":status === "Low Stock"?"bg-amber-100 text-amber-800":"bg-rose-100 text-rose-700"}`}>{status}</span></td>
+        <td className="px-3 py-3"><span className={`rounded-full px-2 py-1 text-[11px] font-bold ${hasExpired?"bg-rose-100 text-rose-700":hasSoon?"bg-amber-100 text-amber-800":"bg-zinc-100 text-zinc-600"}`}>{atRisk}</span></td>
+        <td className="px-3 py-3"><button type="button" onClick={()=>onView(p)} className="rounded-full border border-brand-pink px-3 py-1.5 text-xs font-semibold text-brand-pink hover:bg-pink-50" aria-label={`View ${p.name}`}>View</button></td>
+      </tr>;
+    })}</tbody>
+  </table></div>;
 }

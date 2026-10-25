@@ -105,7 +105,7 @@ export default function PetRecordsPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-brand-pink">Pet's Record</h1>
+      <h1 className="text-3xl font-bold text-brand-pink">Pet&apos;s Record</h1>
       <div className="mt-4 flex w-fit rounded-full border border-pink-200 bg-white p-1">
         <button type="button" onClick={() => switchTab("registered")} className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors ${tab === "registered" ? "bg-brand-pink text-white" : "text-zinc-600"}`}>
           Registered Owners <span className="ml-1 opacity-80">({registeredPets.length})</span>
@@ -124,7 +124,8 @@ export default function PetRecordsPage() {
               <button type="button" onClick={() => changeOwnerFilter("all")} className="text-xs font-semibold text-brand-pink hover:underline">Clear</button>
             </div>
           )}
-          <div className="mt-4 grid grid-cols-1 content-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Larger cards need two columns alongside the owner sidebar. */}
+          <div className="mt-4 grid grid-cols-1 content-start gap-5 md:grid-cols-2 2xl:grid-cols-3">
             {loading ? (
               <p className="col-span-full py-10 text-center text-zinc-400">Loading pets…</p>
             ) : filteredPets.length === 0 ? (

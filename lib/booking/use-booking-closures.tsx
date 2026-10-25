@@ -16,7 +16,7 @@ export function useBookingClosures() {
     setLoading(false);
   }, []);
   useEffect(() => { void reload(); }, [reload]);
-  const byDate = useMemo(() => new Map(dates.map(day => [day.date, day.name])), [dates]);
+  const byDate = useMemo(() => new Map(dates.filter(day => !day.is_open_override).map(day => [day.date, day.name])), [dates]);
   const nameFor = useCallback((day: string | null | undefined) => day ? byDate.get(day) ?? null : null, [byDate]);
   const verifyOpen = useCallback(async (day: string): Promise<string | null> => {
     if (!day) return "Choose an appointment date.";

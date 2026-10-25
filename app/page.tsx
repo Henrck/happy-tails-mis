@@ -8,6 +8,7 @@ import BoardingPricing from '@/components/landing/BoardingPricing';
 import SpaBanner from '@/components/landing/SpaBanner';
 import SpaBenefits from '@/components/landing/SpaBenefits';
 import ProductsCarousel from '@/components/landing/ProductsCarousel';
+import BranchesCarousel from '@/components/landing/BranchesCarousel';
 import DynamicAbout from '@/components/landing/DynamicAbout';
 import Gallery from '@/components/landing/Gallery';
 import Footer from '@/components/landing/Footer';
@@ -18,23 +19,26 @@ import { fetchActiveGalleryPhotos } from '@/lib/supabase/gallery';
 import type { SiteSetting } from '@/lib/supabase/site-settings';
 import type { HeroSlide } from '@/lib/types/hero-slides';
 import type { Product } from '@/lib/types/products';
+import type { WebsiteBranch } from '@/lib/types/website-branches';
 import { copy, type WebsiteService } from '@/lib/website/catalog';
 
 export default async function Home() {
   const db = await createClient();
-  const [settingsResult, heroResult, productsResult, galleryPhotos, serviceResult, textResult] = await Promise.all([
+  const [settingsResult, heroResult, productsResult, galleryPhotos, serviceResult, textResult, branchResult] = await Promise.all([
     db.from('site_settings').select('*'),
     db.from('hero_slides').select('*').eq('active', true).order('sort_order', { ascending: true }),
     db.from('products').select('*').eq('status', 'active').order('product_code'),
     fetchActiveGalleryPhotos(),
     db.from('website_services').select('*').eq('published', true).order('sort_order', { ascending: true }),
     db.from('website_text').select('key,value'),
+    db.from('website_branches').select('*').eq('published', true).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
   ]);
 
   const settings = (settingsResult.data ?? []) as SiteSetting[];
   const get = (key: string) => settings.find(s => s.key === key);
   const text = Object.fromEntries((textResult.data ?? []).map(item => [item.key, item.value])) as Record<string, string>;
   const services = (serviceResult.data ?? []) as WebsiteService[];
+  const branches = (branchResult.data ?? []) as WebsiteBranch[];
   const imageDefaults: Record<string, string | undefined> = {
     'pet-grooming': get('services_grooming_image')?.image_url ?? undefined,
     'pet-boarding': get('services_boarding_image')?.image_url ?? undefined,
@@ -58,6 +62,7 @@ export default async function Home() {
         <SpaBanner backgroundUrl={get('spa_banner_background')?.image_url} width={get('spa_banner_background')?.image_width} height={get('spa_banner_background')?.image_height} />
         <SpaBenefits />
         <ProductsCarousel products={(productsResult.data ?? []) as Product[]} />
+        <BranchesCarousel branches={branches} />
         <DynamicAbout backgroundUrl={get('about_us_background')?.image_url} heading={copy('about_heading', text)} description={copy('about_description', text)} />
       </main>
       <Footer />

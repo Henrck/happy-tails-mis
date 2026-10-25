@@ -1,11 +1,15 @@
-import type { Pet } from "@/lib/types/appointments";
-import SpeciesIcon from "./SpeciesIcon";
+"use client";
 
-// ownerName is passed in directly rather than resolved here — on the
-// Registered Owners tab it comes from the matched Customer, on the
-// Walk-in Only tab it comes straight from the pet's own owner_name.
-// Keeping that resolution at the page level means this card doesn't
-// need to know which tab it's rendering in.
+import Link from "next/link";
+import type { Pet } from "@/lib/types/appointments";
+import PetAvatar from "@/components/dashboard/PetAvatar";
+
+/**
+ * The same avatar, typography and primary actions used by Customer → My Pets,
+ * adapted to preserve the owner information staff need in Pet's Record.
+ * The booking action opens the existing POS walk-in workflow; it does not create
+ * an appointment, bypass pet/owner verification, or preselect a pet implicitly.
+ */
 export default function PetCard({
   pet,
   ownerName,
@@ -15,47 +19,61 @@ export default function PetCard({
   ownerName: string | null;
   onView: () => void;
 }) {
-  const isFemale = pet.sex === "Female";
-  const tint = pet.sex === null ? "bg-zinc-50 border-zinc-200" : isFemale ? "bg-pink-50 border-pink-200" : "bg-sky-50 border-sky-200";
-  const chip = pet.sex === null ? "bg-zinc-100" : isFemale ? "bg-pink-100" : "bg-sky-100";
-  const iconColor = pet.sex === null ? "text-zinc-400" : isFemale ? "text-pink-400" : "text-sky-400";
-
   return (
-    <div className={`rounded-2xl border-2 p-4 ${tint}`}>
-      <div className="flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${chip}`}>
-          <SpeciesIcon species={pet.species} className={`w-7 h-7 ${iconColor}`} />
+    <article className="group flex h-full min-w-0 flex-col rounded-[26px] border border-pink-100 bg-white p-5 shadow-[0_5px_22px_rgba(136,28,74,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:border-pink-200 hover:shadow-[0_12px_30px_rgba(136,28,74,0.12)] sm:p-6">
+      <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+        <div className="shrink-0 rounded-full bg-[#fdf1f7] p-0.5 ring-1 ring-pink-100">
+          <PetAvatar pet={pet} size="lg" />
         </div>
-        <div>
-          <p className="font-bold text-zinc-800">{pet.name}</p>
-          <p className="text-xs text-zinc-500">{pet.breed}</p>
+
+        <div className="min-w-0 flex-1 pt-1">
+          <h3 className="truncate text-xl font-extrabold leading-tight tracking-tight text-[#17324d]" title={pet.name}>
+            {pet.name}
+          </h3>
+          <p className="mt-1.5 line-clamp-2 text-sm leading-5 text-slate-500" title={`${pet.breed || "Breed not specified"} · ${pet.size_label || "Size not specified"}`}>
+            {pet.breed || "Breed not specified"}
+            <span className="mx-1 text-pink-300" aria-hidden="true">·</span>
+            {pet.size_label || "Size not specified"}
+          </p>
+          <p className="mt-1.5 text-xs font-medium text-slate-500">
+            {pet.age != null ? `${pet.age} ${pet.age === 1 ? "year" : "years"} old` : "Age not recorded"}
+          </p>
         </div>
+
+        <span
+          className={`shrink-0 text-2xl font-medium leading-none ${pet.sex === "Male" ? "text-brand-pink" : pet.sex === "Female" ? "text-pink-500" : "text-slate-300"}`}
+          aria-label={pet.sex ?? "Sex not recorded"}
+          title={pet.sex ?? "Sex not recorded"}
+        >
+          {pet.sex === "Male" ? "♂" : pet.sex === "Female" ? "♀" : ""}
+        </span>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <div className={`rounded-lg px-3 py-1.5 text-xs ${chip}`}>
-          <span className="text-zinc-500">Age</span>
-          <p className="font-semibold text-zinc-700">{pet.age != null ? `${pet.age} yrs` : "—"}</p>
-        </div>
-        <div className={`rounded-lg px-3 py-1.5 text-xs ${chip}`}>
-          <span className="text-zinc-500">Sex</span>
-          <p className="font-semibold text-zinc-700">{pet.sex ?? "—"}</p>
-        </div>
+      <div className="mt-4 flex min-w-0 items-center gap-2 rounded-xl bg-pink-50/70 px-3 py-2">
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-pink-500">Owner</span>
+        <span className="min-w-0 truncate text-xs font-semibold text-slate-700" title={ownerName || "Owner not recorded"}>
+          {ownerName || "Owner not recorded"}
+        </span>
       </div>
 
-      <div className="mt-2">
-        <p className="text-xs text-zinc-500">Owner Name</p>
-        <div className={`mt-0.5 rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-700 truncate ${chip}`}>
-          {ownerName ?? "Unknown"}
-        </div>
+      <div className="mt-auto grid grid-cols-2 gap-2.5 pt-4">
+        <button
+          type="button"
+          onClick={onView}
+          aria-label={`View ${pet.name}'s profile and service history`}
+          className="flex min-h-11 min-w-0 items-center justify-center rounded-full bg-brand-pink px-2 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-brand-pink-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink sm:text-sm"
+        >
+          View Profile
+        </button>
+        <Link
+          href="/admin/pos/walk-in"
+          aria-label={`Start a walk-in appointment for ${pet.name}`}
+          title="Opens POS Walk-in Booking; select the pet during verification"
+          className="flex min-h-11 min-w-0 items-center justify-center rounded-full border border-brand-pink px-2 py-2.5 text-center text-xs font-bold text-brand-pink transition-colors hover:bg-pink-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink sm:text-sm"
+        >
+          Book Appointment
+        </Link>
       </div>
-
-      <button
-        onClick={onView}
-        className="mt-3 text-xs font-semibold border border-brand-pink text-brand-pink px-5 py-1.5 rounded-full hover:bg-brand-pink hover:text-white transition-colors"
-      >
-        View
-      </button>
-    </div>
+    </article>
   );
 }

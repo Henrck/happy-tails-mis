@@ -11,7 +11,6 @@ import PosCategoryTabs from "@/components/admin/pos/PosCategoryTabs";
 import ProductPosCard from "@/components/admin/pos/ProductPosCard";
 import CartPanel, { type CartLine } from "@/components/admin/pos/CartPanel";
 import ProcessPaymentModal, { type LowStockWarning } from "@/components/admin/pos/ProcessPaymentModal";
-import ReturnExchangeModal from "@/components/admin/pos/ReturnExchangeModal";
 import SaleCompleteModal, { type CompletedSale } from "@/components/admin/pos/SaleCompleteModal";
 
 export default function PointOfSalePage() {
@@ -26,7 +25,6 @@ export default function PointOfSalePage() {
   const processingRef = useRef(false);
   // Keep this ID stable during retries, including ambiguous network failures.
   const checkoutRequestId = useRef<string | null>(null);
-  const [returnOpen, setReturnOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
@@ -225,7 +223,6 @@ export default function PointOfSalePage() {
         onRemove={remove}
         onClear={clearCart}
         onProcessPayment={() => { setCheckoutError(null); setPaymentOpen(true); }}
-        onReturnExchange={() => setReturnOpen(true)}
       />
 
       {paymentOpen && (
@@ -235,8 +232,6 @@ export default function PointOfSalePage() {
           onClose={() => { if (!processingRef.current) setPaymentOpen(false); }}
           onConfirm={handleConfirmPayment} />
       )}
-
-      {returnOpen && <ReturnExchangeModal onClose={() => setReturnOpen(false)} />}
 
       {completedSale && (
         <SaleCompleteModal sale={completedSale} onClose={() => setCompletedSale(null)} />

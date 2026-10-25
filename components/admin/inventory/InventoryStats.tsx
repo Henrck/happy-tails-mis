@@ -1,62 +1,28 @@
 import type { Product, ProductBatch } from "@/lib/types/products";
-import { computeTotalStock, computeStatus } from "@/lib/supabase/products";
+import { computeStatus } from "@/lib/supabase/products";
+import { batchHealth, sellableStock } from "@/lib/utils/inventory-expiration";
 
-function isExpiringSoon(expirationDate: string | null, withinDays = 30): boolean {
-  if (!expirationDate) return false;
-  const days =
-    (new Date(expirationDate).getTime() - Date.now()) /
-    (1000 * 60 * 60 * 24);
-  return days >= 0 && days <= withinDays;
-}
-
-export default function InventoryStats({
-  products,
-  batches,
-}: {
-  products: Product[];
-  batches: ProductBatch[];
-}) {
-  const activeProducts = products.filter((p) => p.status === "active");
-
-  const outOfStockCount = activeProducts.filter(
-    (p) => computeStatus(computeTotalStock(p.id, batches), p.min_stock) === "Out of Stock"
-  ).length;
-
-  const lowStockCount = activeProducts.filter(
-    (p) => computeStatus(computeTotalStock(p.id, batches), p.min_stock) === "Low Stock"
-  ).length;
-
-  const expiringSoonCount = batches.filter((b) =>
-    isExpiringSoon(b.expiration_date)
-  ).length;
-
-  const realBatchCount = batches.filter((b) => !b.is_adjustment).length;
-
+export default function InventoryStats({ products, batches }: { products: Product[]; batches: ProductBatch[] }) {
+  const active = products.filter(p => p.status === "active");
+  const stock = active.map(p => computeStatus(sellableStock(p.id, batches), p.min_stock));
+  const activeIds = new Set(active.map(p => p.id));
+  const real = batches.filter(b => !b.is_adjustment && b.quantity > 0 && activeIds.has(b.product_id));
+  const expired = real.filter(b => batchHealth(b) === "expired");
+  const soon = real.filter(b => batchHealth(b) === "expiring");
+  const unknown = real.filter(b => batchHealth(b) === "unknown");
   const cards = [
-    { label: "Total Products", value: activeProducts.length, icon: "📦" },
-    { label: "Out of Stock", value: outOfStockCount, dot: "bg-red-500" },
-    { label: "Low Stock", value: lowStockCount, dot: "bg-amber-400" },
-    { label: "Total Batches", value: realBatchCount, icon: "🧾" },
+    { label: "Active Products", value: active.length, sub: "Product catalog", color: "text-zinc-800" },
+    { label: "Out of Stock", value: stock.filter(s => s === "Out of Stock").length, sub: "Sellable units only", color: "text-rose-700" },
+    { label: "Low Stock", value: stock.filter(s => s === "Low Stock").length, sub: "Sellable units only", color: "text-amber-700" },
+    { label: "Expired Batches", value: expired.length, sub: `${expired.reduce((n,b) => n + b.quantity,0)} units to isolate`, color: "text-rose-700" },
+    { label: "Expiring in 30 Days", value: soon.length, sub: `${soon.reduce((n,b) => n + b.quantity,0)} units at risk`, color: "text-amber-700" },
+    { label: "Missing Expiry", value: unknown.length, sub: "Review dates on file", color: "text-zinc-700" },
   ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {cards.map((c) => (
-        <div
-          key={c.label}
-          className="bg-white rounded-2xl shadow-sm border border-pink-100 px-5 py-4"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-zinc-700">{c.label}</span>
-            {c.dot ? (
-              <span className={`w-3 h-3 rounded-full ${c.dot}`} />
-            ) : (
-              <span aria-hidden>{c.icon}</span>
-            )}
-          </div>
-          <p className="mt-1 text-2xl font-bold text-zinc-900">{c.value}</p>
-        </div>
-      ))}
-    </div>
-  );
+  return <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    {cards.map(card => <div key={card.label} className="rounded-2xl border border-pink-100 bg-white px-4 py-4 shadow-sm">
+      <p className="text-xs font-semibold text-zinc-600">{card.label}</p>
+      <p className={`mt-2 text-2xl font-extrabold ${card.color}`}>{card.value}</p>
+      <p className="mt-1 text-[11px] text-zinc-500">{card.sub}</p>
+    </div>)}
+  </div>;
 }

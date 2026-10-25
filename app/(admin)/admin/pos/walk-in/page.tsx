@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Customer } from "@/lib/types/users";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
-import type { Package, PetSize, Addon, AddonPrice, PackagePricing } from "@/lib/types/services";
+import type { Package, PetSize, Addon } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, type BookingLeg } from "@/lib/types/booking-leg";
 import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
@@ -13,9 +13,8 @@ import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/Service
 import CustomerVerifyStep from "@/components/admin/pos/walk-in/CustomerVerifyStep";
 import PetInformationStep from "@/components/admin/pos/walk-in/PetInformationStep";
 import WaiverStep from "@/components/admin/pos/walk-in/WaiverStep";
-import BoardingSelectionStep from "@/components/admin/pos/walk-in/BoardingSelectionStep";
+import BoardingDetailsAndSchedule from "@/components/shared/BoardingDetailsAndSchedule";
 import AlaCarteSelectionStep from "@/components/admin/pos/walk-in/AlaCarteSelectionStep";
-import BoardingScheduleStep from "@/components/admin/pos/walk-in/BoardingScheduleStep";
 import CustomerServiceChoiceStep from "@/components/dashboard/booking/CustomerServiceChoiceStep";
 import CustomerGroomingSelectionStep from "@/components/dashboard/booking/CustomerGroomingSelectionStep";
 import CustomerGroomingScheduleStep from "@/components/dashboard/booking/CustomerGroomingScheduleStep";
@@ -39,8 +38,6 @@ export default function WalkInPage() {
   const [completedLegs, setCompletedLegs] = useState<BookingLeg[]>([]);
   const [groomers, setGroomers] = useState<Groomer[]>([]);
   const [kennels, setKennels] = useState<Kennel[]>([]);
-  const [boardingPricing, setBoardingPricing] = useState<PackagePricing[]>([]);
-  const [boardingAddonPrices, setBoardingAddonPrices] = useState<AddonPrice[]>([]);
   const [packagesByService, setPackagesByService] = useState<Record<string, Package[]>>({});
   const [sizesByService, setSizesByService] = useState<Record<string, PetSize[]>>({});
   const [addonsByService, setAddonsByService] = useState<Record<string, Addon[]>>({});
@@ -50,12 +47,11 @@ export default function WalkInPage() {
     let active = true;
     Promise.all([
       fetchGroomers({ activeOnly: true }), fetchKennels(),
-      fetchPackagesFull("boarding"), fetchAddonsByCategory("Boarding Add-ons"),
+      fetchAddonsByCategory("Boarding Add-ons"),
       fetchAddonsByCategory("Ala Carte"),
-    ]).then(([g, k, b, ba, ac]) => {
+    ]).then(([g, k, ba, ac]) => {
       if (!active) return;
       setGroomers(g.groomers); setKennels(k.kennels);
-      setBoardingPricing(b.pricing); setBoardingAddonPrices(ba.prices);
       setAddonsByService(prev => ({ ...prev, boarding: ba.addons, ala_carte: ac.addons }));
     }).catch(() => { if (active) setLookupError("Some booking options could not be loaded. Refresh before proceeding."); });
     return () => { active = false; };
@@ -119,7 +115,7 @@ export default function WalkInPage() {
         <p className="mt-1 text-sm text-zinc-500">Same multi-pet and multi-service booking process as customer appointments, with walk-in records.</p>
         {completedLegs.length > 0 && <p className="mt-2 text-sm font-semibold text-zinc-700">Services ready: {completedLegs.length} · Pets: {pets.length}</p>}
       </div>
-      {step !== "verify" && <div className="ht-pos-progress-wrap mb-5 rounded-2xl border border-pink-100 bg-white p-3 sm:p-4"><BookingProgress step={step} hasCompletedServices={completedLegs.length > 0} /></div>}
+      {step !== "verify" && <div className="ht-pos-progress-wrap mb-5 rounded-2xl border border-pink-100 bg-white p-3 sm:p-4"><BookingProgress step={step} hasCompletedServices={completedLegs.length > 0} combinedBoarding={step === "selection" && currentLeg?.serviceChoice === "boarding"} /></div>}
       {lookupError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{lookupError}</p>}
       {step === "verify" && <CustomerVerifyStep onSelectExisting={c => {
         setCustomer(c); setOwner({ name: c.full_name, contact: c.phone_number ?? "", address: c.address ?? "" }); setStep("pet-info");
@@ -133,21 +129,17 @@ export default function WalkInPage() {
         onBack={() => setStep(completedLegs.length ? "add-more" : "pet-info")} onNext={() => {}} />}
       {step === "waiver" && currentLeg && <WaiverStep serviceType={currentLeg.serviceChoice} onBack={() => { setCurrentLeg(null); setStep(waiverBackStep); }} onAgree={() => setStep("selection")} />}
       {(step === "selection" || step === "schedule") && legPets.length > 1 && <div className="mb-5"><CurrentLegSidebar pets={legPets} onRemove={id => setCurrentLeg(prev => prev && prev.petIds.length > 1 ? { ...prev, petIds: prev.petIds.filter(x => x !== id), petSelections: prev.petSelections.filter(s => s.pet.id !== id) } : prev)} /></div>}
-      {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingSelectionStep pets={legPets} selections={currentLeg.petSelections}
+      {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingDetailsAndSchedule
+        pets={legPets} selections={currentLeg.petSelections} kennels={kennels}
         alreadyGroomedPetIds={completedLegs.filter(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice)).flatMap(l => l.petIds)}
-        scheduledDate={currentLeg.scheduledDate} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
+        scheduledDate={currentLeg.scheduledDate} petBelongings={currentLeg.petBelongings}
+        specialRequests={currentLeg.specialRequests} onChange={updateSelections}
+        onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
+        onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
+        onBack={backFromSelection} onConfirmed={confirmSchedule} />}
       {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
       {step === "selection" && grooming && currentLeg && <CustomerGroomingSelectionStep serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
         pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
-      {step === "schedule" && currentLeg?.serviceChoice === "boarding" && <BoardingScheduleStep petSelections={currentLeg.petSelections}
-        kennels={kennels} pricing={boardingPricing} addonPrices={boardingAddonPrices} scheduledDate={currentLeg.scheduledDate} dropOffAt={currentLeg.dropOffAt}
-        pickUpAt={currentLeg.pickUpAt} petBelongings={currentLeg.petBelongings} specialRequests={currentLeg.specialRequests}
-        onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
-        onDropOffChange={v => setCurrentLeg(l => l && { ...l, dropOffAt: v })}
-        onPickUpChange={v => setCurrentLeg(l => l && { ...l, pickUpAt: v })}
-        onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
-        onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
-        onSelectionsChange={updateSelections} onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} />}
       {step === "schedule" && currentLeg && grooming && <HolidayAwareGroomingSchedule
         petSelections={currentLeg.petSelections} scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime}
         specialRequests={currentLeg.specialRequests}

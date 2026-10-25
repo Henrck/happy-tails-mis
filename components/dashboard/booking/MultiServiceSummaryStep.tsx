@@ -13,16 +13,33 @@ import type { Groomer, Kennel } from "@/lib/types/pet-services";
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "—";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const parsed = new Date(dateStr + "T00:00:00");
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 function formatTime12h(time: string | null): string {
-  if (!time) return "—";
+  if (!time || !/^\d{2}:\d{2}/.test(time)) return "—";
   const [h, m] = time.split(":").map(Number);
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+// Customer booking selections can be partially hydrated when moving between steps.
+// Keep the review screen render-safe while still validating before persistence.
+function selectionsFor(leg: BookingLeg): DraftPetSelection[] {
+  return Array.isArray(leg.petSelections) ? leg.petSelections.filter((sel): sel is DraftPetSelection => !!sel && !!sel.pet) : [];
+}
+function amountFor(sel: DraftPetSelection): number {
+  const amount = Number(sel.lineAmount);
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+}
+function addonIdsFor(sel: DraftPetSelection): string[] {
+  return Array.isArray(sel.addonIds) ? sel.addonIds : [];
 }
 
 const serviceLabels: Record<string, string> = {
@@ -53,10 +70,10 @@ export default function MultiServiceSummaryStep({
   const hasGrooming = legs.some((leg) =>
     leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming"
   );
-  const grandTotal = legs.reduce((sum, leg) => sum + leg.petSelections.reduce((n, s) => n + s.lineAmount, 0), 0);
+  const grandTotal = legs.reduce((sum, leg) => sum + selectionsFor(leg).reduce((n, s) => n + amountFor(s), 0), 0);
   const saveUnits = legs.reduce((n, leg) => {
-    if (leg.serviceChoice === "boarding") return n + leg.petSelections.length;
-    if (leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") return n + leg.petSelections.length;
+    if (leg.serviceChoice === "boarding") return n + selectionsFor(leg).length;
+    if (leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") return n + selectionsFor(leg).length;
     return n + 1;
   }, 0);
 
@@ -67,12 +84,16 @@ export default function MultiServiceSummaryStep({
     setError(null);
 
     const writes: CreateAppointmentInput[] = [];
+    if (!legs.length || legs.some(leg => !selectionsFor(leg).length || selectionsFor(leg).some(sel => !Number.isFinite(Number(sel.lineAmount)) || Number(sel.lineAmount) < 0))) {
+      setError("Some pet service details are incomplete. Please edit the affected service and review again.");
+      setSaving(false); submitLock.current = false; return;
+    }
     for (const leg of legs) {
       if (leg.serviceChoice !== "boarding") {
         const groups: Array<{ serviceType: AppointmentServiceType; selections: DraftPetSelection[] }> = [];
         if (leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming") {
           // Each online grooming pet receives an independent start time and capacity reservation.
-          for (const sel of leg.petSelections) groups.push({
+          for (const sel of selectionsFor(leg)) groups.push({
             serviceType: sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming",
             selections: [sel],
           });
@@ -111,7 +132,7 @@ export default function MultiServiceSummaryStep({
         }
         continue;
       }
-      for (const sel of leg.petSelections) {
+      for (const sel of selectionsFor(leg)) {
         if (!sel.boardingScheduledDate || !sel.boardingDropOffAt || !sel.boardingPickUpAt) {
           setError(`A boarding schedule is missing for ${sel.pet.name}. Please edit the boarding schedule before confirming.`);
           setSaving(false);
@@ -140,16 +161,16 @@ export default function MultiServiceSummaryStep({
       // propose later starts, but checkout must NEVER accept those silently.
       for (const leg of legs) {
         if (!leg.scheduledDate || !["grooming", "dog_grooming", "cat_grooming"].includes(leg.serviceChoice)) continue;
-        const expected = leg.petSelections.map(sel => (sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime);
+        const expected = selectionsFor(leg).map(sel => (sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime);
         if (!leg.scheduledTime || expected.some(value => !value)) {
           setError("A grooming start time is missing. Please edit the schedule before confirming.");
           submitLock.current = false; return;
         }
         const { data, error: planningError } = await createClient().rpc("happytails_grooming_plan", {
           p_date: leg.scheduledDate,
-          p_pricing_ids: leg.petSelections.map(sel => sel.packagePricingId as string),
+          p_pricing_ids: selectionsFor(leg).map(sel => sel.packagePricingId as string),
           p_preferred_start: leg.scheduledTime,
-          p_groomer_ids: leg.petSelections.map(sel => sel.groomerId),
+          p_groomer_ids: selectionsFor(leg).map(sel => sel.groomerId),
         });
         if (planningError) {
           setError(`Could not verify your grooming times: ${planningError.message}. Please edit the schedule.`);
@@ -202,14 +223,14 @@ export default function MultiServiceSummaryStep({
       <div className="mt-5 space-y-4">
         {legs.map((leg) => {
           const isBoarding = leg.serviceChoice === "boarding";
-          const legTotal = leg.petSelections.reduce((sum, sel) => sum + sel.lineAmount, 0);
+          const legTotal = selectionsFor(leg).reduce((sum, sel) => sum + amountFor(sel), 0);
           return (
             <section key={leg.id} className="w-full rounded-2xl border-2 border-pink-100 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-base font-bold text-brand-pink sm:text-lg">{serviceLabels[leg.serviceChoice]}</h3>
                 <button onClick={() => onEditLeg(leg.id)} className="shrink-0 text-xs font-semibold text-brand-pink hover:underline sm:text-sm">Edit</button>
               </div>
-              {leg.petSelections.map((sel) => {
+              {selectionsFor(leg).map((sel) => {
                 const lookupKey = leg.serviceChoice === "grooming"
                   ? sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming"
                   : leg.serviceChoice;
@@ -219,10 +240,10 @@ export default function MultiServiceSummaryStep({
                 const pkg = packages.find((p) => p.id === sel.packageId);
                 const size = sizes.find((s) => s.id === sel.sizeId);
                 const groomer = groomers.find((g) => g.id === sel.groomerId);
-                const petAddons = sel.addonIds.map((id) => addons.find((a) => a.id === id)?.name).filter(Boolean);
+                const petAddons = addonIdsFor(sel).map((id) => addons.find((a) => a.id === id)?.name).filter(Boolean);
                 return (
                   <div key={sel.pet.id} className="mt-3 border-t border-dashed border-pink-100 pt-3">
-                    <p className="text-sm font-semibold text-zinc-800">{sel.pet.name} <span className="font-normal text-zinc-400">({sel.pet.breed})</span></p>
+                    <p className="text-sm font-semibold text-zinc-800">{sel.pet.name} <span className="font-normal text-zinc-400">({sel.pet.breed ?? "Breed not specified"})</span></p>
                     {isBoarding ? (
                       <>
                         <p className="text-sm text-zinc-600">Kennel Size: {sel.boardingKennelSize === "small" ? "Small" : "Big"}</p>
@@ -240,7 +261,7 @@ export default function MultiServiceSummaryStep({
                       </>
                     )}
                     {petAddons.length > 0 && <p className="text-sm text-zinc-600">Add-ons: {petAddons.join(", ")}</p>}
-                    <p className="mt-0.5 text-sm font-semibold text-zinc-800">₱{sel.lineAmount.toLocaleString()}</p>
+                    <p className="mt-0.5 text-sm font-semibold text-zinc-800">₱{amountFor(sel).toLocaleString()}</p>
                   </div>
                 );
               })}
