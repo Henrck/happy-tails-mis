@@ -1,20 +1,28 @@
 "use client";
-// Ala Carte Selection: the real, separate "Ala Carte" add-on category
-// from Service Management — a flat list, no package/size/groomer
-// involved. Confirmed this is its own category, not a filtered view of
-// Grooming/Boarding add-ons.
+
 import { useState, useEffect, useCallback } from "react";
 import { fetchAddonsByCategory } from "@/lib/supabase/services";
 import type { Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 
-export default function AlaCarteSelectionStep({
-  pets,
-  selections,
-  onChange,
-  onBack,
-  onNext,
-}: {
+function normalizedSize(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+}
+
+function priceForPet(rows: AddonPrice[], addonId: string, petSize: string): number | null {
+  const relevant = rows.filter(row => row.addon_id === addonId);
+  const size = normalizedSize(petSize);
+  const exact = relevant.find(row => normalizedSize(row.size_label) === size);
+  const large = /^(large|extralarge|2xextralarge|xl|2xl|xxl)$/.test(size);
+  const preferred = large
+    ? relevant.find(row => ["large", "largesize"].includes(normalizedSize(row.size_label)))
+    : relevant.find(row => ["smallmedium", "small", "medium"].includes(normalizedSize(row.size_label)));
+  const universal = relevant.find(row => ["all", "allsize", "allsizes", "standard", "fixed"].includes(normalizedSize(row.size_label)));
+  const value = Number((exact ?? preferred ?? universal)?.price);
+  return (exact || preferred || universal) && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+export default function AlaCarteSelectionStep({ pets, selections, onChange, onBack, onNext }: {
   pets: Pet[];
   selections: DraftPetSelection[];
   onChange: (selections: DraftPetSelection[]) => void;
@@ -24,92 +32,66 @@ export default function AlaCarteSelectionStep({
   const [addons, setAddons] = useState<Addon[]>([]);
   const [prices, setPrices] = useState<AddonPrice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const { addons: data, prices: priceData } = await fetchAddonsByCategory("Ala Carte");
-    setAddons(data.filter((a) => a.is_active));
-    setPrices(priceData);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const result = await fetchAddonsByCategory("Ala Carte");
+      if (result.error) throw new Error(result.error);
+      setAddons(result.addons.filter(a => a.is_active));
+      setPrices(result.prices);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Unable to load À La Carte prices.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  useEffect(() => { loadData(); }, [loadData]);
-
-  function selectionFor(pet: Pet) {
-    return selections.find((s) => s.pet.id === pet.id);
-  }
-
+  const selectionFor = (pet: Pet) => selections.find(s => s.pet.id === pet.id);
   function toggleAddon(pet: Pet, addonId: string) {
     const existing = selectionFor(pet);
     const base: DraftPetSelection = existing ?? { pet, packageId: null, packagePricingId: null, sizeId: null, kennelId: null, groomerId: null, addonIds: [], lineAmount: 0 };
-    const addonIds = base.addonIds.includes(addonId) ? base.addonIds.filter((id) => id !== addonId) : [...base.addonIds, addonId];
-
-    const size = pet.size_label;
-    let total = 0;
-    for (const id of addonIds) {
-      const priceRow = prices.find((p) => p.addon_id === id && p.size_label.toLowerCase() === size.toLowerCase());
-      total += priceRow?.price ?? prices.find((p) => p.addon_id === id)?.price ?? 0;
-    }
-
-    const updated = { ...base, addonIds, lineAmount: total };
-    onChange([...selections.filter((s) => s.pet.id !== pet.id), updated]);
+    const addonIds = base.addonIds.includes(addonId) ? base.addonIds.filter(id => id !== addonId) : [...base.addonIds, addonId];
+    const amounts = addonIds.map(id => priceForPet(prices, id, pet.size_label));
+    if (amounts.some(amount => amount === null)) return;
+    const lineAmount = amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0);
+    onChange([...selections.filter(s => s.pet.id !== pet.id), { ...base, addonIds, lineAmount }]);
   }
 
-  const allPetsHaveAtLeastOneAddon = pets.every((p) => (selectionFor(p)?.addonIds.length ?? 0) > 0);
+  const ready = pets.length > 0 && pets.every(pet => {
+    const selected = selectionFor(pet);
+    return !!selected?.addonIds.length && selected.addonIds.every(id => priceForPet(prices, id, pet.size_label) !== null);
+  });
 
-  if (loading) return <p className="text-center text-zinc-400 py-16">Loading add-ons…</p>;
-
-  return (
-    <div className="max-w-3xl mx-auto">
-      <h2 className="text-2xl font-bold text-brand-pink text-center">Ala Carte</h2>
-      <p className="mt-1 text-sm text-zinc-500 text-center">Choose individual services for each pet.</p>
-
-      {addons.length === 0 ? (
-        <p className="mt-10 text-center text-zinc-400">No Ala Carte items available right now.</p>
-      ) : (
-        pets.map((pet) => {
-          const sel = selectionFor(pet);
-          return (
-            <div key={pet.id} className="mt-6">
-              <p className="font-bold text-zinc-800">{pet.name} <span className="font-normal text-zinc-400 text-sm">({pet.size_label})</span></p>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {addons.map((addon) => {
-                  const priceRow = prices.find((p) => p.addon_id === addon.id && p.size_label.toLowerCase() === pet.size_label.toLowerCase())
-                    ?? prices.find((p) => p.addon_id === addon.id);
-                  const selected = sel?.addonIds.includes(addon.id);
-                  return (
-                    <button
-                      key={addon.id}
-                      onClick={() => toggleAddon(pet, addon.id)}
-                      className={`text-left rounded-xl border-2 px-3 py-2.5 text-xs transition-colors ${selected ? "bg-brand-pink border-brand-pink text-white" : "border-pink-100 text-zinc-700 hover:border-pink-200"}`}
-                    >
-                      <p className="font-semibold">{addon.name}</p>
-                      {addon.price_note ? (
-                        <p className={selected ? "text-white/80 italic" : "text-zinc-400 italic"}>{addon.price_note}</p>
-                      ) : priceRow ? (
-                        <p className={selected ? "text-white/80" : "text-zinc-400"}>₱{priceRow.price}</p>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })
-      )}
-
-      <div className="mt-8 flex gap-3">
-        <button onClick={onBack} className="flex-1 border-2 border-zinc-300 text-zinc-500 font-semibold py-2.5 rounded-full hover:border-zinc-400 transition-colors">
-          Back
-        </button>
-        <button
-          onClick={onNext}
-          disabled={!allPetsHaveAtLeastOneAddon}
-          className="flex-1 bg-brand-pink hover:bg-brand-pink-dark disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-full transition-colors"
-        >
-          Next
-        </button>
-      </div>
+  if (loading) return <p className="py-16 text-center text-zinc-400">Loading add-ons…</p>;
+  return <div className="mx-auto max-w-3xl">
+    <h2 className="text-center text-2xl font-bold text-brand-pink">À La Carte</h2>
+    <p className="mt-1 text-center text-sm text-zinc-500">Choose individual services for each pet.</p>
+    {loadError && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{loadError}. Please retry later.</p>}
+    {!loadError && addons.length === 0 && <p className="mt-10 text-center text-zinc-400">No À La Carte items available right now.</p>}
+    {!loadError && pets.map(pet => {
+      const selected = selectionFor(pet);
+      return <div key={pet.id} className="mt-6">
+        <p className="text-sm font-bold text-zinc-800">{pet.name} <span className="font-normal text-zinc-400">({pet.size_label})</span></p>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{addons.map(addon => {
+          const price = priceForPet(prices, addon.id, pet.size_label);
+          const active = selected?.addonIds.includes(addon.id) ?? false;
+          return <button type="button" key={addon.id} disabled={price === null} onClick={() => toggleAddon(pet, addon.id)}
+            className={`rounded-xl border-2 px-3 py-2.5 text-left text-xs ${price === null ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400" : active ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700 hover:border-pink-200"}`}>
+            <span className="block font-semibold">{addon.name}</span>
+            <span className={`mt-1 block ${active ? "text-white/80" : "text-zinc-500"}`}>{price === null ? "Price unavailable for this size" : `₱${price.toLocaleString("en-PH")}`}</span>
+            {addon.price_note && <span className="mt-1 block italic opacity-75">{addon.price_note}</span>}
+          </button>;
+        })}</div>
+        {selected && selected.addonIds.length > 0 && <p className="mt-2 text-right text-sm font-bold text-brand-pink">Subtotal: ₱{selected.lineAmount.toLocaleString("en-PH")}</p>}
+      </div>;
+    })}
+    <div className="mt-8 flex gap-3">
+      <button type="button" onClick={() => onBack()} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500">Back</button>
+      <button type="button" onClick={() => onNext()} disabled={!ready || !!loadError} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white disabled:opacity-40">Next</button>
     </div>
-  );
+  </div>;
 }

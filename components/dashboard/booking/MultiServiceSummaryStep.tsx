@@ -84,6 +84,12 @@ export default function MultiServiceSummaryStep({
     setError(null);
 
     const writes: CreateAppointmentInput[] = [];
+    if (legs.some((leg) => leg.serviceChoice === "ala_carte" &&
+      (selectionsFor(leg).length === 0 || selectionsFor(leg).some(sel => addonIdsFor(sel).length === 0 || amountFor(sel) <= 0)))) {
+      setError("À La Carte selection or pricing is missing. Click Edit, select a priced service for every pet, and review again.");
+      setSaving(false); submitLock.current = false; return;
+    }
+
     if (!legs.length || legs.some(leg => !selectionsFor(leg).length || selectionsFor(leg).some(sel => !Number.isFinite(Number(sel.lineAmount)) || Number(sel.lineAmount) < 0))) {
       setError("Some pet service details are incomplete. Please edit the affected service and review again.");
       setSaving(false); submitLock.current = false; return;
@@ -224,12 +230,14 @@ export default function MultiServiceSummaryStep({
         {legs.map((leg) => {
           const isBoarding = leg.serviceChoice === "boarding";
           const legTotal = selectionsFor(leg).reduce((sum, sel) => sum + amountFor(sel), 0);
+          const incompleteAlaCarte = leg.serviceChoice === "ala_carte" && (selectionsFor(leg).length === 0 || selectionsFor(leg).some(sel => addonIdsFor(sel).length === 0 || amountFor(sel) <= 0));
           return (
             <section key={leg.id} className="w-full rounded-2xl border-2 border-pink-100 p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="text-base font-bold text-brand-pink sm:text-lg">{serviceLabels[leg.serviceChoice]}</h3>
                 <button onClick={() => onEditLeg(leg.id)} className="shrink-0 text-xs font-semibold text-brand-pink hover:underline sm:text-sm">Edit</button>
               </div>
+              {incompleteAlaCarte && <p role="alert" className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">À La Carte details or prices are missing. Click Edit to select a priced service before checkout.</p>}
               {selectionsFor(leg).map((sel) => {
                 const lookupKey = leg.serviceChoice === "grooming"
                   ? sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming"

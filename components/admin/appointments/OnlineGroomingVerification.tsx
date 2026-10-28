@@ -30,7 +30,6 @@ export default function OnlineGroomingVerification({ appointment, pet, onSaved }
   if (appointment.status === "completed" || appointment.status === "cancelled" || appointment.status === "checked_in") return null;
 
   async function calculate() {
-    // Narrow again inside the async callback; JSX early returns do not carry into closures.
     if (serviceType !== "dog_grooming" && serviceType !== "cat_grooming") return;
     if (!booked) {setError("The saved package details could not be loaded.");return;}
     setBusy(true); setError(null); setPreview(null); setApproved(false);
@@ -57,8 +56,8 @@ export default function OnlineGroomingVerification({ appointment, pet, onSaved }
     <p className="mt-1 text-xs text-zinc-600">Weigh {pet.name} at the shop. The stored appointment quote is not final until the customer approves the verified price.</p>
     <p className="mt-2 text-xs text-zinc-500">Registered size: <strong>{pet.size_label || "Unclassified"}</strong> · Booked rate: <strong>{pet.packagePricingLabel || "—"}</strong> · Quoted: <strong>₱{pet.lineAmount.toLocaleString()}</strong></p>
     <div className="mt-3 flex flex-wrap items-end gap-2">
-      <label className="flex-1 min-w-[135px] text-xs font-semibold text-zinc-700">Measured weight (KG)
-        <input type="number" step="0.01" min="0.01" max="200" value={weight} onChange={e=>{setWeight(e.target.value);setPreview(null);setApproved(false);setError(null);setSuccess(false);}} placeholder="e.g. 12.50" className="mt-1 w-full rounded-lg border border-pink-200 px-3 py-2 text-sm focus:border-brand-pink focus:outline-none" />
+      <label className="flex-1 min-w-[135px] text-xs font-semibold text-zinc-700">Measured weight (KG){serviceType === "cat_grooming" ? " · Whole numbers only" : ""}
+        <input type="number" step={serviceType === "cat_grooming" ? "1" : "0.01"} min={serviceType === "cat_grooming" ? "1" : "0.01"} max="200" value={weight} onChange={e=>{setWeight(e.target.value);setPreview(null);setApproved(false);setError(null);setSuccess(false);}} placeholder={serviceType === "cat_grooming" ? "e.g. 4 or 6" : "e.g. 12.50"} className="mt-1 w-full rounded-lg border border-pink-200 px-3 py-2 text-sm focus:border-brand-pink focus:outline-none" />
       </label>
       <button type="button" onClick={calculate} disabled={busy || !weight.trim() || !booked} className="rounded-full border border-brand-pink px-4 py-2 text-xs font-bold text-brand-pink disabled:opacity-40">Calculate Price</button>
     </div>

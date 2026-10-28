@@ -1,15 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import type { Pet } from "@/lib/types/appointments";
 import PetAvatar from "@/components/dashboard/PetAvatar";
 
-/**
- * The same avatar, typography and primary actions used by Customer → My Pets,
- * adapted to preserve the owner information staff need in Pet's Record.
- * The booking action opens the existing POS walk-in workflow; it does not create
- * an appointment, bypass pet/owner verification, or preselect a pet implicitly.
- */
+/** Pet record card with a single action to view the pet's details and service history. */
 export default function PetCard({
   pet,
   ownerName,
@@ -56,23 +50,15 @@ export default function PetCard({
         </span>
       </div>
 
-      <div className="mt-auto grid grid-cols-2 gap-2.5 pt-4">
+      <div className="mt-auto pt-4">
         <button
           type="button"
           onClick={onView}
           aria-label={`View ${pet.name}'s profile and service history`}
-          className="flex min-h-11 min-w-0 items-center justify-center rounded-full bg-brand-pink px-2 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-brand-pink-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink sm:text-sm"
+          className="flex min-h-11 w-full items-center justify-center rounded-full bg-brand-pink px-4 py-2.5 text-center text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-pink-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink"
         >
           View Profile
         </button>
-        <Link
-          href="/admin/pos/walk-in"
-          aria-label={`Start a walk-in appointment for ${pet.name}`}
-          title="Opens POS Walk-in Booking; select the pet during verification"
-          className="flex min-h-11 min-w-0 items-center justify-center rounded-full border border-brand-pink px-2 py-2.5 text-center text-xs font-bold text-brand-pink transition-colors hover:bg-pink-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-pink sm:text-sm"
-        >
-          Book Appointment
-        </Link>
       </div>
     </article>
   );
