@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
 import { isGrooming, verifyGroomingLegPlans, type ScheduledGroomingSelection } from "@/lib/supabase/grooming-booking";
-import { toAppointmentServiceType } from "@/lib/types/walk-in-draft";
 import type { BookingLeg } from "@/lib/types/booking-leg";
 import type { Customer } from "@/lib/types/users";
 import type { AppointmentServiceType, DraftPetSelection } from "@/lib/types/appointments";
@@ -56,10 +55,10 @@ export default function MultiServiceSummaryStep({ customer, legs, packagesByServ
           if (!s.groomingScheduledTime || !s.groomerId || !s.packagePricingId) { setError(`Complete grooming scheduling for ${s.pet.name}.`); return; }
           writes.push(makeInput(leg, s.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [s], s.groomingScheduledTime));
         }
-      } else {
+      } else if (leg.serviceChoice === "ala_carte") {
         if (!leg.scheduledDate || !leg.scheduledTime) { setError("Choose a date and time for À La Carte."); return; }
         if (selectionsOf(leg).some(s => !s.addonIds?.length || Number(s.lineAmount) <= 0)) { setError("À La Carte service pricing is missing. Edit and select a priced service for each pet."); return; }
-        writes.push(makeInput(leg, toAppointmentServiceType(leg.serviceChoice), selectionsOf(leg), leg.scheduledTime));
+        writes.push(makeInput(leg, "ala_carte", selectionsOf(leg), leg.scheduledTime));
       }
     }
     lock.current = true; setSaving(true);
