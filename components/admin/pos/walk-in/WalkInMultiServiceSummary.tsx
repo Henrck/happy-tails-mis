@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
 import { checkBookingClosedDate } from "@/lib/supabase/booking-closures";
-import { createClient } from "@/lib/supabase/client";
+import { isGrooming, verifyGroomingLegPlans, type ScheduledGroomingSelection } from "@/lib/supabase/grooming-booking";
 import type { Customer } from "@/lib/types/users";
 import type { BookingLeg } from "@/lib/types/booking-leg";
 import type { AppointmentServiceType, DraftPetSelection } from "@/lib/types/appointments";
@@ -11,165 +11,109 @@ import type { Package, PetSize, Addon } from "@/lib/types/services";
 import type { Groomer } from "@/lib/types/pet-services";
 
 type Props = {
-  customer: Customer | null;
-  owner: { name: string; contact: string; address: string };
-  legs: BookingLeg[];
-  packagesByService: Record<string, Package[]>;
-  sizesByService: Record<string, PetSize[]>;
-  addonsByService: Record<string, Addon[]>;
-  groomers: Groomer[];
-  onBack: () => void;
-  onEditLeg: (id: string) => void;
-  onDone: () => void;
+  customer: Customer | null; owner: { name: string; contact: string; address: string }; legs: BookingLeg[];
+  packagesByService: Record<string, Package[]>; sizesByService: Record<string, PetSize[]>;
+  addonsByService: Record<string, Addon[]>; groomers: Groomer[];
+  onBack: () => void; onEditLeg: (id: string) => void; onDone: () => void;
 };
 const labels: Record<string, string> = { grooming: "Grooming", dog_grooming: "Dog Grooming", cat_grooming: "Cat Grooming", boarding: "Boarding", ala_carte: "À La Carte" };
+const prettyTime = (time?: string | null) => { if (!time || !/^\d{2}:\d{2}/.test(time)) return "—"; const [h, m] = time.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 
-export default function WalkInMultiServiceSummary({ customer, owner, legs, packagesByService, sizesByService, addonsByService, groomers, onBack, onEditLeg, onDone }: Props) {
+export default function WalkInMultiServiceSummary({ customer, owner, legs, packagesByService, sizesByService, addonsByService, groomers,
+  onBack, onEditLeg, onDone }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [acknowledgedWeightPolicy, setAcknowledgedWeightPolicy] = useState(false);
+  const [approved, setApproved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lock = useRef(false);
-  const total = legs.reduce((sum, leg) => sum + leg.petSelections.reduce((n, p) => n + p.lineAmount, 0), 0);
-  const grooming = legs.some(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice));
-
-  function input(service: AppointmentServiceType, selections: DraftPetSelection[], leg: BookingLeg): CreateAppointmentInput {
+  const hasGrooming = legs.some(l => isGrooming(l.serviceChoice));
+  const total = legs.reduce((sum, l) => sum + l.petSelections.reduce((n, s) => n + Number(s.lineAmount || 0), 0), 0);
+  function makeInput(leg: BookingLeg, service: AppointmentServiceType, pets: DraftPetSelection[], start: string | null): CreateAppointmentInput {
     return {
-      service_type: service,
-      is_walk_in: true,
-      customer_id: customer?.id ?? null,
-      owner_name: owner.name,
-      owner_contact: owner.contact,
-      owner_address: owner.address || null,
-      scheduled_date: leg.scheduledDate ?? "",
-      scheduled_time: service === "boarding" ? null : leg.scheduledTime,
-      drop_off_at: service === "boarding" ? leg.dropOffAt : null,
-      pick_up_at: service === "boarding" ? leg.pickUpAt : null,
-      special_requests: leg.specialRequests || null,
-      petSelections: selections,
+      service_type: service, is_walk_in: true, customer_id: customer?.id ?? null,
+      owner_name: owner.name, owner_contact: owner.contact, owner_address: owner.address || null,
+      scheduled_date: leg.scheduledDate ?? "", scheduled_time: start, drop_off_at: null, pick_up_at: null,
+      special_requests: leg.specialRequests || null, petSelections: pets,
     };
   }
-
   async function save() {
-    if (lock.current || saved || (grooming && !acknowledgedWeightPolicy)) return;
+    if (lock.current || saving || saved || (hasGrooming && !approved)) return;
     setError(null);
-    if (!legs.length || !owner.name.trim() || !owner.contact.trim()) {
-      setError("Owner details and at least one service are required."); return;
-    }
+    if (!owner.name.trim() || !owner.contact.trim() || !legs.length) { setError("Owner information and services are required."); return; }
     const writes: CreateAppointmentInput[] = [];
     for (const leg of legs) {
-      if (!leg.petSelections.length) { setError(`No pets selected for ${labels[leg.serviceChoice]}.`); return; }
+      if (!leg.petSelections.length) { setError(`Select pets for ${labels[leg.serviceChoice]}.`); return; }
+      if (leg.petSelections.some(s => !Number.isFinite(Number(s.lineAmount)) || Number(s.lineAmount) < 0)) { setError("An amount is invalid. Edit the affected service."); return; }
       if (leg.serviceChoice === "boarding") {
-        for (const sel of leg.petSelections) {
-          if (!sel.boardingScheduledDate || !sel.boardingDropOffAt || !sel.boardingPickUpAt) {
-            setError(`Complete the boarding schedule for ${sel.pet.name} first.`); return;
-          }
-          writes.push({ ...input("boarding", [sel], leg), scheduled_date: sel.boardingScheduledDate,
-            drop_off_at: sel.boardingDropOffAt, pick_up_at: sel.boardingPickUpAt });
+        for (const s of leg.petSelections) {
+          if (!s.boardingScheduledDate || !s.boardingDropOffAt || !s.boardingPickUpAt) { setError(`Complete boarding dates for ${s.pet.name}.`); return; }
+          writes.push({ ...makeInput(leg, "boarding", [s], null), scheduled_date: s.boardingScheduledDate,
+            drop_off_at: s.boardingDropOffAt, pick_up_at: s.boardingPickUpAt });
+        }
+      } else if (isGrooming(leg.serviceChoice)) {
+        if (!leg.scheduledDate || !leg.scheduledTime) { setError("Select a grooming date and time."); return; }
+        for (const s of leg.petSelections as ScheduledGroomingSelection[]) {
+          if (!s.groomerId || !s.groomingScheduledTime || !s.packagePricingId) { setError(`Groomer reservation missing for ${s.pet.name}. Edit the schedule.`); return; }
+          writes.push(makeInput(leg, s.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [s], s.groomingScheduledTime));
         }
       } else {
-        if (!leg.scheduledDate || !leg.scheduledTime) {
-          setError(`Select a date and time for ${labels[leg.serviceChoice]}.`); return;
-        }
-        if (["grooming", "dog_grooming", "cat_grooming"].includes(leg.serviceChoice)) {
-          // As in Customer Booking, each grooming pet reserves its own verified start time.
-          for (const sel of leg.petSelections) {
-            const time = (sel as DraftPetSelection & { groomingScheduledTime?: string }).groomingScheduledTime;
-            if (!time || !/^\d{2}:\d{2}$/.test(time)) {
-              setError(`Verify a start time for ${sel.pet.name} before saving.`); return;
-            }
-            writes.push({ ...input(sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [sel], leg), scheduled_time: time });
-          }
-        } else if (leg.serviceChoice === "ala_carte") {
-          writes.push(input("ala_carte", leg.petSelections, leg));
-        }
+        if (!leg.scheduledDate || !leg.scheduledTime) { setError("Select the À La Carte schedule."); return; }
+        if (leg.petSelections.some(s => !s.addonIds?.length || Number(s.lineAmount) <= 0)) { setError("À La Carte selections or prices are missing. Edit the service."); return; }
+        writes.push(makeInput(leg, "ala_carte", leg.petSelections, leg.scheduledTime));
       }
     }
-    if (!writes.length) { setError("No appointments are ready to save."); return; }
     lock.current = true; setSaving(true);
     try {
-      // Validate closures again at checkout in case Superadmin closed a day during booking.
-      for (const date of new Set(writes.map(w => w.scheduled_date))) {
-        const closure = await checkBookingClosedDate(date);
-        if (closure.error) { setError(`Could not verify closed dates: ${closure.error}`); lock.current = false; return; }
-        if (closure.closed) { setError(`${date} is closed (${closure.name ?? "Holiday / closure"}). Please edit the schedule.`); lock.current = false; return; }
+      for (const day of new Set(writes.map(w => w.scheduled_date))) {
+        const closed = await checkBookingClosedDate(day);
+        if (closed.error || closed.closed) { setError(closed.error || `${day} is closed (${closed.name || "Holiday / closure"}).`); lock.current = false; return; }
       }
-      // Confirm exact reviewed grooming times before writing records; do not silently shift pets.
-      for (const leg of legs.filter(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice))) {
-        if (!leg.scheduledDate || !leg.scheduledTime) { setError("A grooming schedule is incomplete."); lock.current = false; return; }
-        const { data, error: planError } = await createClient().rpc("happytails_grooming_plan", {
-          p_date: leg.scheduledDate,
-          p_pricing_ids: leg.petSelections.map(s => s.packagePricingId as string),
-          p_preferred_start: leg.scheduledTime,
-          p_groomer_ids: leg.petSelections.map(s => s.groomerId),
-        });
-        if (planError) { setError(`Could not recheck grooming availability: ${planError.message}`); lock.current = false; return; }
-        const revised = data as Array<{time:string}>;
-        if (!Array.isArray(revised) || revised.length !== leg.petSelections.length || revised.some((item, i) => item.time !== (leg.petSelections[i] as DraftPetSelection & {groomingScheduledTime?:string}).groomingScheduledTime)) {
-          setError("Grooming availability has changed. Edit the schedule and review the new times before saving."); lock.current = false; return;
-        }
-      }
+      const problem = await verifyGroomingLegPlans(legs);
+      if (problem) { setError(problem); lock.current = false; return; }
       const result = await createAppointmentsAtomic(writes);
       if (result.error) { setError(`Walk-in booking could not be saved: ${result.error}`); lock.current = false; return; }
-      if (result.appointments.length !== writes.length) throw new Error("Unexpected number of saved appointments. Verify appointments before retrying.");
+      if (result.appointments.length !== writes.length) throw new Error("Unconfirmed appointment result. Check the appointment table before retrying.");
       setSaved(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unexpected booking error. Check appointments before retrying.");
-      // Keep submission locked for indeterminate outcomes to prevent duplicate charges/appointments.
-    } finally { setSaving(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Unconfirmed booking result. Check the appointment table before retrying."); }
+    finally { setSaving(false); }
   }
-
-  if (saved) return <div className="mx-auto max-w-md rounded-3xl bg-white p-8 text-center shadow-sm">
-    <div className="text-5xl text-emerald-600">✓</div>
-    <h2 className="mt-4 text-2xl font-bold text-zinc-800">Walk-in Booking Complete</h2>
-    <p className="mt-2 text-sm text-zinc-600">All selected services were recorded together as walk-in appointments.</p>
-    <p className="mt-2 text-sm font-semibold text-brand-pink">Total recorded: ₱{total.toLocaleString()}</p>
-    <button type="button" onClick={onDone} className="mt-6 w-full rounded-full bg-brand-pink px-5 py-3 font-semibold text-white">Back to POS</button>
-  </div>;
-
-  return <div className="mx-auto max-w-3xl">
+  if (saved) return <section className="mx-auto max-w-xl py-10 text-center">
+    <h2 className="text-2xl font-bold text-emerald-700">Walk-in Booking Complete</h2>
+    <p className="mt-2 text-zinc-600">All appointments were recorded together. Grooming pets have individual groomer reservations.</p>
+    <p className="mt-3 font-semibold text-brand-pink">Total recorded: ₱{total.toLocaleString()}</p>
+    <button type="button" onClick={onDone} className="mt-5 rounded-full bg-brand-pink px-6 py-3 font-semibold text-white">Return to POS</button>
+  </section>;
+  return <div className="mx-auto w-full max-w-3xl">
     <h2 className="text-center text-2xl font-extrabold text-brand-pink">Walk-in Booking Summary</h2>
-    <p className="mt-1 text-center text-sm text-zinc-500">Confirm all services in one transaction. Each pet's boarding reservation is saved separately.</p>
-    <section className="mt-6 rounded-2xl border border-pink-100 bg-white p-5">
-      <h3 className="font-bold text-zinc-800">Owner</h3>
-      <p className="mt-1 text-sm text-zinc-600">{owner.name} · {owner.contact}</p>
-      {owner.address && <p className="text-sm text-zinc-500">{owner.address}</p>}
-      <p className="mt-2 text-xs font-semibold text-brand-pink">{customer ? "Registered customer" : "Guest walk-in"}</p>
-    </section>
-    {legs.map(leg => <section key={leg.id} className="mt-4 rounded-2xl border border-pink-100 bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-bold text-brand-pink">{labels[leg.serviceChoice]}</h3>
-        <button type="button" className="text-sm font-semibold text-brand-pink underline" onClick={() => onEditLeg(leg.id)}>Edit service</button>
-      </div>
-      {leg.petSelections.map(sel => {
-        const kind = leg.serviceChoice === "grooming" ? (sel.pet.species === "Cat" ? "cat_grooming" : "dog_grooming") : leg.serviceChoice;
-        const pkg = packagesByService[kind]?.find(p => p.id === sel.packageId);
-        const size = sizesByService[kind]?.find(s => s.id === sel.sizeId);
-        const names = sel.addonIds.map(id => addonsByService[kind]?.find(a => a.id === id)?.name).filter(Boolean);
-        const groomer = groomers.find(g => g.id === sel.groomerId);
-        return <div key={sel.pet.id} className="mt-3 border-t border-dashed border-pink-100 pt-3 text-sm">
-          <div className="flex items-start justify-between gap-3"><p className="font-semibold text-zinc-800">{sel.pet.name} <span className="font-normal text-zinc-500">({sel.pet.species})</span></p><p className="font-bold text-zinc-800">₱{sel.lineAmount.toLocaleString()}</p></div>
-          {pkg && <p className="text-zinc-600">Package: {pkg.name}</p>}
-          {size && <p className="text-zinc-600">Size: {size.label}</p>}
-          {groomer && <p className="text-zinc-600">Groomer: {groomer.name}</p>}
-          {names.length > 0 && <p className="text-zinc-600">Add-ons: {names.join(", ")}</p>}
-          {kind === "boarding" && <p className="text-zinc-600">Boarding: {sel.boardingDropOffAt ? new Date(sel.boardingDropOffAt).toLocaleString() : "—"} → {sel.boardingPickUpAt ? new Date(sel.boardingPickUpAt).toLocaleString() : "—"}</p>}
+    <p className="mt-1 text-center text-sm text-zinc-500">Review each pet, groomer, appointment time and total before saving.</p>
+    <div className="mt-5 space-y-4">{legs.map(leg => <section key={leg.id} className="rounded-2xl border-2 border-pink-100 bg-white p-5">
+      <div className="flex justify-between gap-3"><h3 className="font-bold text-brand-pink">{labels[leg.serviceChoice]}</h3>
+        <button type="button" onClick={() => onEditLeg(leg.id)} className="text-sm font-semibold text-brand-pink underline">Edit</button></div>
+      {leg.petSelections.map(s => {
+        const service = leg.serviceChoice === "grooming" ? (s.pet.species === "Cat" ? "cat_grooming" : "dog_grooming") : leg.serviceChoice;
+        const pkg = packagesByService[service]?.find(p => p.id === s.packageId);
+        const size = sizesByService[service]?.find(p => p.id === s.sizeId);
+        const groomer = groomers.find(g => g.id === s.groomerId);
+        const addons = (s.addonIds ?? []).map(id => addonsByService[service]?.find(a => a.id === id)?.name).filter(Boolean).join(", ");
+        return <div key={s.pet.id} className="mt-3 border-t border-dashed border-pink-100 pt-3 text-sm text-zinc-700">
+          <strong>{s.pet.name}</strong> <span className="text-zinc-400">({s.pet.breed})</span>
+          {pkg && <p>Package: {pkg.name}</p>}{size && <p>Size: {size.label}</p>}
+          {isGrooming(leg.serviceChoice) && <p>Groomer: {groomer?.name ?? "Assigned"} · Start: {prettyTime((s as ScheduledGroomingSelection).groomingScheduledTime)}</p>}
+          {leg.serviceChoice === "boarding" && <><p>Kennel: {s.boardingKennelSize}</p><p>Drop-off: {s.boardingDropOffAt ?? "—"}</p><p>Pick-up: {s.boardingPickUpAt ?? "—"}</p></>}
+          {addons && <p>Add-ons: {addons}</p>}<p className="font-semibold">₱{Number(s.lineAmount).toLocaleString()}</p>
         </div>;
       })}
-      {leg.serviceChoice !== "boarding" && <p className="mt-3 text-sm text-zinc-600">Schedule: {leg.scheduledDate ?? "—"} · {leg.scheduledTime ?? "—"}</p>}
+      {leg.serviceChoice !== "boarding" && <p className="mt-3 text-sm text-zinc-600">Schedule: {leg.scheduledDate ?? "—"} · {prettyTime(leg.scheduledTime)}</p>}
       {leg.specialRequests && <p className="mt-2 text-sm text-zinc-600">Notes: {leg.specialRequests}</p>}
-      <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{leg.petSelections.reduce((n,s) => n + s.lineAmount, 0).toLocaleString()}</p>
-    </section>)}
-    <div className="mt-5 flex justify-between rounded-2xl bg-pink-100 px-5 py-4 font-bold text-zinc-800"><span>{grooming ? "Estimated Total" : "Grand Total"}</span><span className="text-brand-pink">₱{total.toLocaleString()}</span></div>
-    {grooming && <section className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-      <p>Grooming amounts are estimates until staff verify the pet's actual weight and size and confirm any price adjustment before service.</p>
-      <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg bg-white p-3 text-sm text-zinc-800">
-        <input type="checkbox" checked={acknowledgedWeightPolicy} onChange={e => setAcknowledgedWeightPolicy(e.target.checked)} className="mt-1 accent-pink-500" />
-        <span>Staff have explained that the final grooming price may change after actual weight and size verification.</span>
-      </label>
-    </section>}
-    {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" disabled={saving} onClick={onBack} className="rounded-full border-2 border-pink-200 bg-white py-3 font-semibold text-brand-pink disabled:opacity-50">Back</button>
-      <button type="button" disabled={saving || !legs.length || (grooming && !acknowledgedWeightPolicy)} onClick={save} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Complete Walk-in Booking"}</button></div>
+      <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{leg.petSelections.reduce((n, s) => n + Number(s.lineAmount || 0), 0).toLocaleString()}</p>
+    </section>)}</div>
+    <div className="mt-5 flex justify-between rounded-2xl bg-pink-100 px-5 py-4 font-bold"><span>{hasGrooming ? "Estimated Total" : "Grand Total"}</span><span className="text-brand-pink">₱{total.toLocaleString()}</span></div>
+    {hasGrooming && <label className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
+      <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} className="mt-1" />
+      <span>I have explained that grooming prices are estimates until verified against the actual pet weight, and the owner must approve any adjustment.</span>
+    </label>}
+    {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
+    <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="rounded-full border border-zinc-300 py-3 font-semibold">Back</button>
+      <button type="button" onClick={() => void save()} disabled={saving || !legs.length || (hasGrooming && !approved)} className="rounded-full bg-brand-pink py-3 font-bold text-white disabled:opacity-40">{saving ? "Saving…" : "Complete Walk-in Booking"}</button></div>
   </div>;
 }

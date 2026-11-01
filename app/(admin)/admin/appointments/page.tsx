@@ -11,13 +11,13 @@ import Pagination from "@/components/admin/Pagination";
 const PAGE_SIZE = 10;
 
 // Sort the ENTIRE filtered list before pagination. Every status is ranked so
-// cancelled/completed entries cannot displace work that still needs attention.
+// completed/cancelled entries cannot displace work that still needs attention.
 const STATUS_PRIORITY: Record<AppointmentStatus, number> = {
   pending: 0,
   confirmed: 1,
   checked_in: 2,
-  cancelled: 3,
-  completed: 4,
+  completed: 3,
+  cancelled: 4,
 };
 
 function compareAppointments(a: AppointmentRow, b: AppointmentRow): number {
@@ -39,7 +39,7 @@ export default function AdminAppointmentsPage() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<FilterState>({ search: "", status: "all", service: "all", scope: "today" });
+  const [filters, setFilters] = useState<FilterState>({ search: "", status: "all", service: "all", scope: "all" });
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<AppointmentRow | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);

@@ -1,144 +1,145 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
-import { fetchGroomers } from "@/lib/supabase/pet-services";
 import { groomingAddonPrice } from "@/lib/booking/boarding-promotions";
 import { catGroomingSizeGuide, CAT_SMALL_MAX_KG } from "@/lib/utils/pet-size-guide";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
-import type { Groomer } from "@/lib/types/pet-services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 
 type GroomingChoice = ServiceType | "grooming";
-type LookupSet = { packages: Package[]; inclusions: PackageInclusion[]; pricing: PackagePricing[]; sizes: PetSize[]; addons: Addon[]; addonPrices: AddonPrice[] };
-const emptyLookup: LookupSet = { packages: [], inclusions: [], pricing: [], sizes: [], addons: [], addonPrices: [] };
-
-// Resolve size using its saved database ID first, then the registered label.
-// A missing or unrecognized registered size must not silently permit a lower quote.
+type Lookups = { packages: Package[]; inclusions: PackageInclusion[]; pricing: PackagePricing[]; sizes: PetSize[]; addons: Addon[]; addonPrices: AddonPrice[] };
+const empty: Lookups = { packages: [], inclusions: [], pricing: [], sizes: [], addons: [], addonPrices: [] };
 type PetWithSize = Pet & { pet_size_id?: string | null; weight_kg?: number | null };
-function normalizedSize(label: string): string {
-  return label.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^(?:size)/, "");
-}
-function minimumSizeIndex(pet: Pet, sizes: PetSize[]): number {
+const normalize = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, "").replace(/^size/, "");
+function minimumSizeIndex(pet: Pet, sizes: PetSize[]) {
   const saved = pet as PetWithSize;
-  // An entered weight is the source of truth for the online cat pricing tier.
-  if (pet.species === "Cat" && saved.weight_kg != null && Number.isFinite(Number(saved.weight_kg)) && Number(saved.weight_kg) > 0) {
-    const tier = Number(saved.weight_kg) <= CAT_SMALL_MAX_KG ? "small" : "large";
-    return sizes.findIndex(s=>s.label.trim().toLowerCase()===tier);
+  if (pet.species === "Cat" && saved.weight_kg != null && Number(saved.weight_kg) > 0) {
+    const category = Number(saved.weight_kg) <= CAT_SMALL_MAX_KG ? "small" : "large";
+    return sizes.findIndex(s => s.label.trim().toLowerCase() === category);
   }
-  if (saved.pet_size_id) {
-    const byId = sizes.findIndex(s => s.id === saved.pet_size_id);
-    if (byId >= 0) return byId;
-  }
-  const name = normalizedSize(pet.size_label ?? "");
-  if (!name || ["unknown", "unclassified", "notset", "na"].includes(name)) return -1;
-  const exact = sizes.findIndex(s => normalizedSize(s.label) === name);
-  if (exact >= 0) return exact;
-  const prefix = sizes.findIndex(s => {
-    const label = normalizedSize(s.label);
-    return name.startsWith(label) || label.startsWith(name);
-  });
-  return prefix >= 0 ? prefix : -2; // unresolved: require staff to correct the record
+  if (saved.pet_size_id) { const i = sizes.findIndex(s => s.id === saved.pet_size_id); if (i >= 0) return i; }
+  const label = normalize(pet.size_label ?? "");
+  if (!label || ["unknown", "unclassified", "notset", "na"].includes(label)) return -1;
+  const direct = sizes.findIndex(s => normalize(s.label) === label);
+  if (direct >= 0) return direct;
+  return sizes.findIndex(s => label.startsWith(normalize(s.label)) || normalize(s.label).startsWith(label)) < 0
+    ? -2 : sizes.findIndex(s => label.startsWith(normalize(s.label)) || normalize(s.label).startsWith(label));
 }
 
-export default function CustomerGroomingSelectionStep({serviceType, pets, selections, onChange, onBack, onNext}: {
-  serviceType: GroomingChoice;
-  pets: Pet[];
-  selections: DraftPetSelection[];
-  onChange: (selections: DraftPetSelection[]) => void;
-  onBack: () => void;
-  onNext: () => void;
+export default function CustomerGroomingSelectionStep({ serviceType, pets, selections, onChange, onBack, onNext }: {
+  serviceType: GroomingChoice; pets: Pet[]; selections: DraftPetSelection[];
+  onChange: (items: DraftPetSelection[]) => void; onBack: () => void; onNext: () => void;
 }) {
-  const [lookupByService, setLookupByService] = useState<Record<ServiceType, LookupSet>>({dog_grooming: emptyLookup, cat_grooming: emptyLookup, boarding: emptyLookup});
-  const [groomers, setGroomers] = useState<Groomer[]>([]);
+  const [lookups, setLookups] = useState<Record<ServiceType, Lookups>>({ dog_grooming: empty, cat_grooming: empty, boarding: empty });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activePetIdx, setActivePetIdx] = useState(0);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    let valid = true;
+    setLoading(true); setError(null);
     const services: ServiceType[] = serviceType === "grooming" ? ["dog_grooming", "cat_grooming"] : [serviceType];
-    const [results, groomerResult] = await Promise.all([
-      Promise.all(services.map(async (type) => {
-        const [pkg, size, addon] = await Promise.all([fetchPackagesFull(type), fetchPetSizes(type), fetchAddonsByCategory("Grooming Add-ons")]);
-        return [type, {packages: pkg.packages.filter(p=>p.is_active), inclusions: pkg.inclusions, pricing: pkg.pricing, sizes: type === "cat_grooming" ? catGroomingSizeGuide(size.sizes.filter(s=>s.is_active)) : size.sizes.filter(s=>s.is_active), addons: addon.addons.filter(a=>a.is_active), addonPrices: addon.prices}] as const;
-      })),
-      fetchGroomers({activeOnly:true})
-    ]);
-    setLookupByService(prev=>{const next={...prev};for(const [type,data] of results)next[type]=data;return next;});
-    setGroomers(groomerResult.groomers);
-    setLoading(false);
+    void Promise.all(services.map(async type => {
+      const [p, sz, a] = await Promise.all([fetchPackagesFull(type), fetchPetSizes(type), fetchAddonsByCategory("Grooming Add-ons")]);
+      if (p.error || sz.error || a.error) throw new Error(p.error ?? sz.error ?? a.error ?? "Unable to load grooming services");
+      const sizes = sz.sizes.filter(s => s.is_active);
+      return [type, { packages: p.packages.filter(row => row.is_active), inclusions: p.inclusions, pricing: p.pricing,
+        sizes: type === "cat_grooming" ? catGroomingSizeGuide(sizes) : sizes,
+        addons: a.addons.filter(row => row.is_active), addonPrices: a.prices }] as const;
+    })).then(rows => { if (valid) setLookups(previous => ({ ...previous, ...Object.fromEntries(rows) })); })
+      .catch(e => { if (valid) setError(e instanceof Error ? e.message : "Unable to load grooming packages"); })
+      .finally(() => { if (valid) setLoading(false); });
+    return () => { valid = false; };
   }, [serviceType]);
-  useEffect(()=>{void loadData()},[loadData]);
 
-  const activePet = pets[activePetIdx];
-  const activeService: ServiceType = activePet?.species === "Cat" ? "cat_grooming" : "dog_grooming";
-  const data = lookupByService[activeService];
-  const minimum = activePet ? minimumSizeIndex(activePet, data.sizes) : -1;
-  const activeSelection = selections.find(s=>s.pet.id===activePet?.id);
-
-  function pricingRow(packageId: string, size: PetSize) {
-    const rows=data.pricing.filter(row=>row.package_id===packageId);
-    return rows.find(row=>row.size_id===size.id || row.size_label.trim().toLowerCase()===size.label.trim().toLowerCase()) ?? rows.find(row=>row.size_id===null);
+  const pet = pets[activePetIdx];
+  const data = lookups[pet?.species === "Cat" ? "cat_grooming" : "dog_grooming"];
+  const selected = selections.find(s => s.pet.id === pet?.id);
+  const minimum = pet ? minimumSizeIndex(pet, data.sizes) : -1;
+  function rateFor(packageId: string, size: PetSize, lookup = data) {
+    const rows = lookup.pricing.filter(row => row.package_id === packageId);
+    return rows.find(row => row.size_id === size.id || normalize(row.size_label) === normalize(size.label)) ?? rows.find(row => row.size_id === null);
   }
-  function addonPrice(addonId:string,sizeLabel?:string) {
-    const rows=data.addonPrices.filter(row=>row.addon_id===addonId);
-    return groomingAddonPrice(rows,sizeLabel);
+  function addonRate(addonId: string, sizeLabel?: string, lookup = data) {
+    return groomingAddonPrice(lookup.addonPrices.filter(row => row.addon_id === addonId), sizeLabel);
   }
-  function computeAmount(sel:DraftPetSelection) {
-    const size=data.sizes.find(s=>s.id===sel.sizeId);
-    let amount=sel.packageId && size ? (pricingRow(sel.packageId,size)?.price ?? 0):0;
-    for(const id of sel.addonIds)amount+=addonPrice(id,size?.label)?.price??0;
-    return amount;
+  function update(patch: Partial<DraftPetSelection>) {
+    if (!pet) return;
+    const base = selected ?? { pet, packageId: null, packagePricingId: null, sizeId: null, kennelId: null, groomerId: null, addonIds: [], lineAmount: 0 };
+    const draft: DraftPetSelection = { ...base, ...patch };
+    if (draft.sizeId) {
+      const idx = data.sizes.findIndex(size => size.id === draft.sizeId);
+      if (minimum === -2 || idx < 0 || idx < minimum) return;
+    }
+    const size = data.sizes.find(s => s.id === draft.sizeId);
+    const rate = draft.packageId && size ? rateFor(draft.packageId, size) : null;
+    const addons = draft.addonIds.map(id => addonRate(id, size?.label));
+    draft.lineAmount = (rate?.price ?? 0) + addons.reduce((sum, row) => sum + (row?.price ?? 0), 0);
+    // Groomer is chosen only after date and time have been selected.
+    draft.groomerId = null;
+    onChange([...selections.filter(s => s.pet.id !== pet.id), draft]);
   }
-  function updateSelection(patch:Partial<DraftPetSelection>) {
-    if(!activePet)return;
-    const existing=selections.find(s=>s.pet.id===activePet.id);
-    const base:DraftPetSelection=existing??{pet:activePet,packageId:null,packagePricingId:null,sizeId:null,kennelId:null,groomerId:null,addonIds:[],lineAmount:0};
-    const updated={...base,...patch};
-    if(updated.sizeId){const index=data.sizes.findIndex(s=>s.id===updated.sizeId);if(minimum===-2 || index<minimum || index<0)return;}
-    updated.lineAmount=computeAmount(updated);
-    onChange([...selections.filter(s=>s.pet.id!==activePet.id),updated]);
+  function configured(item: Pet) {
+    const s = selections.find(row => row.pet.id === item.id);
+    const lookup = lookups[item.species === "Cat" ? "cat_grooming" : "dog_grooming"];
+    const min = minimumSizeIndex(item, lookup.sizes);
+    const idx = lookup.sizes.findIndex(size => size.id === s?.sizeId);
+    return !!s?.packageId && idx >= 0 && min !== -2 && idx >= min &&
+      !!lookup.pricing.find(rate => rate.id === s.packagePricingId && rate.package_id === s.packageId) &&
+      (s.addonIds ?? []).every(id => !!groomingAddonPrice(lookup.addonPrices.filter(a => a.addon_id === id), lookup.sizes[idx]?.label));
   }
-  function toggleAddon(id:string){if(!activeSelection)return;updateSelection({addonIds:activeSelection.addonIds.includes(id)?activeSelection.addonIds.filter(x=>x!==id):[...activeSelection.addonIds,id]});}
-  function isPetConfigured(p: Pet) {
-    const sel = selections.find(s => s.pet.id === p.id);
-    const lookup = lookupByService[p.species === "Cat" ? "cat_grooming" : "dog_grooming"];
-    const index = lookup.sizes.findIndex(s => s.id === sel?.sizeId);
-    const minimum = minimumSizeIndex(p, lookup.sizes);
-    return !!sel?.packageId && index >= 0 && minimum !== -2 && index >= minimum
-      && !!lookup.pricing.find(row => row.id === sel.packagePricingId && row.package_id === sel.packageId);
+  const ready = pets.length > 0 && pets.every(configured);
+  function next() {
+    if (!pet || !configured(pet)) return;
+    if (ready) { onNext(); return; }
+    const idx = Array.from({ length: pets.length - 1 }, (_, offset) => (activePetIdx + offset + 1) % pets.length)
+      .find(i => !configured(pets[i]));
+    if (idx !== undefined) setActivePetIdx(idx);
   }
-  const currentConfigured = activePet ? isPetConfigured(activePet) : false;
-  const allConfigured = pets.length > 0 && pets.every(isPetConfigured);
-  const remaining = pets.filter(p => !isPetConfigured(p));
-  function handleNextPetOrSchedule() {
-    if (!currentConfigured) return;
-    if (allConfigured) { onNext(); return; }
-    // Advance to the next unfinished pet, wrapping around the tabs if needed.
-    const nextIndex = Array.from({ length: pets.length - 1 }, (_, offset) =>
-      (activePetIdx + offset + 1) % pets.length
-    ).find(index => !isPetConfigured(pets[index]));
-    if (nextIndex !== undefined) setActivePetIdx(nextIndex);
-  }
-  if(loading)return <p className="py-16 text-center text-zinc-400">Loading grooming options…</p>;
-  if(!activePet)return null;
+  if (loading) return <p className="py-16 text-center text-zinc-400">Loading grooming options…</p>;
+  if (error) return <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}<button type="button" onClick={onBack} className="ml-3 font-semibold underline">Back</button></div>;
+  if (!pet) return null;
   return <div className="mx-auto w-full max-w-3xl">
-    <h2 className="text-center text-2xl font-bold text-brand-pink">{serviceType==="grooming"?"Grooming":activeService==="dog_grooming"?"Dog Grooming":"Cat Grooming"}</h2>
-    <p className="mt-1 text-center text-sm text-zinc-500">Choose a package and a size for each pet. Final size and price are verified at the shop.</p>
-    <div className="mt-5 flex flex-wrap justify-center gap-2">{pets.map((pet,idx)=><button key={pet.id} type="button" onClick={()=>setActivePetIdx(idx)} className={`rounded-full border-2 px-4 py-2 text-xs font-semibold ${idx===activePetIdx?"border-brand-pink bg-brand-pink text-white":"border-pink-100 bg-white text-zinc-600"}`}>{pet.species==="Cat"?"🐈":"🐕"} {pet.name} {selections.find(s=>s.pet.id===pet.id)?.packageId?"✓":""}</button>)}</div>
+    <h2 className="text-center text-2xl font-bold text-brand-pink">{serviceType === "grooming" ? "Grooming" : pet.species === "Cat" ? "Cat Grooming" : "Dog Grooming"}</h2>
+    <p className="mt-1 text-center text-sm text-zinc-500">Choose the package, size and add-ons. You will select an available groomer after choosing a date and start time.</p>
+    <div className="mt-5 flex flex-wrap justify-center gap-2">{pets.map((p, i) => <button type="button" key={p.id} onClick={() => setActivePetIdx(i)}
+      className={`rounded-full border-2 px-4 py-2 text-xs font-semibold ${i === activePetIdx ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 bg-white text-zinc-600"}`}>
+      {p.species === "Cat" ? "🐈" : "🐕"} {p.name} {configured(p) ? "✓" : ""}</button>)}</div>
     <div className="mt-6 rounded-2xl border-2 border-pink-100 bg-white p-5">
-      <p className="font-bold text-zinc-800">{activePet.name} <span className="font-normal text-zinc-400">({activePet.species})</span></p>
-      <p className="mt-5 font-bold text-zinc-800">Select Package</p>
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">{data.packages.map(pkg=><button key={pkg.id} type="button" onClick={()=>updateSelection({packageId:pkg.id,packagePricingId:null,sizeId:null})} className={`rounded-xl border-2 p-3 text-left text-sm ${activeSelection?.packageId===pkg.id?"border-brand-pink bg-brand-tint":"border-pink-100 hover:border-brand-pink"}`}><p className="font-semibold text-zinc-800">{pkg.name}</p>{data.inclusions.filter(i=>i.package_id===pkg.id).map(i=><p key={i.id} className="mt-0.5 text-xs text-zinc-500">• {i.label}</p>)}</button>)}</div>
-      {activeSelection?.packageId && <>
-        <p className="mt-6 font-bold text-zinc-800">Select Size</p>
-        <p className="mt-1 text-xs text-zinc-500">Registered size: <strong>{activePet.size_label||"Unclassified"}</strong>. {minimum===-2 ? "The saved size does not match the active size guide. Please ask staff to update this pet’s registered size." : activePet.species==="Cat" ? "Cat grooming uses Small and Large only." : "Smaller tiers are unavailable; you may choose the registered size or larger."}</p>
-        <div className="mt-2 flex flex-wrap gap-2">{data.sizes.map((size,idx)=>{const disabled=minimum===-2 || idx<minimum || !pricingRow(activeSelection.packageId!,size);const price=pricingRow(activeSelection.packageId!,size);const selected=activeSelection.sizeId===size.id;return <button key={size.id} type="button" disabled={disabled} title={disabled?minimum===-2?"Registered size needs staff verification":`Unavailable: ${activePet.name} is registered as ${activePet.size_label}`:undefined} onClick={()=>updateSelection({sizeId:size.id,packagePricingId:price?.id??null})} className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold ${disabled?"cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 opacity-70":selected?"border-brand-pink bg-brand-pink text-white":"border-pink-200 text-zinc-700 hover:border-brand-pink"}`}>{size.label} {size.weight_range&&<span className="font-normal opacity-70">({size.weight_range})</span>}{price&&<span className="ml-1.5">₱{price.price}</span>}{disabled&&<span className="ml-1">· Unavailable</span>}</button>})}</div>
-        <p className="mt-6 font-bold text-zinc-800">Select Groomer <span className="text-sm font-normal text-zinc-400">(Optional)</span></p>
-        <select value={activeSelection.groomerId??""} onChange={e=>updateSelection({groomerId:e.target.value||null})} className="mt-2 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-pink sm:w-64"><option value="">No preference</option>{groomers.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select>
-        {data.addons.length>0&&<><p className="mt-6 font-bold text-zinc-800">Add-Ons <span className="text-sm font-normal text-zinc-400">(Optional)</span></p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{data.addons.map(addon=>{const size=data.sizes.find(s=>s.id===activeSelection.sizeId);const price=addonPrice(addon.id,size?.label);const selected=activeSelection.addonIds.includes(addon.id);return <button key={addon.id} type="button" onClick={()=>toggleAddon(addon.id)} className={`rounded-xl border-2 px-3 py-2 text-left text-xs ${selected?"border-brand-pink bg-brand-pink text-white":"border-pink-100 text-zinc-700 hover:border-pink-200"}`}><p className="font-semibold">{addon.name}</p>{price&&<p className={selected?"text-white/80":"text-zinc-400"}>₱{price.price}</p>}</button>})}</div></>}
+      <p className="font-bold text-zinc-800">{pet.name} <span className="font-normal text-zinc-400">({pet.species})</span></p>
+      <p className="mt-5 font-bold">Select Package</p>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">{data.packages.map(pkg => <button type="button" key={pkg.id}
+        onClick={() => update({ packageId: pkg.id, packagePricingId: null, sizeId: null, addonIds: [], groomerId: null })}
+        className={`rounded-xl border-2 p-3 text-left text-sm ${selected?.packageId === pkg.id ? "border-brand-pink bg-brand-tint" : "border-pink-100 hover:border-brand-pink"}`}>
+        <p className="font-semibold">{pkg.name}</p>{data.inclusions.filter(row => row.package_id === pkg.id).map(row => <p key={row.id} className="text-xs text-zinc-500">• {row.label}</p>)}
+      </button>)}</div>
+      {selected?.packageId && <>
+        <p className="mt-6 font-bold">Select Size</p>
+        <p className="mt-1 text-xs text-zinc-500">Registered size: <strong>{pet.size_label || "Unclassified"}</strong>. {minimum === -2 ? "Saved size needs correction by staff." : pet.species === "Cat" ? "Cat grooming uses Small and Large only." : "You may select the registered size or larger."}</p>
+        <div className="mt-2 flex flex-wrap gap-2">{data.sizes.map((size, idx) => {
+          const price = rateFor(selected.packageId!, size);
+          const blocked = minimum === -2 || idx < minimum || !price;
+          return <button type="button" key={size.id} disabled={blocked}
+            onClick={() => update({ sizeId: size.id, packagePricingId: price?.id ?? null })}
+            className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold ${blocked ? "border-zinc-200 bg-zinc-100 text-zinc-400" : selected.sizeId === size.id ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200"}`}>
+            {size.label} {size.weight_range && <span className="font-normal">({size.weight_range})</span>} {price && `₱${price.price}`}
+          </button>;
+        })}</div>
+        <p className="mt-6 rounded-xl bg-pink-50 p-3 text-xs text-zinc-600">Groomers are selected in the Schedule step, where the system can hide groomers already booked at your chosen start time.</p>
+        {!!data.addons.length && <><p className="mt-6 font-bold">Add-ons (Optional)</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{data.addons.map(addon => {
+            const size = data.sizes.find(s => s.id === selected.sizeId);
+            const rate = addonRate(addon.id, size?.label);
+            const selectedAddon = selected.addonIds.includes(addon.id);
+            return <button type="button" key={addon.id} disabled={!selected.sizeId || (!rate && !selectedAddon)}
+              onClick={() => update({ addonIds: selectedAddon ? selected.addonIds.filter(id => id !== addon.id) : [...selected.addonIds, addon.id] })}
+              className={`rounded-xl border-2 px-3 py-2 text-left text-xs ${selectedAddon ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"} disabled:opacity-40`}>
+              <span className="block font-semibold">{addon.name}</span>{rate && <span>₱{rate.price}</span>}
+            </button>;
+          })}</div></>}
       </>}
     </div>
-    <div className="mt-8 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500 hover:border-zinc-400">Back</button><button type="button" onClick={handleNextPetOrSchedule} disabled={!currentConfigured} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white hover:bg-brand-pink-dark disabled:opacity-40">{allConfigured ? "Next: Schedule" : `Next Pet${remaining.length ? ` (${remaining.length} remaining)` : ""}`}</button></div>
+    <div className="mt-8 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500">Back</button>
+      <button type="button" onClick={next} disabled={!configured(pet)} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white disabled:opacity-40">{ready ? "Next: Schedule" : "Next Pet"}</button></div>
   </div>;
 }
