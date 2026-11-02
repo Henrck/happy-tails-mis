@@ -15,7 +15,7 @@ import type { HeroSlide } from "@/lib/types/hero-slides";
 import type { GalleryPhoto } from "@/lib/types/gallery";
 import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
-import Services from "@/components/landing/Services";
+import DynamicServices from "@/components/landing/DynamicServices";
 import GroomingBanner from "@/components/landing/GroomingBanner";
 import GroomingPricing from "@/components/landing/GroomingPricing";
 import BoardingBanner from "@/components/landing/BoardingBanner";
@@ -27,6 +27,7 @@ import Gallery from "@/components/landing/Gallery";
 import { PoliciesModalProvider } from "@/components/landing/PoliciesModalContext";
 import PoliciesModal from "@/components/landing/PoliciesModal";
 import type { Product } from "@/lib/types/products";
+import { copy, type WebsiteService } from "@/lib/website/catalog";
 import type { PublicPricingCatalog } from "@/lib/landing/public-pricing";
 import type { Package, PackageInclusion, PackagePricing, PetSize } from "@/lib/types/services";
 
@@ -35,6 +36,8 @@ export default function WebsiteManagementPage() {
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [websiteServices, setWebsiteServices] = useState<WebsiteService[]>([]);
+  const [websiteText, setWebsiteText] = useState<Record<string, string>>({});
   const [pricingCatalog, setPricingCatalog] = useState<PublicPricingCatalog>({
     packages: [], pricing: [], sizes: [], inclusions: [], loaded: false,
   });
@@ -52,11 +55,18 @@ export default function WebsiteManagementPage() {
 
   async function loadContent() {
     const supabase = createClient();
-    const [{ data: settingsData, error: settingsError }, { data: productsData }, { data: galleryData }] = await Promise.all([
+    const [settingsResult, productsResult, galleryResult, servicesResult, textResult] = await Promise.all([
       supabase.from("site_settings").select("*"),
       supabase.from("products").select("*").eq("status", "active").order("product_code"),
       supabase.from("gallery_photos").select("*").eq("active", true).order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
+      supabase.from("website_services").select("*").eq("published", true).order("sort_order", { ascending: true }),
+      supabase.from("website_text").select("key,value"),
     ]);
+    const { data: settingsData, error: settingsError } = settingsResult;
+    const { data: productsData } = productsResult;
+    const { data: galleryData } = galleryResult;
+    if (!servicesResult.error) setWebsiteServices((servicesResult.data ?? []) as WebsiteService[]);
+    if (!textResult.error) setWebsiteText(Object.fromEntries((textResult.data ?? []).map(row => [row.key, row.value])));
     // Fetch the exact active Service Management data used by public pricing cards.
     // Do not substitute hardcoded prices if any query fails.
     const [packageResult, rateResult, sizeResult, inclusionResult] = await Promise.all([
@@ -77,9 +87,13 @@ export default function WebsiteManagementPage() {
         loaded: true,
       });
     }
-    if (pricingFailure) setError(`Unable to load live grooming prices: ${pricingFailure.message}`);
-    else if (settingsError) setError(settingsError.message);
-    else setError(null);
+    const failures = [
+      pricingFailure ? `Unable to load live pricing: ${pricingFailure.message}` : null,
+      settingsError ? `Unable to load website settings: ${settingsError.message}` : null,
+      servicesResult.error ? `Unable to load published services: ${servicesResult.error.message}` : null,
+      textResult.error ? `Unable to load website text: ${textResult.error.message}` : null,
+    ].filter(Boolean);
+    setError(failures.length ? failures.join(" | ") : null);
     if (!settingsError) setSettings((settingsData as SiteSetting[]) ?? []);
     setProducts((productsData as Product[]) ?? []);
     setGalleryPhotos((galleryData as GalleryPhoto[]) ?? []);
@@ -89,6 +103,14 @@ export default function WebsiteManagementPage() {
 
   useEffect(() => { void loadContent().finally(() => setLoading(false)); }, []);
   const get = (key: SiteSettingKey) => settings.find((s) => s.key === key);
+  const serviceImageDefaults: Record<string, string | undefined> = {
+    "pet-grooming": get("services_grooming_image")?.image_url ?? undefined,
+    "pet-boarding": get("services_boarding_image")?.image_url ?? undefined,
+    "pet-spa": get("services_spa_image")?.image_url ?? undefined,
+  };
+  const previewServices = websiteServices.map(service => ({
+    ...service, image_url: service.image_url ?? serviceImageDefaults[service.slug] ?? null,
+  }));
   function openUploadFor(key: SiteSettingKey) {
     setUploadTarget(key);
     window.setTimeout(() => fileInputRef.current?.click(), 0);
@@ -135,7 +157,7 @@ export default function WebsiteManagementPage() {
         <div className="mt-6 max-h-[75dvh] min-w-0 overflow-auto rounded-2xl border-2 border-zinc-800 shadow-xl sm:border-4">
           <EditableSection editMode={editMode} label="Logo" onEdit={() => openUploadFor("site_logo")}><Navbar logoUrl={get("site_logo")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Hero Slides" onEdit={() => setManageHeroSlides(true)}><Hero slides={heroSlides} logoUrl={get("site_logo")?.image_url} /></EditableSection>
-          <EditableSection editMode={editMode} label="Pet Services Photos" onEdit={() => setManageServicesImages(true)}><Services groomingImage={get("services_grooming_image")?.image_url} boardingImage={get("services_boarding_image")?.image_url} spaImage={get("services_spa_image")?.image_url} /></EditableSection>
+          <EditableSection editMode={editMode} label="Published Services" onEdit={() => setManageServicesImages(true)}><DynamicServices services={previewServices} heading={copy("services_heading", websiteText)} subheading={copy("services_subheading", websiteText)} /></EditableSection>
           <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
           <EditableSection editMode={editMode} label="Grooming Banner" onEdit={() => openUploadFor("grooming_banner_background")}><GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} /></EditableSection>
           <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><GroomingPricing catalog={pricingCatalog} basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></EditableSection>
