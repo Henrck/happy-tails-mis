@@ -3,6 +3,7 @@ import Hero from '@/components/landing/Hero';
 import Navbar from '@/components/landing/Navbar';
 import DynamicServices from '@/components/landing/DynamicServices';
 import GroomingBanner from '@/components/landing/GroomingBanner';
+import LandingTextSection from "@/components/landing/LandingTextSection";
 import GroomingPricing from '@/components/landing/GroomingPricing';
 import BoardingBanner from '@/components/landing/BoardingBanner';
 import BoardingPricing from '@/components/landing/BoardingPricing';
@@ -26,33 +27,23 @@ import type { Package, PackagePricing, PackageInclusion, PetSize } from '@/lib/t
 import type { PublicPricingCatalog } from '@/lib/landing/public-pricing';
 import { copy, type WebsiteService } from '@/lib/website/catalog';
 
-// The homepage title targets branded searches and verified Noveleta location.
-// Google may choose its own displayed title or description.
 export const metadata: Metadata = {
   title: { absolute: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite' },
-  description:
-    'Visit Happy Tails Pet Grooming Cafe in Noveleta, Cavite for pet grooming, boarding, spa care and pet supplies. Explore our services and book online.',
+  description: 'Visit Happy Tails Pet Grooming Cafe in Noveleta, Cavite for pet grooming, boarding, spa care and pet supplies. Explore our services and book online.',
   alternates: { canonical: '/' },
   openGraph: {
-    type: 'website',
-    locale: 'en_PH',
-    siteName: 'Happy Tails Pet Grooming Cafe',
+    type: 'website', locale: 'en_PH', siteName: 'Happy Tails Pet Grooming Cafe',
     title: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite',
-    description:
-      'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite. Explore Happy Tails and book online.',
-    url: '/',
-    images: [{ url: '/images/hero-bg.png', alt: 'Happy Tails Pet Grooming Cafe' }],
+    description: 'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite. Explore Happy Tails and book online.',
+    url: '/', images: [{ url: '/images/hero-bg.png', alt: 'Happy Tails Pet Grooming Cafe' }],
   },
   twitter: {
-    card: 'summary_large_image',
-    title: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite',
-    description: 'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite.',
-    images: ['/images/hero-bg.png'],
+    card: 'summary_large_image', title: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite',
+    description: 'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite.', images: ['/images/hero-bg.png'],
   },
 };
 
-// Public service prices must reflect the latest database values at the next
-// page request (without a redeploy or an outdated static page cache).
+// Show the latest published text and service prices on every new page request.
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
@@ -70,34 +61,25 @@ export default async function Home() {
     db.from('pet_sizes').select('id,service_type,label,weight_range,sort_order,is_active')
       .in('service_type', ['dog_grooming', 'cat_grooming']).order('sort_order'),
   ]);
-
   const packages = (packageResult.data ?? []) as Package[];
   const packageIds = packages.map(pkg => pkg.id);
   const [pricingResult, inclusionResult] = packageResult.error || !packageIds.length
     ? [null, null]
     : await Promise.all([
-      db.from('package_pricing').select('id,package_id,size_id,size_label,size_detail,price,is_per_night,nights')
-        .in('package_id', packageIds),
-      db.from('package_inclusions').select('id,package_id,label,sort_order')
-        .in('package_id', packageIds).order('sort_order'),
+      db.from('package_pricing').select('id,package_id,size_id,size_label,size_detail,price,is_per_night,nights').in('package_id', packageIds),
+      db.from('package_inclusions').select('id,package_id,label,sort_order').in('package_id', packageIds).order('sort_order'),
     ]);
-
   if (packageResult.error || sizeResult.error || pricingResult?.error || inclusionResult?.error) {
-    // Server log only: never expose raw database or permission details on the public page.
     console.error('[HappyTails public pricing] Could not load active service rates:',
-      packageResult.error?.message ?? sizeResult.error?.message ??
-      pricingResult?.error?.message ?? inclusionResult?.error?.message);
+      packageResult.error?.message ?? sizeResult.error?.message ?? pricingResult?.error?.message ?? inclusionResult?.error?.message);
   }
-
+  if (textResult.error) console.error('[HappyTails website text] Failed to read published content:', textResult.error.message);
   const pricingCatalog: PublicPricingCatalog = {
-    packages,
-    pricing: (pricingResult?.data ?? []) as PackagePricing[],
-    sizes: (sizeResult.data ?? []) as PetSize[],
-    inclusions: (inclusionResult?.data ?? []) as PackageInclusion[],
+    packages, pricing: (pricingResult?.data ?? []) as PackagePricing[],
+    sizes: (sizeResult.data ?? []) as PetSize[], inclusions: (inclusionResult?.data ?? []) as PackageInclusion[],
     loaded: !packageResult.error && !sizeResult.error &&
       (packageIds.length === 0 || (!pricingResult?.error && !inclusionResult?.error)),
   };
-
   const settings = (settingsResult.data ?? []) as SiteSetting[];
   const get = (key: string) => settings.find(s => s.key === key);
   const text = Object.fromEntries((textResult.data ?? []).map(item => [item.key, item.value])) as Record<string, string>;
@@ -109,24 +91,21 @@ export default async function Home() {
     'pet-spa': get('services_spa_image')?.image_url ?? undefined,
   };
   const shownServices = services.map(s => ({ ...s, image_url: s.image_url ?? imageDefaults[s.slug] ?? null }));
-
   return (
     <PoliciesModalProvider>
       <Navbar logoUrl={get('site_logo')?.image_url} />
       <main>
         <Hero slides={(heroResult.data ?? []) as HeroSlide[]} logoUrl={get('site_logo')?.image_url} />
         <HomepageSeo />
-        {shownServices.length > 0 && (
-          <DynamicServices services={shownServices} heading={copy('services_heading', text)} subheading={copy('services_subheading', text)} />
-        )}
+        {shownServices.length > 0 && <DynamicServices services={shownServices} heading={copy('services_heading', text)} subheading={copy('services_subheading', text)} />}
         <Gallery photos={galleryPhotos} heading={copy('gallery_heading', text)} subheading={copy('gallery_subheading', text)} />
-        <GroomingBanner backgroundUrl={get('grooming_banner_background')?.image_url} width={get('grooming_banner_background')?.image_width} height={get('grooming_banner_background')?.image_height} />
-        <GroomingPricing catalog={pricingCatalog} basicImage={get('grooming_basic_image')?.image_url} diamondImage={get('grooming_diamond_image')?.image_url} premiumImage={get('grooming_premium_image')?.image_url} />
-        <BoardingBanner backgroundUrl={get('boarding_banner_background')?.image_url} width={get('boarding_banner_background')?.image_width} height={get('boarding_banner_background')?.image_height} />
-        <BoardingPricing catalog={pricingCatalog} smallKennelImage={get('boarding_small_kennel_image')?.image_url} bigKennelImage={get('boarding_big_kennel_image')?.image_url} />
-        <SpaBanner backgroundUrl={get('spa_banner_background')?.image_url} width={get('spa_banner_background')?.image_width} height={get('spa_banner_background')?.image_height} />
+        <GroomingBanner description={copy('grooming_banner_description', text)} backgroundUrl={get('grooming_banner_background')?.image_url} width={get('grooming_banner_background')?.image_width} height={get('grooming_banner_background')?.image_height} />
+        <LandingTextSection heading={copy('grooming_heading', text)} subheading={copy('grooming_subheading', text)}><GroomingPricing catalog={pricingCatalog} basicImage={get('grooming_basic_image')?.image_url} diamondImage={get('grooming_diamond_image')?.image_url} premiumImage={get('grooming_premium_image')?.image_url} /></LandingTextSection>
+        <BoardingBanner description={copy('boarding_banner_description', text)} backgroundUrl={get('boarding_banner_background')?.image_url} width={get('boarding_banner_background')?.image_width} height={get('boarding_banner_background')?.image_height} />
+        <LandingTextSection heading={copy('boarding_heading', text)} subheading={copy('boarding_subheading', text)}><BoardingPricing catalog={pricingCatalog} smallKennelImage={get('boarding_small_kennel_image')?.image_url} bigKennelImage={get('boarding_big_kennel_image')?.image_url} /></LandingTextSection>
+        <SpaBanner description={copy('spa_banner_description', text)} backgroundUrl={get('spa_banner_background')?.image_url} width={get('spa_banner_background')?.image_width} height={get('spa_banner_background')?.image_height} />
         <SpaBenefits />
-        <ProductsCarousel products={(productsResult.data ?? []) as Product[]} />
+        <LandingTextSection tone="pink" heading={copy('products_heading', text)} subheading={copy('products_subheading', text)}><ProductsCarousel products={(productsResult.data ?? []) as Product[]} /></LandingTextSection>
         <BranchesCarousel branches={branches} />
         <DynamicAbout backgroundUrl={get('about_us_background')?.image_url} heading={copy('about_heading', text)} description={copy('about_description', text)} />
       </main>

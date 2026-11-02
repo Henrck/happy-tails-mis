@@ -17,12 +17,13 @@ import Navbar from "@/components/landing/Navbar";
 import Hero from "@/components/landing/Hero";
 import DynamicServices from "@/components/landing/DynamicServices";
 import GroomingBanner from "@/components/landing/GroomingBanner";
+import LandingTextSection from "@/components/landing/LandingTextSection";
 import GroomingPricing from "@/components/landing/GroomingPricing";
 import BoardingBanner from "@/components/landing/BoardingBanner";
 import BoardingPricing from "@/components/landing/BoardingPricing";
 import SpaBanner from "@/components/landing/SpaBanner";
 import ProductsCarousel from "@/components/landing/ProductsCarousel";
-import AboutUs from "@/components/landing/AboutUs";
+import DynamicAbout from "@/components/landing/DynamicAbout";
 import Gallery from "@/components/landing/Gallery";
 import { PoliciesModalProvider } from "@/components/landing/PoliciesModalContext";
 import PoliciesModal from "@/components/landing/PoliciesModal";
@@ -158,14 +159,14 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="Logo" onEdit={() => openUploadFor("site_logo")}><Navbar logoUrl={get("site_logo")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Hero Slides" onEdit={() => setManageHeroSlides(true)}><Hero slides={heroSlides} logoUrl={get("site_logo")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Published Services" onEdit={() => setManageServicesImages(true)}><DynamicServices services={previewServices} heading={copy("services_heading", websiteText)} subheading={copy("services_subheading", websiteText)} /></EditableSection>
-          <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
-          <EditableSection editMode={editMode} label="Grooming Banner" onEdit={() => openUploadFor("grooming_banner_background")}><GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} /></EditableSection>
-          <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><GroomingPricing catalog={pricingCatalog} basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></EditableSection>
-          <EditableSection editMode={editMode} label="Boarding Banner" onEdit={() => openUploadFor("boarding_banner_background")}><BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} /></EditableSection>
-          <EditableSection editMode={editMode} label="Boarding Pricing Photos" onEdit={() => setManagePricingImages(true)}><BoardingPricing catalog={pricingCatalog} smallKennelImage={get("boarding_small_kennel_image")?.image_url} bigKennelImage={get("boarding_big_kennel_image")?.image_url} /></EditableSection>
-          <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
-          <ProductsCarousel products={products} />
-          <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><AboutUs backgroundUrl={get("about_us_background")?.image_url} /></EditableSection>
+          <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} heading={copy("gallery_heading", websiteText)} subheading={copy("gallery_subheading", websiteText)} /></EditableSection>
+          <EditableSection editMode={editMode} label="Grooming Banner" onEdit={() => openUploadFor("grooming_banner_background")}><GroomingBanner description={copy("grooming_banner_description", websiteText)} backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} /></EditableSection>
+          <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><LandingTextSection heading={copy("grooming_heading", websiteText)} subheading={copy("grooming_subheading", websiteText)}><GroomingPricing catalog={pricingCatalog} basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></LandingTextSection></EditableSection>
+          <EditableSection editMode={editMode} label="Boarding Banner" onEdit={() => openUploadFor("boarding_banner_background")}><BoardingBanner description={copy("boarding_banner_description", websiteText)} backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} /></EditableSection>
+          <EditableSection editMode={editMode} label="Boarding Pricing Photos" onEdit={() => setManagePricingImages(true)}><LandingTextSection heading={copy("boarding_heading", websiteText)} subheading={copy("boarding_subheading", websiteText)}><BoardingPricing catalog={pricingCatalog} smallKennelImage={get("boarding_small_kennel_image")?.image_url} bigKennelImage={get("boarding_big_kennel_image")?.image_url} /></LandingTextSection></EditableSection>
+          <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner description={copy("spa_banner_description", websiteText)} backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
+          <LandingTextSection tone="pink" heading={copy("products_heading", websiteText)} subheading={copy("products_subheading", websiteText)}><ProductsCarousel products={products} /></LandingTextSection>
+          <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><DynamicAbout backgroundUrl={get("about_us_background")?.image_url} heading={copy("about_heading", websiteText)} description={copy("about_description", websiteText)} /></EditableSection>
         </div>
         <p className="mt-3 text-xs text-zinc-400">This is the live site. Toggle "Edit" to reveal edit controls over each section.</p>
         {manageHeroSlides && <HeroSlidesManager onClose={async () => { setManageHeroSlides(false); await loadContent(); }} />}
