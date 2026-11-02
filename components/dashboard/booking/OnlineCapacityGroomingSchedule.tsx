@@ -144,6 +144,12 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
   function chooseGroomer(petId: string, id: string) {
     invalidate(); setPreference(prev => ({ ...prev, [petId]: id || null }));
   }
+  function applyGroomerToAll(id: string) {
+    // The planner will assign consecutive, non-overlapping times for this groomer.
+    // Only offer groomers eligible for every pet at the requested initial time.
+    invalidate();
+    setPreference(Object.fromEntries(petSelections.map(s => [s.pet.id, id || null])));
+  }
   async function proceed() {
     if (!scheduledDate || !scheduledTime || busy) return;
     const previous = planRef.current;
@@ -158,6 +164,15 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
   }
 
   const disabled = closures.loading || !!closures.error || !!monthError;
+  // A quick-select groomer must be eligible for all pets; the planner calculates
+  // each pet's actual start time after the user makes this preference selection.
+  const commonGroomers = petSelections.length && petSelections.every(s => choices[s.pet.id])
+    ? (choices[petSelections[0].pet.id] ?? []).filter(g => g.available && petSelections.every(s =>
+        (choices[s.pet.id] ?? []).some(option => option.groomer_id === g.groomer_id && option.available)))
+    : [];
+  const selectedForAll = petSelections.length && petSelections.every(s =>
+    preference[s.pet.id] === preference[petSelections[0].pet.id])
+    ? preference[petSelections[0].pet.id] ?? "" : "mixed";
   return <section className="mx-auto w-full max-w-4xl space-y-5">
     <header className="text-center"><h2 className="text-2xl font-bold text-brand-pink">Grooming Schedule</h2>
       <p className="mt-2 text-sm text-zinc-600">Each groomer can serve one pet at a time. Multi-pet appointments are arranged without overlapping the groomer.</p></header>
@@ -178,6 +193,20 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     {scheduledDate && scheduledTime && <div className="rounded-2xl border border-pink-200 bg-white p-4">
       <h3 className="font-semibold">Groomer preference for each pet</h3>
       <p className="mt-1 text-xs text-zinc-500">Only groomers available for the selected start time appear. The same groomer may be selected for multiple pets in this booking; later pets start after earlier sessions finish.</p>
+      {petSelections.length > 1 && <div className="mt-4 rounded-xl border border-pink-200 bg-pink-50 p-3">
+        <label htmlFor="groomer-quick-select" className="block text-sm font-bold text-zinc-800">Quick select — apply to all {petSelections.length} pets</label>
+        <p className="mt-1 text-xs text-zinc-600">Choose one groomer for every pet. The schedule will arrange their sessions one after another based on each package's duration. You can still change individual pets below.</p>
+        <select id="groomer-quick-select" value={selectedForAll} onChange={e => applyGroomerToAll(e.target.value)}
+          disabled={busy}
+          className="mt-2 w-full rounded-xl border border-pink-200 bg-white px-3 py-3 text-sm">
+          {selectedForAll === "mixed" && <option value="mixed" disabled>Different groomers selected</option>}
+          <option value="">No preference — assign automatically</option>
+          {commonGroomers.map(g => <option key={g.groomer_id} value={g.groomer_id}>{g.groomer_name}</option>)}
+          {selectedForAll && selectedForAll !== "mixed" && !commonGroomers.some(g => g.groomer_id === selectedForAll) &&
+            <option value={selectedForAll} disabled>Selected groomer no longer available</option>}
+        </select>
+        {!commonGroomers.length && <p className="mt-2 text-xs text-amber-700">No single groomer is available for every pet at this start time. Select groomers separately or choose another time.</p>}
+      </div>}
       <div className="mt-3 space-y-3">{petSelections.map(s => {
         const available = (choices[s.pet.id] ?? []).filter(g => g.available);
         const selected = preference[s.pet.id] ?? "";

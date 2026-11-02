@@ -7,6 +7,7 @@ import AppointmentFilters, { type FilterState } from "@/components/admin/appoint
 import AppointmentsTable from "@/components/admin/appointments/AppointmentsTable";
 import AppointmentDetailModal from "@/components/admin/appointments/AppointmentDetailModal";
 import Pagination from "@/components/admin/Pagination";
+import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 
 const PAGE_SIZE = 10;
 
@@ -95,7 +96,7 @@ export default function AdminAppointmentsPage() {
     </div>
     <div className="mt-6"><AppointmentStats refreshKey={refreshKey} /></div>
     <div className="mt-6"><AppointmentFilters filters={filters} onChange={(x) => { setFilters(x); setPage(0); }} /></div>
-    {loadError && <p className="mt-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{loadError}</p>}
+    {loadError && <FeedbackDialog title="Appointments Could Not Load" message={loadError} onClose={() => setLoadError(null)} actionLabel="Retry Loading" onAction={() => { setLoadError(null); void load(); }} />}
     <div className="mt-4">{loading ? <p className="text-center text-zinc-400 py-10">Loading appointments…</p> : <AppointmentsTable rows={visible} onView={setSelected} />}</div>
     <div className="mt-4"><Pagination page={safePage} pageSize={PAGE_SIZE} totalItems={filtered.length} onPageChange={setPage} /></div>
     {selected && <AppointmentDetailModal appointment={selected} onClose={() => setSelected(null)} onUpdateStatus={status} onRefresh={load} />}

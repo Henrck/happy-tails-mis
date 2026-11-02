@@ -41,23 +41,21 @@ export function eligibleServicesFor(
 
   const hasDog = selected.some((p) => p.species === "Dog");
   const hasCat = selected.some((p) => p.species === "Cat");
+  if (hasDog || hasCat) results.push("grooming");
 
-  if (hasDog || hasCat) {
-    results.push("grooming");
+  // Boarding is one group reservation for the selected pets. Once added,
+  // do not offer it again in "Other Services", even for an unselected pet.
+  // This avoids a second Boarding leg accidentally competing for the same
+  // two Big kennels and splitting pets that were meant to share.
+  if (selected.length > 0 && !completedLegs.some((l) => l.serviceChoice === "boarding")) {
+    results.push("boarding");
   }
-
-  const boardingCovered = coveredBy("boarding");
-  if (selected.some((p) => !boardingCovered.has(p.id))) results.push("boarding");
 
   const alaCovered = coveredBy("ala_carte");
   if (selected.some((p) => !alaCovered.has(p.id))) results.push("ala_carte");
-
   return results;
 }
 
-// Kept only for backwards compatibility with older imports.
-// Species never auto-creates a service; the customer explicitly chooses
-// the service after the selected pets are known.
 export function autoQueuedGroomingLegs(_selectedPets: Pet[]): BookingLeg[] {
   return [];
 }
