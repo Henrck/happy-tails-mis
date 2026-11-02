@@ -44,6 +44,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   const [error, setError] = useState<string | null>(null);
   const [shareTargets, setShareTargets] = useState<string[]>([]);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [reminder, setReminder] = useState<{ title: string; message: string; details?: string[] } | null>(null);
   const [custom, setCustom] = useState<Record<string, string>>(() => Object.fromEntries(
     selections.filter(s => s.boardingNights != null).map(s => [s.pet.id, String(s.boardingNights)])
   ));
@@ -121,6 +122,17 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   }
   function createGroup() {
     const group = selections.filter(s => shareTargets.includes(s.pet.id)) as ShareSelection[];
+    // Compare actual nights, including extended boarding packages, before the
+    // generic share validation so customers receive an actionable explanation.
+    if (group.length >= 2 && group.every(s => nightsFor(s) !== null) &&
+        new Set(group.map(s => nightsFor(s))).size > 1) {
+      setReminder({
+        title: "Different Boarding Durations",
+        message: "These pets cannot share one kennel because their boarding days and nights are different. Select the same boarding package and number of nights, or reserve separate kennels.",
+        details: group.map(s => `${s.pet.name}: ${(nightsFor(s) ?? 0) + 1} days / ${nightsFor(s)} nights`),
+      });
+      return;
+    }
     if (!validShareGroup(group)) {
       setShareNotice("Choose Small + Medium, Medium + Medium, or 3 Small pets. All must use the same Big kennel package and duration.");
       return;
@@ -146,7 +158,25 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   const currentShareError = shareError(selections as ShareSelection[]);
   const largePets = pets.filter((pet) => petTier(pet) === "large");
   const tooManyLargePets = largePets.length > 2;
-  const valid = !error && !currentShareError && !tooManyLargePets && pets.length > 0 && pets.every((pet) => {
+  // Every valid sharing group uses one physical Big kennel; each other pet
+  // selecting Big uses a separate kennel. This is a booking-group constraint,
+  // not a date availability calculation.
+  const requestedBigKennels = new Set(
+    (selections as ShareSelection[])
+      .filter(s => s.boardingKennelSize === "big")
+      .map(s => s.boardingShareGroupId || `pet:${s.pet.id}`),
+  ).size;
+  const bigKennelLimit = 2;
+  const exceedsBigKennels = requestedBigKennels > bigKennelLimit;
+  useEffect(() => {
+    if (exceedsBigKennels) {
+      setReminder({
+        title: "Not Enough Big Kennels",
+        message: `Your selected pets require ${requestedBigKennels} separate Big kennels, but HappyTails has only ${bigKennelLimit}. Changing the date cannot make this group fit. Eligible pets may share a Big kennel when their sizes and boarding durations match; otherwise arrange separate, non-overlapping stays.`,
+      });
+    }
+  }, [exceedsBigKennels, requestedBigKennels]);
+  const valid = !error && !currentShareError && !tooManyLargePets && !exceedsBigKennels && pets.length > 0 && pets.every((pet) => {
     const s = forPet(pet), rate = rateFor(s), nights = nightsFor(s);
     return !!s && !!petTier(pet) && !!s.boardingKennelSize &&
       !(s.boardingKennelSize === "small" && !["small", "medium"].includes(petTier(pet) ?? "")) &&
@@ -160,7 +190,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
     <h2 className="text-center text-xl font-bold text-brand-pink">Pet Hotel / Boarding</h2>
     <p className="mt-2 text-center text-sm text-zinc-600">Step 1 of 2 — choose the kennel and duration for each pet. Next, check availability for the <strong>entire stay</strong> in the Dates step.</p>
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    {tooManyLargePets && <p role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">You selected {largePets.length} Large or larger pets. The hotel has only 2 Big kennels, and each Large pet needs one Big kennel exclusively. Reduce this boarding group or arrange separate, non-overlapping stays.</p>}
+    {exceedsBigKennels && <p role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">This booking needs {requestedBigKennels} Big kennels but only {bigKennelLimit} are configured. Adjust the booking group before continuing.</p>}
     <p className="mt-4 rounded-xl bg-pink-50 p-4 text-xs leading-5 text-zinc-700">Each Small kennel accepts one Small <b>or Medium</b> pet. Sharing one Big kennel is available for exactly Small + Medium, Medium + Medium, or three Small pets. All other pets use separate kennels. There are only <b>two Big kennels</b>. Free Bath & Dry begins at four nights.</p>
     {pets.map((pet) => {
       const s = forPet(pet), tier = petTier(pet), size = s?.boardingKennelSize;
@@ -233,5 +263,17 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
     </section>}
     {combined ? <div className="mt-6 flex items-center justify-between gap-3"><button type="button" onClick={onBack} className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-semibold">Back to waiver</button><p className="text-xs text-zinc-500">{valid ? "Pick an available group date below ↓" : "Complete each pet to see availability."}</p></div>
       : <div className="mt-6 grid grid-cols-2 gap-3"><button onClick={onBack} className="rounded-full border border-zinc-300 py-3">Back</button><button disabled={!valid} onClick={() => { onChange(withSharedKennelPrices(selections.map(recalculate) as ShareSelection[],pricing)); onNext(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next: Boarding Dates</button></div>}
+    {reminder && <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setReminder(null); }}>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="boarding-reminder-title" aria-describedby="boarding-reminder-message"
+        className="w-full max-w-md rounded-3xl border border-pink-100 bg-white p-5 shadow-2xl sm:p-6">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-2xl" aria-hidden="true">⚠️</div>
+        <h3 id="boarding-reminder-title" className="mt-3 text-center text-lg font-bold text-zinc-900">{reminder.title}</h3>
+        <p id="boarding-reminder-message" className="mt-3 text-center text-sm leading-6 text-zinc-600">{reminder.message}</p>
+        {reminder.details && <div className="mt-4 space-y-2 rounded-2xl bg-pink-50 p-4">
+          {reminder.details.map((detail, index) => <p key={index} className="text-sm font-medium text-zinc-700">{detail}</p>)}
+        </div>}
+        <button type="button" autoFocus onClick={() => setReminder(null)} className="mt-5 w-full rounded-full bg-brand-pink px-4 py-3 text-sm font-bold text-white hover:bg-brand-pink-dark">Understood</button>
+      </div>
+    </div>}
   </section>;
 }

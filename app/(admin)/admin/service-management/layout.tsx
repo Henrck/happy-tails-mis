@@ -1,2 +1,10 @@
-import Link from 'next/link';
-export default function Layout({children}:{children:React.ReactNode}){return <><div className="mb-4 flex flex-wrap gap-2"><Link href="/admin/service-management" className="rounded-full border border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink">Packages, prices & add-ons</Link><Link href="/admin/service-management/catalog" className="rounded-full bg-brand-pink px-4 py-2 text-sm font-semibold text-white">Services catalog</Link></div>{children}</>}
+import ManagementSubnav from "@/components/admin/shared/ManagementSubnav";
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <ManagementSubnav section="services" />
+      {children}
+    </>
+  );
+}

@@ -27,12 +27,17 @@ import Gallery from "@/components/landing/Gallery";
 import { PoliciesModalProvider } from "@/components/landing/PoliciesModalContext";
 import PoliciesModal from "@/components/landing/PoliciesModal";
 import type { Product } from "@/lib/types/products";
+import type { PublicPricingCatalog } from "@/lib/landing/public-pricing";
+import type { Package, PackageInclusion, PackagePricing, PetSize } from "@/lib/types/services";
 
 export default function WebsiteManagementPage() {
   const [settings, setSettings] = useState<SiteSetting[]>([]);
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [pricingCatalog, setPricingCatalog] = useState<PublicPricingCatalog>({
+    packages: [], pricing: [], sizes: [], inclusions: [], loaded: false,
+  });
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [uploadTarget, setUploadTarget] = useState<SiteSettingKey | null>(null);
@@ -52,8 +57,30 @@ export default function WebsiteManagementPage() {
       supabase.from("products").select("*").eq("status", "active").order("product_code"),
       supabase.from("gallery_photos").select("*").eq("active", true).order("sort_order", { ascending: true }).order("created_at", { ascending: false }),
     ]);
-    if (settingsError) setError(settingsError.message);
-    else setSettings((settingsData as SiteSetting[]) ?? []);
+    // Fetch the exact active Service Management data used by public pricing cards.
+    // Do not substitute hardcoded prices if any query fails.
+    const [packageResult, rateResult, sizeResult, inclusionResult] = await Promise.all([
+      supabase.from("packages").select("*").in("service_type", ["dog_grooming", "cat_grooming"]),
+      supabase.from("package_pricing").select("*"),
+      supabase.from("pet_sizes").select("*").in("service_type", ["dog_grooming", "cat_grooming"]),
+      supabase.from("package_inclusions").select("*"),
+    ]);
+    const pricingFailure = packageResult.error ?? rateResult.error ?? sizeResult.error ?? inclusionResult.error;
+    if (pricingFailure) {
+      setPricingCatalog({ packages: [], pricing: [], sizes: [], inclusions: [], loaded: false });
+    } else {
+      setPricingCatalog({
+        packages: (packageResult.data ?? []) as Package[],
+        pricing: (rateResult.data ?? []) as PackagePricing[],
+        sizes: (sizeResult.data ?? []) as PetSize[],
+        inclusions: (inclusionResult.data ?? []) as PackageInclusion[],
+        loaded: true,
+      });
+    }
+    if (pricingFailure) setError(`Unable to load live grooming prices: ${pricingFailure.message}`);
+    else if (settingsError) setError(settingsError.message);
+    else setError(null);
+    if (!settingsError) setSettings((settingsData as SiteSetting[]) ?? []);
     setProducts((productsData as Product[]) ?? []);
     setGalleryPhotos((galleryData as GalleryPhoto[]) ?? []);
     const hero = await fetchAllHeroSlides();
@@ -111,9 +138,9 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="Pet Services Photos" onEdit={() => setManageServicesImages(true)}><Services groomingImage={get("services_grooming_image")?.image_url} boardingImage={get("services_boarding_image")?.image_url} spaImage={get("services_spa_image")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Before & After Gallery" onEdit={() => setManageBeforeAfter(true)}><Gallery photos={galleryPhotos} /></EditableSection>
           <EditableSection editMode={editMode} label="Grooming Banner" onEdit={() => openUploadFor("grooming_banner_background")}><GroomingBanner backgroundUrl={get("grooming_banner_background")?.image_url} width={get("grooming_banner_background")?.image_width} height={get("grooming_banner_background")?.image_height} /></EditableSection>
-          <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><GroomingPricing basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></EditableSection>
+          <EditableSection editMode={editMode} label="Grooming Pricing Photos" onEdit={() => setManagePricingImages(true)}><GroomingPricing catalog={pricingCatalog} basicImage={get("grooming_basic_image")?.image_url} diamondImage={get("grooming_diamond_image")?.image_url} premiumImage={get("grooming_premium_image")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Boarding Banner" onEdit={() => openUploadFor("boarding_banner_background")}><BoardingBanner backgroundUrl={get("boarding_banner_background")?.image_url} width={get("boarding_banner_background")?.image_width} height={get("boarding_banner_background")?.image_height} /></EditableSection>
-          <EditableSection editMode={editMode} label="Boarding Pricing Photos" onEdit={() => setManagePricingImages(true)}><BoardingPricing smallKennelImage={get("boarding_small_kennel_image")?.image_url} bigKennelImage={get("boarding_big_kennel_image")?.image_url} /></EditableSection>
+          <EditableSection editMode={editMode} label="Boarding Pricing Photos" onEdit={() => setManagePricingImages(true)}><BoardingPricing catalog={pricingCatalog} smallKennelImage={get("boarding_small_kennel_image")?.image_url} bigKennelImage={get("boarding_big_kennel_image")?.image_url} /></EditableSection>
           <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
           <ProductsCarousel products={products} />
           <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><AboutUs backgroundUrl={get("about_us_background")?.image_url} /></EditableSection>

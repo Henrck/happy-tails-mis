@@ -1,0 +1,55 @@
+diff --git a/components/admin/pos/walk-in/BoardingSelectionStep.tsx b/components/admin/pos/walk-in/BoardingSelectionStep.tsx
+--- a/components/admin/pos/walk-in/BoardingSelectionStep.tsx
++++ b/components/admin/pos/walk-in/BoardingSelectionStep.tsx
+@@ -9,4 +9,5 @@
+ import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
+ import { validShareGroup, shareError, shareGroups, withSharedKennelPrices, type ShareSelection } from "@/lib/booking/boarding-share";
++import BoardingReminderModal from "@/components/shared/BoardingReminderModal";
+ 
+ type KennelSize = "small" | "big";
+@@ -48,4 +49,5 @@
+   const [error, setError] = useState<string | null>(null);
+   const [shareTargets, setShareTargets] = useState<string[]>([]);
+   const [shareNotice, setShareNotice] = useState<string | null>(null);
++  const [reminder, setReminder] = useState<{ title: string; message: string; details: string[] } | null>(null);
+   const [custom, setCustom] = useState<Record<string, string>>(() => Object.fromEntries(
+@@ -130,7 +132,15 @@
+   }
+   function createGroup() {
+     const group = selections.filter(s => shareTargets.includes(s.pet.id)) as ShareSelection[];
++    if (group.length >= 2 && new Set(group.map(s => nightsFor(s))).size > 1) {
++      setReminder({
++        title: "Cannot Merge Boarding Pets",
++        message: "These pets have different boarding durations. Pets sharing one kennel must have the same package and number of nights. Choose matching stays or reserve separate kennels.",
++        details: group.map(s => `${s.pet.name}: ${nightsFor(s) ?? "Not selected"} night(s)`),
++      });
++      return;
++    }
+     if (!validShareGroup(group)) {
+-      setShareNotice("Choose Small + Medium, Medium + Medium, or 3 Small pets. All must use the same Big kennel package and duration.");
++      setReminder({ title: "These pets cannot share a kennel", message: "Sharing requires a Big kennel with the same package and duration for every pet. Allowed groups: Small + Medium, Medium + Medium, or three Small pets.", details: group.map(s => `${s.pet.name} · ${s.pet.size_label} · ${nightsFor(s) ?? "—"} night(s)`) });
+       return;
+     }
+@@ -160,3 +174,9 @@
+   const largePets = pets.filter((pet) => petTier(pet) === "large");
+   const tooManyLargePets = largePets.length > 2;
++  const bigGroups = new Set(selections.filter(s => s.boardingKennelSize === "big" && (s as ShareSelection).boardingShareGroupId).map(s => (s as ShareSelection).boardingShareGroupId));
++  const requestedBig = selections.filter(s => s.boardingKennelSize === "big" && !(s as ShareSelection).boardingShareGroupId).length + bigGroups.size;
++  const tooManyBigKennels = requestedBig > 2;
++  function remindCapacity() {
++    setReminder({ title: "Not Enough Big Kennels", message: `This booking requires ${requestedBig} Big kennels, but HappyTails has at most 2. This is a group-size restriction, not a sign that every date is already reserved. Select an eligible sharing group or book separate, non-overlapping stays.`, details: ["Large or larger pets must use a Big kennel individually.", "Only eligible Small/Medium pets can share a Big kennel."] });
++  }
+   const valid = !error && !currentShareError && !tooManyLargePets && pets.length > 0 && pets.every((pet) => {
+@@ -174,3 +197,4 @@
+   useEffect(() => { onPrepared?.(pricing, valid && !loading); }, [onPrepared, pricing, valid, loading]);
+   if (loading) return <p className="py-10 text-center text-zinc-500">Loading boarding packages…</p>;
+   return <section className="mx-auto max-w-3xl">
++    {reminder && <BoardingReminderModal title={reminder.title} message={reminder.message} details={reminder.details} onClose={() => setReminder(null)} />}
+@@ -176,1 +200,2 @@
+     <p className="mt-2 text-center text-sm text-zinc-600">Step 1 of 2 — choose the kennel and duration for each pet. Next, check availability for the <strong>entire stay</strong> in the Dates step.</p>
++    {tooManyBigKennels && <button type="button" onClick={remindCapacity} className="mt-4 w-full rounded-xl border border-amber-300 bg-amber-50 p-4 text-left text-sm font-semibold text-amber-900">This selection needs {requestedBig} Big kennels, but only 2 exist. Tap to understand your options.</button>}
+@@ -279,3 +304,3 @@
+-      : <div className="mt-6 grid grid-cols-2 gap-3"><button onClick={onBack} className="rounded-full border border-zinc-300 py-3">Back</button><button disabled={!valid} onClick={() => { onChange(withSharedKennelPrices(selections.map(recalculate) as ShareSelection[],pricing)); onNext(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next: Boarding Dates</button></div>}
++      : <div className="mt-6 grid grid-cols-2 gap-3"><button onClick={onBack} className="rounded-full border border-zinc-300 py-3">Back</button><button disabled={!valid && !tooManyBigKennels} onClick={() => { if (tooManyBigKennels) { remindCapacity(); return; } onChange(withSharedKennelPrices(selections.map(recalculate) as ShareSelection[],pricing)); onNext(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next: Boarding Dates</button></div>}
+   </section>;
+ }
