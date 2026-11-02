@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Hero from '@/components/landing/Hero';
 import Navbar from '@/components/landing/Navbar';
 import DynamicServices from '@/components/landing/DynamicServices';
@@ -12,6 +13,7 @@ import BranchesCarousel from '@/components/landing/BranchesCarousel';
 import DynamicAbout from '@/components/landing/DynamicAbout';
 import Gallery from '@/components/landing/Gallery';
 import Footer from '@/components/landing/Footer';
+import HomepageSeo from '@/components/seo/HomepageSeo';
 import { PoliciesModalProvider } from '@/components/landing/PoliciesModalContext';
 import PoliciesModal from '@/components/landing/PoliciesModal';
 import { createClient } from '@/lib/supabase/server';
@@ -23,6 +25,31 @@ import type { WebsiteBranch } from '@/lib/types/website-branches';
 import type { Package, PackagePricing, PackageInclusion, PetSize } from '@/lib/types/services';
 import type { PublicPricingCatalog } from '@/lib/landing/public-pricing';
 import { copy, type WebsiteService } from '@/lib/website/catalog';
+
+// The homepage title targets branded searches and verified Noveleta location.
+// Google may choose its own displayed title or description.
+export const metadata: Metadata = {
+  title: { absolute: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite' },
+  description:
+    'Visit Happy Tails Pet Grooming Cafe in Noveleta, Cavite for pet grooming, boarding, spa care and pet supplies. Explore our services and book online.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    locale: 'en_PH',
+    siteName: 'Happy Tails Pet Grooming Cafe',
+    title: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite',
+    description:
+      'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite. Explore Happy Tails and book online.',
+    url: '/',
+    images: [{ url: '/images/hero-bg.png', alt: 'Happy Tails Pet Grooming Cafe' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Happy Tails Pet Grooming Cafe | Noveleta, Cavite',
+    description: 'Pet grooming, boarding, spa services, and pet supplies in Noveleta, Cavite.',
+    images: ['/images/hero-bg.png'],
+  },
+};
 
 // Public service prices must reflect the latest database values at the next
 // page request (without a redeploy or an outdated static page cache).
@@ -88,6 +115,7 @@ export default async function Home() {
       <Navbar logoUrl={get('site_logo')?.image_url} />
       <main>
         <Hero slides={(heroResult.data ?? []) as HeroSlide[]} logoUrl={get('site_logo')?.image_url} />
+        <HomepageSeo />
         {shownServices.length > 0 && (
           <DynamicServices services={shownServices} heading={copy('services_heading', text)} subheading={copy('services_subheading', text)} />
         )}

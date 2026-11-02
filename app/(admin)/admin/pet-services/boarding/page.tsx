@@ -16,7 +16,6 @@ import SessionCompletedModal from "@/components/admin/pet-services/SessionComple
 import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 
 type Pending = { kennel: Kennel;action: "disable" | "activate" };
-const MAX: Record<KennelSize, number> = { small: 6, big: 2 };
 
 export default function BoardingManagementPage() {
   const router = useRouter();
@@ -66,7 +65,6 @@ export default function BoardingManagementPage() {
 
   async function addK(size: KennelSize, number: number, name: string) {
     if (busy) return;
-    if (count(size) >= MAX[size]) { setError(`The shop has a maximum of ${MAX[size]} ${size} kennels.`); return; }
     setBusy(true);
     setError(null);
     try {
@@ -90,18 +88,11 @@ export default function BoardingManagementPage() {
     if (busy) return;
     const kennel = inactive.find((item) => item.id === id);
     if (!kennel) { setError("The selected disabled kennel could not be found. Refresh and try again."); return; }
-    if (count(kennel.size) >= MAX[kennel.size]) {
-      setError(`The physical ${kennel.size} kennel limit has already been reached.`);
-      return;
-    }
     setAdd(false);
     setPending({ kennel, action: "activate" });
   }
   async function toggleKennel() {
     if (!pending || busy) return;
-    if (pending.action === "activate" && count(pending.kennel.size) >= MAX[pending.kennel.size]) {
-      setError(`The physical ${pending.kennel.size} kennel limit has already been reached.`);setPending(null);return;
-    }
     setBusy(true);setError(null);
     try {
       const { error: saveError } = await setKennelActive(pending.kennel.id, pending.action === "activate");
@@ -145,7 +136,7 @@ export default function BoardingManagementPage() {
   return <div>
     <div className="flex flex-wrap items-start justify-between gap-2">
       <div><h1 className="text-3xl font-bold text-brand-pink">Boarding Management</h1>
-        <p className="mt-1 text-sm text-zinc-600">Physical kennel limit: <b>6 Small and 2 Big</b>. A shared Big kennel shows both checked-in pets. Future reservations are managed in Appointments.</p></div>
+        <p className="mt-1 text-sm text-zinc-600">Active kennel capacity: <b>{count("small")} Small and {count("big")} Big</b>. Add kennels as the shop expands; booking availability follows the active roster. A shared Big kennel shows both checked-in pets.</p></div>
       <button type="button" onClick={() => setShowInactive((v) => !v)} className="rounded-full border border-pink-200 px-4 py-2 text-sm font-semibold text-brand-pink">{showInactive ? "Hide" : "View"} Disabled Kennels ({inactive.length})</button>
     </div>
     {error && <FeedbackDialog title="Boarding Needs Attention" message={error} onClose={() => setError(null)} actionLabel="Retry Loading" onAction={() => { setError(null); void load(); }} />}
@@ -155,8 +146,8 @@ export default function BoardingManagementPage() {
       {(["small", "big"] as KennelSize[]).map((size) => {
         const items = filtered.filter((k) => k.size === size);
         return <section key={size} className="mt-6">
-          <div className="flex items-center justify-between gap-2"><h2 className="font-bold uppercase text-zinc-800">{size === "big" ? "Big" : "Small"} Kennels ({count(size)}/{MAX[size]})</h2>
-            <button type="button" disabled={count("small") >= MAX.small && count("big") >= MAX.big} onClick={() => setAdd(true)} className="rounded-full border border-brand-pink px-4 py-2 text-xs font-semibold text-brand-pink disabled:opacity-40">Add Kennel</button></div>
+          <div className="flex items-center justify-between gap-2"><h2 className="font-bold uppercase text-zinc-800">{size === "big" ? "Big" : "Small"} Kennels ({count(size)} active)</h2>
+            <button type="button" onClick={() => setAdd(true)} className="rounded-full border border-brand-pink px-4 py-2 text-xs font-semibold text-brand-pink disabled:opacity-40">Add Kennel</button></div>
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {items.map((k) => <OpsKennelCard key={k.id} kennel={k} sessions={sessionFor(k.id)}
               onView={(appointmentId, appointmentPetId) => setViewing({ appointmentId, appointmentPetId })}
@@ -169,7 +160,7 @@ export default function BoardingManagementPage() {
       {showInactive && <section className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-4"><h2 className="font-bold text-amber-900">Disabled Kennels</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">{inactive.map((k) => <div key={k.id} className="flex items-center justify-between gap-2 rounded-xl bg-white p-3">
           <b className="text-sm text-zinc-700">{k.size === "big" ? "Big" : "Small"} Kennel #{k.number}</b>
-          <button type="button" disabled={count(k.size) >= MAX[k.size]} onClick={() => setPending({ kennel: k, action: "activate" })} className="rounded-full border border-emerald-400 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-40">Reactivate</button>
+          <button type="button" disabled={busy} onClick={() => setPending({ kennel: k, action: "activate" })} className="rounded-full border border-emerald-400 px-3 py-2 text-xs font-semibold text-emerald-700 disabled:opacity-40">Reactivate</button>
         </div>)}{inactive.length === 0 && <p className="text-sm text-zinc-500">No disabled kennels.</p>}</div>
       </section>}
     </>}
