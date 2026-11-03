@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, PawPrint, Phone, UserRound, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasValidCustomerPhone, normalizeCustomerPhone } from "@/lib/utils/customer-phone";
+import "./signup-validation.css";
 import { isUsernameTaken, validateUsernameFormat } from "@/lib/supabase/customer-auth";
 
 type Props = { landscapeUrl: string; portraitUrl: string; customPortrait: boolean };
@@ -39,6 +40,7 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
   const [message, setMessage] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [confirmedUserId, setConfirmedUserId] = useState<string | null>(null);
+  const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
 
   useEffect(() => {
     // Keep just the pending email to allow re-requesting an OTP after a refresh.
@@ -60,6 +62,21 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
 
   const checks = passwordChecks(password);
   const validPassword = Object.values(checks).every(Boolean);
+  const phoneComplete = /^09\d{9}$/.test(phone);
+  const confirmMismatch = confirmPassword.length > 0 && confirmPassword !== password;
+  const passwordRequirements = [
+    { key: "length", label: "At least 8 characters", passed: checks.length },
+    { key: "upper", label: "One uppercase letter (A–Z)", passed: checks.upper },
+    { key: "lower", label: "One lowercase letter (a–z)", passed: checks.lower },
+    { key: "special", label: "One special character (!, @, #, etc.)", passed: checks.special },
+  ];
+
+  function handlePhoneInput(value: string) {
+    const digits = value.replace(/\D/g, "");
+    // Convert pasted +639XXXXXXXXX / 639XXXXXXXXX to an 11-digit local number.
+    const local = digits.startsWith("639") ? `0${digits.slice(2)}` : digits;
+    setPhone(local.slice(0, 11));
+  }
   const backgroundVars = {
     "--ht-recovery-landscape": `url(${JSON.stringify(landscapeUrl)})`,
     "--ht-recovery-portrait": `url(${JSON.stringify(portraitUrl)})`,
@@ -85,7 +102,7 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
       setError("Enter a valid email address."); return;
     }
     if (!validPassword || password.length > 1024) {
-      setError("Use at least 8 characters, with uppercase, lowercase, and a special character."); return;
+      setError("Your password must satisfy all requirements shown below the Password field."); return;
     }
     if (password !== confirmPassword) {
       setError("The passwords do not match."); return;
@@ -215,10 +232,6 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
     finally { setBusy(false); }
   }
 
-  function backToDetails() {
-    setStage("details"); setConfirmedUserId(null); setCode(""); setError(""); setMessage("");
-    try { sessionStorage.removeItem(PENDING_EMAIL_KEY); } catch { /* optional */ }
-  }
 
   return (
     <div className={`ht-recovery-page ht-signup-page${customPortrait ? " ht-recovery-custom-portrait" : ""}`} style={backgroundVars}>
@@ -245,14 +258,19 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
               <div className="ht-recovery-field"><UserRound aria-hidden="true" /><input id="ht-su-username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Choose a unique username" minLength={3} maxLength={20} disabled={busy} required /></div>
               <p className="ht-signup-password-hint">3–20 characters: letters, numbers, underscores, or periods. You can log in using this username or your email.</p>
               <label className="ht-recovery-label" htmlFor="ht-su-phone">Phone Number</label>
-              <div className="ht-recovery-field"><Phone aria-hidden="true" /><input id="ht-su-phone" value={phone} onChange={e => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="09XXXXXXXXX or +639XXXXXXXXX" maxLength={20} disabled={busy} required /></div>
+              <div className={`ht-recovery-field${phone.length > 0 && !phoneComplete ? " ht-signup-field-warning" : ""}`}><Phone aria-hidden="true" /><input id="ht-su-phone" value={phone} onChange={e => handlePhoneInput(e.target.value)} type="tel" autoComplete="tel" inputMode="numeric" pattern="09[0-9]{9}" placeholder="09XXXXXXXXX" maxLength={11} aria-describedby="ht-su-phone-help" aria-invalid={phone.length > 0 && !phoneComplete} disabled={busy} required /></div>
+              <p id="ht-su-phone-help" className={`ht-signup-inline-help${phone.length > 0 && !phoneComplete ? " ht-signup-inline-error" : ""}`} role={phone.length > 0 && !phoneComplete ? "status" : undefined}>{phone.length === 0 ? "Enter 11 digits starting with 09. You may paste a +63 number." : phoneComplete ? "✓ Valid 11-digit Philippine mobile number" : `Enter 11 digits beginning with 09 (${phone.length}/11 digits).`}</p>
               <label className="ht-recovery-label" htmlFor="ht-su-email">Email Address</label>
               <div className="ht-recovery-field"><Mail aria-hidden="true" /><input id="ht-su-email" value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" autoCapitalize="none" placeholder="Gmail, Yahoo, iCloud, Outlook, etc." maxLength={254} disabled={busy} required /></div>
               <label className="ht-recovery-label" htmlFor="ht-su-password">Password</label>
-              <div className="ht-recovery-field"><LockKeyhole aria-hidden="true" /><input id="ht-su-password" value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder="Create a password" disabled={busy} required /><button type="button" className="ht-recovery-eye" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div>
+              <div className={`ht-recovery-field${password.length > 0 && !validPassword ? " ht-signup-field-warning" : ""}`}><LockKeyhole aria-hidden="true" /><input id="ht-su-password" value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? "text" : "password"} autoComplete="new-password" placeholder="Create a password" aria-describedby="ht-su-password-rules" aria-invalid={password.length > 0 && !validPassword} disabled={busy} required /><button type="button" className="ht-recovery-eye" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</button></div>
+              <div id="ht-su-password-rules" className="ht-signup-password-rules" aria-label="Password requirements">
+                <strong>Password requirements</strong>
+                <ul>{passwordRequirements.map(rule => <li key={rule.key} className={rule.passed ? "ht-signup-rule-met" : ""}><span aria-hidden="true">{rule.passed ? "✓" : "○"}</span>{rule.label}</li>)}</ul>
+              </div>
               <label className="ht-recovery-label" htmlFor="ht-su-confirm">Confirm Password</label>
-              <div className="ht-recovery-field"><ShieldCheck aria-hidden="true" /><input id="ht-su-confirm" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" disabled={busy} required /><button type="button" className="ht-recovery-eye" onClick={() => setShowConfirmPassword(v => !v)} aria-label={showConfirmPassword ? "Hide confirmation" : "Show confirmation"}>{showConfirmPassword ? <EyeOff /> : <Eye />}</button></div>
-              <p className="ht-signup-password-hint">At least 8 characters, including uppercase, lowercase and a special character.</p>
+              <div className={`ht-recovery-field${confirmMismatch ? " ht-signup-field-warning" : ""}`}><ShieldCheck aria-hidden="true" /><input id="ht-su-confirm" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type={showConfirmPassword ? "text" : "password"} autoComplete="new-password" placeholder="Confirm your password" aria-invalid={confirmMismatch} aria-describedby="ht-su-confirm-help" disabled={busy} required /><button type="button" className="ht-recovery-eye" onClick={() => setShowConfirmPassword(v => !v)} aria-label={showConfirmPassword ? "Hide confirmation" : "Show confirmation"}>{showConfirmPassword ? <EyeOff /> : <Eye />}</button></div>
+              <p id="ht-su-confirm-help" className={`ht-signup-inline-help${confirmMismatch ? " ht-signup-inline-error" : ""}`} role={confirmMismatch ? "alert" : "status"}>{confirmPassword.length === 0 ? "Re-enter the same password to confirm." : confirmMismatch ? "✕ Passwords do not match." : "✓ Passwords match."}</p>
               <button className="ht-recovery-primary" type="submit" disabled={busy}>{busy ? "Creating account..." : "Create Account"}<ArrowRight aria-hidden="true" size={20} /></button>
             </form>
           ) : (
@@ -260,13 +278,26 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
               <label className="ht-recovery-label" htmlFor="ht-su-code">Email Verification Code</label>
               <div className="ht-recovery-field"><Mail aria-hidden="true" /><input className="ht-recovery-code" id="ht-su-code" value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, CODE_LENGTH))} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={CODE_LENGTH} placeholder="000000" disabled={busy || !!confirmedUserId} required={!confirmedUserId} /></div>
               <p className="ht-recovery-help">Check your inbox and spam folder. The code is for email confirmation, not password recovery.</p>
+              <p className="ht-signup-verification-warning" role="note">Your email and username are reserved for this pending registration. Complete verification using this email. Leaving or restarting with another email will not automatically release your username.</p>
               <button className="ht-recovery-primary" type="submit" disabled={busy || (!confirmedUserId && code.length !== CODE_LENGTH)}>{busy ? "Verifying..." : confirmedUserId ? "Complete Account Setup" : "Verify Email"}<ArrowRight aria-hidden="true" size={20} /></button>
-              <div className="ht-recovery-actions"><button type="button" disabled={busy || !!confirmedUserId} onClick={backToDetails}>Change email</button><button type="button" disabled={busy || cooldown > 0 || !!confirmedUserId} onClick={() => void handleResend()}>{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}</button></div>
+              <div className="ht-recovery-actions"><span className="ht-signup-locked-label">Registration details locked</span><button type="button" disabled={busy || cooldown > 0 || !!confirmedUserId} onClick={() => void handleResend()}>{cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}</button></div>
             </form>
           )}
-          <Link className="ht-recovery-back" href="/sign-in"><ArrowLeft size={18} aria-hidden="true" /> Back to Log In</Link>
+          <Link className="ht-recovery-back" href="/sign-in" onClick={event => { if (stage === "verify") { event.preventDefault(); setShowLeaveConfirmation(true); } }}><ArrowLeft size={18} aria-hidden="true" /> Back to Log In</Link>
         </section>
       </div>
+      {showLeaveConfirmation && stage === "verify" && (
+        <div className="ht-signup-leave-overlay" role="presentation">
+          <section className="ht-signup-leave-modal" role="dialog" aria-modal="true" aria-labelledby="ht-signup-leave-title" aria-describedby="ht-signup-leave-description">
+            <h2 id="ht-signup-leave-title">Leave email verification?</h2>
+            <p id="ht-signup-leave-description">Your registration is not complete. Your username may remain reserved by the pending account even if you leave. You can return to Sign Up in this browser session to resend your code.</p>
+            <div className="ht-signup-leave-actions">
+              <button type="button" onClick={() => setShowLeaveConfirmation(false)}>Continue Verification</button>
+              <Link href="/sign-in">Leave to Log In</Link>
+            </div>
+          </section>
+        </div>
+      )}
       <div className="ht-recovery-portrait-bottom" aria-hidden="true" />
     </div>
   );

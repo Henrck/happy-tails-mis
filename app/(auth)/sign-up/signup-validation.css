@@ -1,0 +1,25 @@
+/* Scoped inline feedback for HappyTails registration. No layout/background changes. */
+.ht-signup-page .ht-signup-field-warning { border-color: #e74868; box-shadow: 0 0 0 2px rgba(231,72,104,.11); }
+.ht-signup-inline-help { margin: 0 2px 3px; font-size: 12px; line-height: 1.45; color: #36644a; }
+.ht-signup-inline-help.ht-signup-inline-error { color: #b42346; font-weight: 700; }
+.ht-signup-password-rules { margin: 2px 0 5px; border: 1px solid #efc8dc; border-radius: 14px; background: #fff5fa; padding: 12px 15px; color: #4b4350; }
+.ht-signup-password-rules strong { display: block; margin-bottom: 8px; color: #ab2760; font-size: 13px; }
+.ht-signup-password-rules ul { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); column-gap: 10px; row-gap: 6px; list-style: none; padding: 0; margin: 0; }
+.ht-signup-password-rules li { display:flex; align-items:flex-start; gap:6px; font-size: 12px; line-height:1.45; color:#a54b62; }
+.ht-signup-password-rules li span { font-size:14px; line-height:1.2; font-weight:800; flex:none; }
+.ht-signup-password-rules li.ht-signup-rule-met { color:#227b4b; }
+.ht-signup-page .ht-recovery-error { font-size: 13px; font-weight: 700; border-color:#e74868; background:#fff0f3; color:#a3143d; }
+@media (max-width:480px) { .ht-signup-password-rules ul { grid-template-columns: 1fr; } }
+
+/* Pending signup must not offer an email-change escape after creating an Auth user. */
+.ht-signup-locked-label{font-size:12px;font-weight:700;color:#6e5970;}
+.ht-signup-verification-warning{margin:7px 0 2px;padding:12px 14px;border-radius:13px;background:#fff3e7;border:1px solid #f4cdaa;color:#7b4a25;font-size:12px;line-height:1.5;}
+.ht-signup-leave-overlay{position:fixed;inset:0;z-index:100;display:flex;justify-content:center;align-items:center;padding:16px;background:rgba(39,20,32,.6);}
+.ht-signup-leave-modal{box-sizing:border-box;width:min(100%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:28px 24px;background:#fffafd;border:1px solid #f6d3e6;border-radius:22px;box-shadow:0 15px 45px #3f22333d;}
+.ht-signup-leave-modal h2{font-size:22px;font-weight:800;color:#d52577;margin:0 0 10px;}
+.ht-signup-leave-modal p{font-size:14px;line-height:1.6;color:#635664;margin:0 0 18px;}
+.ht-signup-leave-actions{display:flex;flex-wrap:wrap;gap:9px;}
+.ht-signup-leave-actions button,.ht-signup-leave-actions a{flex:1;min-width:145px;padding:11px 12px;text-align:center;font-size:13px;font-weight:700;border-radius:12px;text-decoration:none;cursor:pointer;}
+.ht-signup-leave-actions button{background:#e63284;border:1px solid #e63284;color:#fff;}
+.ht-signup-leave-actions a{background:#fff;border:1px solid #e9b8d0;color:#b82467;}
+.ht-signup-leave-actions button:focus-visible,.ht-signup-leave-actions a:focus-visible{outline:3px solid #f1a9d0;outline-offset:2px;}
