@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import YoungPetGroomingNotice from "@/components/shared/YoungPetGroomingNotice";
 import { COMMON_BREEDS } from "@/lib/data/breed-suggestions";
 import { normalizePetAge } from "@/lib/utils/pet-age";
 
@@ -26,6 +27,7 @@ export default function NewCustomerPetForm({ onBack, onNext }: {
   const [pets, setPets] = useState<NewPetEntry[]>([emptyPet()]);
   const [error, setError] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
+  const [groomingNotice, setGroomingNotice] = useState<"initial" | "another" | null>("initial");
   const contactError = phoneTouched ? phoneError(ownerContact) : null;
   const controlClass = "mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink";
   function updatePet(index: number, patch: Partial<NewPetEntry>) { setError(null);setPets(prev=>prev.map((pet,i)=>i===index?{...pet,...patch}:pet)); }
@@ -58,8 +60,9 @@ export default function NewCustomerPetForm({ onBack, onNext }: {
           <label className="text-sm font-semibold">Sex <span className="font-normal text-zinc-400">(Optional)</span><select className={controlClass} value={pet.sex} onChange={e=>updatePet(i,{sex:e.target.value as NewPetEntry["sex"]})}><option value="">—</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
         </div>
       </section>)}
-      <button type="button" className="w-full rounded-xl border-2 border-dashed border-pink-200 py-2.5 text-sm font-semibold text-brand-pink" onClick={()=>{setError(null);setPets(prev=>[...prev,emptyPet()]);}}>+ Add Another Pet</button>
+      <button type="button" className="w-full rounded-xl border-2 border-dashed border-pink-200 py-2.5 text-sm font-semibold text-brand-pink" onClick={() => setGroomingNotice("another")}>+ Add Another Pet</button>
     </div>
+    {groomingNotice && <YoungPetGroomingNotice onCancel={() => setGroomingNotice(null)} onContinue={() => { if (groomingNotice === "another") { setError(null); setPets(prev => [...prev, emptyPet()]); } setGroomingNotice(null); }} />}
     {error&&<p role="alert" className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
     <div className="mt-6 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500">Back</button><button type="button" onClick={handleNext} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white">Next</button></div>
   </div>;

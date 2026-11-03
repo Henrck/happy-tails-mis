@@ -1,0 +1,15 @@
+/* Homepage-only mobile width guard. The presence of the hero scopes these
+   rules to the public landing page and Website Management live preview. */
+@media (max-width: 639px) {
+  body:has(.ht-hero-root) { overflow-x: clip; }
+  body:has(.ht-hero-root) main {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+  body:has(.ht-hero-root) main > section {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,115 @@
+.root {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: clip;
+  isolation: isolate;
+}
+.frame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16 / 6.8;
+  overflow: hidden;
+  background: #f7cadc;
+}
+.slide {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  animation: heroFade .35s ease-out both;
+}
+.slideImage { object-fit: cover; object-position: center; }
+.content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 52px;
+  pointer-events: none;
+}
+.logo {
+  display: block;
+  width: min(280px, 30vw);
+  height: auto;
+  max-height: 60%;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0,0,0,.15));
+}
+.bookButton {
+  pointer-events: auto;
+  min-height: 44px;
+  border-radius: 999px;
+  padding: 10px 24px;
+  color: white;
+  background: #f53d93;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 6px 14px rgba(120,28,76,.18);
+  white-space: nowrap;
+}
+.bookButton:hover { background: #d42b7c; }
+.arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #d42b7c;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+.previous { left: 16px; }
+.next { right: 16px; }
+.dots {
+  position: absolute;
+  z-index: 3;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.dot { width: 9px; height: 9px; border-radius: 99px; background: rgba(255,255,255,.65); }
+.dotActive { width: 26px; background: white; }
+@keyframes heroFade { from { opacity: .35; } to { opacity: 1; } }
+
+@media (max-width: 1023px) {
+  .frame { aspect-ratio: 16 / 9; }
+  .logo { width: min(250px, 34vw); }
+}
+@media (max-width: 639px) {
+  /* A fixed and bounded mobile frame: no oversized hero or sideways scrolling. */
+  .frame {
+    aspect-ratio: auto;
+    height: clamp(390px, 115vw, 560px);
+    max-width: 100%;
+    background: linear-gradient(135deg, #f6d3e1 0%, #f8c6da 48%, #f4dce6 100%);
+  }
+  /* Contain keeps the entire admin-uploaded slide visible and correctly
+     proportioned; the pink frame fills unused space, never black letterboxing. */
+  .slideImage { object-fit: contain; object-position: center; }
+  .content { padding: 36px 52px 44px; gap: 16px; }
+  .logo { width: clamp(130px, 38vw, 205px); max-width: 62%; max-height: 48%; }
+  .bookButton { font-size: 14px; padding: 10px 22px; }
+  .arrow { width: 36px; height: 36px; }
+  .previous { left: 8px; }
+  .next { right: 8px; }
+  .dots { bottom: 7px; }
+
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide { animation: none; }
+}
