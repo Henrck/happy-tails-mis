@@ -93,9 +93,25 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     for (const item of (data ?? []) as MonthDay[]) {
       if (item.open_slots === 0) unavailable[item.day] = item.capacity === 0 ? "No groomers available" : "Fully booked";
     }
+    // A previously cached monthly result may treat a Philippine holiday as
+    // closed even after SuperAdmin has explicitly opened it. Cross-check live
+    // groomer slots for reopened holidays before labeling them unavailable.
+    // Do NOT invent capacity: if no groomers are free, the day stays blocked.
+    const reopened = closures.dates.filter(d => d.is_open_override && d.date.startsWith(`${key}-`));
+    if (reopened.length) {
+      const checks = await Promise.all(reopened.map(async d => {
+        const { data: slots, error: slotError } = await createClient().rpc("happytails_live_groomer_slots", { p_date: d.date });
+        return { day: d.date, available: !slotError && Array.isArray(slots) && slots.some((s: LiveSlot) => Number(s.remaining) > 0) };
+      }));
+      for (const item of checks) {
+        if (item.available) delete unavailable[item.day];
+        // Otherwise preserve the reason from the authoritative planner.
+      }
+    }
     setMonthError(null);
     setFullDates(unavailable);
-  }, []);
+  // Re-evaluate monthly availability whenever Calendar Management changes.
+  }, [closures.dates]);
 
   useEffect(() => { void reloadMonth(month); }, [month, refresh, reloadMonth]);
 
@@ -294,6 +310,11 @@ export default function OnlineCapacityGroomingSchedule({ petSelections, schedule
     <BookingDayCalendar value={scheduledDate} onChange={chooseDate} closures={closures} unavailable={fullDates}
       onMonthChange={setMonth} title="Grooming" />
     {monthError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{monthError}</p>}
+    {scheduledDate && closures.dates.some(d => d.date === scheduledDate && d.is_open_override) && fullDates[scheduledDate] &&
+      <p role="alert" className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        Calendar Management has opened this holiday, but groomer availability currently reports {fullDates[scheduledDate].toLowerCase()}.
+        The date cannot be booked until an available groomer is confirmed. Check Groomer Availability settings and the database availability rules.
+      </p>}
     <div>
       <h3 className="mb-2 font-semibold">Choose preferred start time</h3>
       <p className="mb-3 text-xs text-zinc-500">For example, two 30-minute pets with the same groomer must start by 4:30 PM. Two groomers may each begin a pet at 5:00 PM.</p>

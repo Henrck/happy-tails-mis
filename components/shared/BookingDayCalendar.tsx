@@ -36,7 +36,8 @@ export default function BookingDayCalendar({ value, onChange, closures, unavaila
   const length = new Date(year, m + 1, 0).getDate();
   const cells = Array.from({ length: Math.ceil((offset + length) / 7) * 7 }, (_, index) => index - offset + 1);
   const unavailableNow = closures.loading || Boolean(closures.error) || capacityLoading || Boolean(capacityError);
-  return <section className="mx-auto w-full max-w-[490px] rounded-2xl border border-pink-100 bg-white p-3 sm:p-4" aria-label="Booking date calendar">
+  // Avoid stretching to the height of the adjacent boarding-details grid column.
+  return <section className="mx-auto h-fit w-full max-w-[490px] self-start rounded-2xl border border-pink-100 bg-white p-3 sm:p-4" aria-label="Booking date calendar">
     <div className="mb-3 flex items-center justify-between gap-3">
       <button type="button" aria-label="Previous month" disabled={monthKey <= today.slice(0, 7)} onClick={() => setMonth(new Date(year, m - 1, 1))} className="rounded-full p-2 text-zinc-600 hover:bg-pink-50 disabled:opacity-30"><ChevronLeft size={18}/></button>
       <h3 className="flex items-center gap-2 text-sm font-bold text-zinc-800"><CalendarDays size={16} className="text-brand-pink"/>{title} · {month.toLocaleDateString("en-PH", { month: "long", year: "numeric" })}</h3>
@@ -47,8 +48,8 @@ export default function BookingDayCalendar({ value, onChange, closures, unavaila
       {cells.map((day, index) => {
         const inMonth = day > 0 && day <= length;
         const date = inMonth ? `${monthKey}-${String(day).padStart(2, "0")}` : "";
-        const reason = closures.nameFor(date) ?? unavailable[date] ?? null;
         const past = inMonth && date < today;
+        const reason = past ? null : (closures.nameFor(date) ?? unavailable[date] ?? null);
         // Blocked dates remain inspectable to explain why they cannot be booked.
         const blocked = !inMonth || past || unavailableNow || (Boolean(availability) && inMonth && availability?.[date] === undefined);
         return <button type="button" key={index} disabled={blocked} aria-disabled={Boolean(reason)} aria-label={!inMonth ? "Outside month" : reason ? `${date}: Closed - ${reason}` : past ? `${date}: Past date` : date}
@@ -56,7 +57,7 @@ export default function BookingDayCalendar({ value, onChange, closures, unavaila
           aria-pressed={value === date} onClick={() => { if (reason) { if (onBlocked) onBlocked(`${date}: ${reason}`); else setExplanation(`${date}: ${reason}`); return; } setExplanation(null); onChange(date); }}
           className={`flex min-h-12 flex-col items-center justify-center rounded-lg border px-0.5 py-1 text-xs font-semibold transition ${reason ? "border-rose-200 bg-rose-50 text-rose-700" : past ? "border-transparent bg-rose-50/60 text-rose-400" : value === date ? "border-brand-pink bg-brand-pink text-white" : "border-transparent text-zinc-700 hover:bg-pink-50"} disabled:cursor-not-allowed ${reason ? "cursor-not-allowed" : ""}`}>
           {inMonth ? day : ""}
-          {reason ? <span className="mt-0.5 max-w-full truncate text-[8px] font-extrabold leading-3 text-rose-600">{reason.toLowerCase().includes("pickup") ? "Pickup closed" : reason.toLowerCase().includes("full") || reason.toLowerCase().includes("no ") ? "Full" : "Closed"}</span>
+          {reason ? <span className="mt-0.5 max-w-full truncate text-[8px] font-extrabold leading-3 text-rose-600">{reason.toLowerCase().includes("time has passed") ? "Past time" : reason.toLowerCase().includes("pickup") ? "Pickup closed" : reason.toLowerCase().includes("full") || reason.toLowerCase().includes("no ") ? "Full" : "Closed"}</span>
             : past ? <span className="mt-0.5 text-[8px] font-bold text-rose-500">Past</span>
             : availability && inMonth ? <span className="mt-0.5 text-[8px] font-bold text-emerald-700">{availability[date] === undefined ? "Checking" : groupMode ? "Available" : `${availability[date]} left`}</span> : null}
         </button>;

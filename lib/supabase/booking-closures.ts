@@ -8,6 +8,14 @@ export type BookingClosedDate = {
   is_open_override: boolean;
 };
 
+const CALENDAR_UPDATED = "happytails-booking-calendar-updated";
+function publishCalendarChange() {
+  if (typeof window === "undefined") return;
+  // Same-tab listeners get a custom event; other tabs get the storage event.
+  window.dispatchEvent(new Event(CALENDAR_UPDATED));
+  try { window.localStorage.setItem(CALENDAR_UPDATED, String(Date.now())); } catch { /* optional */ }
+}
+
 export async function fetchBookingClosedDates(): Promise<{ dates: BookingClosedDate[]; error: string | null }> {
   const { data, error } = await createClient().from("booking_closed_dates")
     .select("date,name,category,source,is_open_override").order("date");
@@ -23,16 +31,19 @@ export async function checkBookingClosedDate(date: string): Promise<{ closed: bo
 export async function addExceptionalClosure(date: string, name: string) {
   const { error } = await createClient().from("booking_closed_dates")
     .insert({ date, name: name.trim(), category: "exceptional_closure", is_open_override: false });
+  if (!error) publishCalendarChange();
   return error?.message ?? null;
 }
 
 export async function deleteExceptionalClosure(date: string) {
   const { error } = await createClient().from("booking_closed_dates")
     .delete().eq("date", date).eq("category", "exceptional_closure");
+  if (!error) publishCalendarChange();
   return error?.message ?? null;
 }
 
 export async function setHolidayOpen(date: string, open: boolean): Promise<string | null> {
   const { error } = await createClient().rpc("happytails_set_holiday_open", { p_date: date, p_open: open });
+  if (!error) publishCalendarChange();
   return error?.message ?? null;
 }

@@ -1,0 +1,180 @@
+/* HappyTails mobile/tablet filter controls.
+ * Presentation only: no filtering, export, sorting, or state logic is changed.
+ * The selectors match filter components in the 2026-11-03 main branch.
+ */
+@media (max-width: 1023px) {
+  /* Search and select elements must not impose their intrinsic Safari widths. */
+  .ht-admin-content :is(input, select)[type="date"],
+  .ht-admin-content input[type="search"],
+  .ht-admin-content input[type="text"],
+  .ht-admin-content select {
+    box-sizing: border-box;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .ht-admin-content input[type="date"] {
+    width: 100%;
+    min-width: 0;
+    -webkit-appearance: auto;
+    appearance: auto;
+  }
+  .ht-admin-content input[type="date"]::-webkit-date-and-time-value {
+    min-width: 0;
+    text-align: left;
+  }
+
+  /* Report filters: 2 equal columns on tablets, search takes a full row.
+     Input fields are grid items, therefore they cannot push adjacent fields. */
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ):is(.flex, .grid) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 10px;
+  }
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ) > :is(input, select, div) {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .ht-admin-content div:has(> input[aria-label="Search service reports"]) > input[aria-label="Search service reports"],
+  .ht-admin-content div:has(> input[aria-label="Search invoices or products"]) > input[aria-label="Search invoices or products"],
+  .ht-admin-content div:has(> div > input[placeholder="Search inventory"]) > div:has(> input[placeholder="Search inventory"]),
+  .ht-admin-content div:has(> div > input[placeholder="Search transactions"]) > div:has(> input[placeholder="Search transactions"]) {
+    grid-column: 1 / -1;
+  }
+  /* Date-range dash would occupy its own grid cell; hide decoration only. */
+  .ht-admin-content div:has(> input[aria-label="Search service reports"]) > span.text-zinc-300,
+  .ht-admin-content div:has(> input[aria-label="Search invoices or products"]) > span.text-zinc-300,
+  .ht-admin-content div:has(> div > input[placeholder="Search transactions"]) > span.text-zinc-300 {
+    display: none;
+  }
+  /* ExportMenu is a wrapper; allow its trigger to fit the grid cell. */
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ) > :is(button, div) {
+    min-width: 0;
+  }
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ) > button {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  /* Appointment search: the search takes a row while Today/History and Filter
+     keep their normal handlers and remain visible side by side. */
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet, owner, or appointment ID"]) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet, owner, or appointment ID"]) > div:has(> input[placeholder="Search by pet, owner, or appointment ID"]) {
+    flex: 1 0 100%;
+    width: 100%;
+  }
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet, owner, or appointment ID"]) > div:has(> button) {
+    min-width: 0;
+  }
+  /* Ensure the appointment filter's 288px dropdown does not exceed viewport. */
+  .ht-admin-content div:has(> select[value]) { min-width: 0; }
+
+  /* Pet records & user management: search gets a full, readable line. */
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet or owner name"]),
+  .ht-admin-content div:has(> div > input[placeholder="Search by name, ID, email, or phone"]) {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet or owner name"]) > div:has(> input),
+  .ht-admin-content div:has(> div > input[placeholder="Search by name, ID, email, or phone"]) > div:has(> input) {
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .ht-admin-content div:has(> div > input[placeholder="Search by name, ID, email, or phone"]) > select {
+    width: min(100%, 240px);
+  }
+
+  /* Pet services: search uses remaining space, history wraps to a new line. */
+  .ht-admin-content :is(
+    div:has(> input[placeholder="Search pet, owner, or kennel"]),
+    div:has(> div > input[placeholder="Search by pet, owner, or groomer"])
+  ) {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .ht-admin-content :is(
+    div:has(> input[placeholder="Search pet, owner, or kennel"]),
+    div:has(> div > input[placeholder="Search by pet, owner, or groomer"])
+  ) > button:last-child {
+    margin-left: 0;
+    min-height: 42px;
+  }
+
+  /* Filter popovers remain readable and scrollable even on short phone screens.
+     Apply only to the filter panels, not unrelated modals or menus. */
+  .ht-admin-content :is(
+    #pet-filter-panel,
+    #grooming-filter-panel,
+    div:has(> div > h3.text-brand-pink):has(> div > label > select)
+  ) {
+    max-width: calc(100vw - 28px);
+    max-height: min(70dvh, 540px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 599px) {
+  /* Report filters on phones: no half-width date inputs or clipped labels. */
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ):is(.flex, .grid) {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+  .ht-admin-content :is(
+    div:has(> input[aria-label="Search service reports"]),
+    div:has(> input[aria-label="Search invoices or products"]),
+    div:has(> div > input[placeholder="Search inventory"]),
+    div:has(> div > input[placeholder="Search transactions"])
+  ) > :is(input, select) {
+    font-size: 16px; /* Prevents automatic iOS input zoom. */
+    min-height: 44px;
+  }
+  .ht-admin-content div:has(> div > input[placeholder="Search by pet, owner, or appointment ID"]) > div.flex.rounded-full {
+    max-width: calc(100vw - 28px);
+  }
+  /* Phone filter panels are screen-aligned sheets, not overflow-prone popovers. */
+  .ht-admin-content #pet-filter-panel,
+  .ht-admin-content #grooming-filter-panel,
+  .ht-admin-content div:has(> select):has(> button):is(.absolute) {
+    position: fixed;
+    top: max(84px, env(safe-area-inset-top, 0px) + 70px);
+    left: 14px;
+    right: 14px;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+    z-index: 60;
+  }
+}

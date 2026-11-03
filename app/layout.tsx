@@ -1,21 +1,15 @@
 import type { Metadata } from "next";
-import { Fredoka, Nunito } from "next/font/google";
 import { IS_PREVIEW_DEPLOYMENT, SITE_URL } from "@/lib/seo";
 import "./globals.css";
 
-// Fredoka: rounded, playful — used for headings, matches the logo/mascot tone.
-const fredoka = Fredoka({
-  variable: "--font-heading",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
-
-// Nunito: also rounded but far more legible at small sizes — used for body
-// text, price tables, and anywhere reading matters more than personality.
-const nunito = Nunito({
-  variable: "--font-body",
-  subsets: ["latin"],
-});
+// Load the existing typefaces in the browser rather than through next/font/google.
+// Some Google Fonts responses use extensionless URLs that Next.js 16 Turbopack
+// cannot resolve during the production build.
+// Retain the same CSS variable names consumed by globals.css/Tailwind.
+const fontVariables = {
+  "--font-heading": '"Fredoka"',
+  "--font-body": '"Nunito"',
+} as React.CSSProperties;
 
 const siteName = "Happy Tails Pet Grooming Cafe";
 const siteDescription =
@@ -67,10 +61,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${fredoka.variable} ${nunito.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased" style={fontVariables}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;500;600;700;800&display=swap"
+        />
+      </head>
       {/* suppressHydrationWarning here specifically: browser extensions
           like Grammarly inject attributes (data-gr-ext-installed, etc.)
           into <body> after the page loads, which React then flags as a

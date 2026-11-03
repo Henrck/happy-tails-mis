@@ -76,8 +76,8 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const [review, setReview] = useState(false);
   const [verified, setVerified] = useState<DraftPetSelection[]>([]);
 
-  // Only exceptional shop closures block caretaker-assisted Boarding.
-  // Official holidays remain marked as informational reminders below.
+  // Exceptional closures prevent boarding; regular holidays can be handled by caretakers.
+  // Honor the holiday-open override recorded in Calendar Management.
   const boardingClosures = useMemo(() => ({
     ...closures,
     nameFor: (day: string | null | undefined) => day ? closures.dates.find((d) =>
@@ -129,9 +129,18 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const onMonthChange = useCallback((next: string) => setMonth((current) => current === next ? current : next), []);
   const availability: Record<string, number> = {};
   const unavailable: Record<string, string> = {};
+  const today = manilaToday();
   for (const item of days) {
+    // A day explicitly opened in Calendar Management can still be in the past.
+    // Do not mislabel past days as shop closures when the SQL planner rejects them.
+    if (item.day < today) continue;
     availability[item.day] = item.available ? 1 : 0;
-    if (!item.available) unavailable[item.day] = item.reason ?? "Fully booked for the selected group";
+    if (!item.available) {
+      const selectedDropOff = new Date(`${item.day}T${time}:00+08:00`).getTime();
+      unavailable[item.day] = item.day === today && selectedDropOff <= Date.now()
+        ? "Drop-off time has passed"
+        : item.reason ?? "Fully booked for the selected group";
+    }
   }
 
   const setSchedule = (day: string, clock: string) => petSelections.map((s) => {
@@ -186,12 +195,13 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
         {shareGroups(verified as ShareSelection[]).map(group => <div key={group[0].boardingShareGroupId} className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
           <b>One shared Big kennel</b> · {group.map(s => s.pet.name).join(" + ")}
           <p className="mt-1 font-semibold text-emerald-900">Combined charge: ₱{group.reduce((sum,s) => sum + s.lineAmount,0).toLocaleString()}</p>
-          <p className="mt-1 text-xs text-emerald-800">One kennel base rate; per-pet add-ons are retained.</p>
+          <p className="mt-1 text-xs text-emerald-800">One kennel base rate; per-pet add-ons remain retained.</p>
         </div>)}
-        {verified.map((s) => <div key={s.pet.id} className="rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm">
-        <b>{s.pet.name}</b> · {s.boardingKennelSize === "big" ? "Big" : "Small"} Kennel · ₱{s.lineAmount.toLocaleString()}
-        <p className="mt-1 text-xs text-zinc-600">{display(s.boardingDropOffAt!)} → {display(s.boardingPickUpAt!)}</p>
-      </div>)}</div>
+        {verified.map((s) => <div key={s.pet.id} className="mt-2 rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm">
+          <b>{s.pet.name}</b> · {s.boardingKennelSize === "big" ? "Big" : "Small"} Kennel · ₱{s.lineAmount.toLocaleString()}
+          <p className="mt-1 text-xs text-zinc-600">{display(s.boardingDropOffAt!)} → {display(s.boardingPickUpAt!)}</p>
+        </div>)}
+      </div>
       <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Availability is not reserved until final booking submission. On official holidays, caretakers supervise pets and can assist with pickup during the 9 AM–6 PM window. Exceptional closures remain unavailable.</p>
       <div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setReview(false)} className="rounded-full border border-pink-200 py-3 text-sm font-semibold text-brand-pink">Review dates</button><button onClick={() => { setReview(false); onConfirmed(verified); }} className="rounded-full bg-brand-pink py-3 text-sm font-semibold text-white">Continue</button></div>
     </div>
@@ -204,12 +214,16 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
       <p className="mt-2 text-xs text-zinc-600"><b>Sharing rules:</b> One shared Big kennel holds two Small pets, Small + Medium, Medium + Medium, or three Small pets, only when the Share One Big Kennel option was selected in Details. A Large or larger pet uses one Big kennel alone. A Small kennel holds one Small or Medium pet.</p>
     </div>
     <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">The calendar checks the <strong>entire stay</strong>, not just the arrival date. For example, arriving November 3 for six nights overlaps Big kennels reserved from November 5, so the date is unavailable. A stay that checks out before those reservations begin may still be available.</p>
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_230px]">
-      <BookingDayCalendar title="Group check-in" value={date} closures={boardingClosures}
-        availability={availability} unavailable={unavailable} groupMode onBlocked={setError}
-        capacityLoading={loading || checking || !validDetails} capacityError={loadError}
-        onMonthChange={onMonthChange} onChange={(day) => { void choose(day); }}/>
-      <div className="space-y-3 rounded-2xl border border-pink-100 bg-white p-4">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_230px]">
+      <div className="min-w-0 space-y-5">
+        <BookingDayCalendar title="Group check-in" value={date} closures={boardingClosures}
+          availability={availability} unavailable={unavailable} groupMode onBlocked={setError}
+          capacityLoading={loading || checking || !validDetails} capacityError={loadError}
+          onMonthChange={onMonthChange} onChange={(day) => { void choose(day); }}/>
+        <div><p className="text-sm font-semibold text-zinc-800">Pet belongings (optional)</p><div className="mt-2 flex flex-wrap gap-2">{BELONGINGS.map((item) => <button key={item} type="button" onClick={() => onBelongingsChange(petBelongings.includes(item) ? petBelongings.filter((v) => v !== item) : [...petBelongings,item])} className={`rounded-full border px-3 py-2 text-xs font-semibold ${petBelongings.includes(item) ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-zinc-700"}`}>{item}</button>)}</div></div>
+        <label className="block text-sm font-semibold text-zinc-800">Care instructions / special requests<textarea value={specialRequests} rows={3} onChange={(e) => onRequestsChange(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 bg-white p-3 text-sm"/></label>
+      </div>
+      <div className="self-start space-y-3 rounded-2xl border border-pink-100 bg-white p-4">
         <label className="block text-sm font-semibold text-zinc-800">Drop-off time (all pets)
           <input type="time" min="09:00" max="18:00" step={60} value={time} onChange={(e) => changeTime(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 p-3 text-sm"/>
         </label>
@@ -224,7 +238,6 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
             </div> : <p className="mt-2 text-xs text-amber-800">{countsError ?? "Select a date to view available kennels."}</p>)}
           <p className="mt-2 text-[11px] leading-4 text-zinc-500">Counts reflect existing reservations, before adding this booking. Final group allocation is checked again when saving.</p>
         </div>
-
         {petSelections.map((s) => {
           const n = nightsFor(s, pricing);
           return <div key={s.pet.id} className="rounded-xl bg-slate-50 p-3 text-xs text-zinc-700">
@@ -235,8 +248,6 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
         <p className="text-xs text-amber-800">Official holiday care is available. Exceptional shop closures are still blocked for drop-off/pickup.</p>
       </div>
     </div>
-    <div><p className="text-sm font-semibold text-zinc-800">Pet belongings (optional)</p><div className="mt-2 flex flex-wrap gap-2">{BELONGINGS.map((item) => <button key={item} type="button" onClick={() => onBelongingsChange(petBelongings.includes(item) ? petBelongings.filter((v) => v !== item) : [...petBelongings,item])} className={`rounded-full border px-3 py-2 text-xs font-semibold ${petBelongings.includes(item) ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-zinc-700"}`}>{item}</button>)}</div></div>
-    <label className="block text-sm font-semibold text-zinc-800">Care instructions / special requests<textarea value={specialRequests} rows={3} onChange={(e) => onRequestsChange(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 bg-white p-3 text-sm"/></label>
     {error && <FeedbackDialog title="Boarding Date Unavailable" tone="warning" message={error} onClose={() => setError(null)} />}
     {loadError && <FeedbackDialog title="Could Not Check Boarding Calendar" message={loadError} onClose={() => setLoadError(null)} />}
     <div className="grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="rounded-full border border-pink-200 py-3 font-semibold text-brand-pink">Back</button><button type="button" disabled={!valid} onClick={() => { void confirm(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">{checking ? "Checking…" : "Review Schedule"}</button></div>

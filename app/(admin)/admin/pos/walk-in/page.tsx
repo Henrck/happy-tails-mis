@@ -24,6 +24,7 @@ import BookingProgress from "@/components/dashboard/booking/BookingProgress";
 import AddAnotherServicePrompt from "@/components/dashboard/booking/AddAnotherServicePrompt";
 import CurrentLegSidebar from "@/components/dashboard/booking/CurrentLegSidebar";
 import WalkInMultiServiceSummary from "@/components/admin/pos/walk-in/WalkInMultiServiceSummary";
+import "@/app/(dashboard)/account/appointments/booking-polish.css";
 import "./pos-booking.css";
 
 type Step = "verify" | "pet-info" | "service" | "waiver" | "selection" | "schedule" | "add-more" | "summary";
@@ -112,15 +113,29 @@ export default function WalkInPage() {
   }
   function backFromSelection() { setStep("waiver"); }
 
-  return <div className="ht-pos-booking min-h-screen bg-[#FDF1F7] p-4 sm:p-6 md:p-10">
+  // POS uses the same responsive layout as Customer Booking. The POS-only
+  // identity verification and atomic walk-in checkout remain unchanged.
+  const showPetSummary = (step === "selection" || step === "schedule") && legPets.length > 0;
+  return <div className="ht-pos-booking ht-booking-v4 min-w-0 pb-8">
     <button type="button" onClick={() => router.push("/admin/pos")} className="text-sm font-semibold text-zinc-500 hover:text-brand-pink">← Back to POS</button>
-    <div className="mt-6 mx-auto max-w-5xl">
-      <div className="mb-5 rounded-2xl border border-pink-100 bg-white px-5 py-4">
+    <div className="mx-auto mt-5 w-full max-w-7xl min-w-0">
+      <div className="ht-pos-intro mb-5 rounded-2xl border border-pink-100 bg-white px-4 py-4 sm:px-6">
         <h1 className="text-xl font-extrabold text-brand-pink">Walk-in Booking</h1>
         <p className="mt-1 text-sm text-zinc-500">Same multi-pet and multi-service booking process as customer appointments, with walk-in records.</p>
         {completedLegs.length > 0 && <p className="mt-2 text-sm font-semibold text-zinc-700">Services ready: {completedLegs.length} · Pets: {pets.length}</p>}
       </div>
-      {step !== "verify" && <div className="ht-pos-progress-wrap mb-5 rounded-2xl border border-pink-100 bg-white p-3 sm:p-4"><BookingProgress step={step} hasCompletedServices={completedLegs.length > 0} combinedBoarding={step === "selection" && currentLeg?.serviceChoice === "boarding"} /></div>}
+      <div className={`ht-booking-shell ${step === "verify" ? "ht-pos-verify" : ""}`}>
+        {step !== "verify" && <div className="ht-booking-left">
+          <BookingProgress step={step} hasCompletedServices={completedLegs.length > 0}
+            combinedBoarding={step === "selection" && currentLeg?.serviceChoice === "boarding"} />
+          {showPetSummary && <CurrentLegSidebar pets={legPets} onRemove={id => setCurrentLeg(prev =>
+            prev && prev.petIds.length > 1 ? { ...prev,
+              petIds: prev.petIds.filter(x => x !== id),
+              petSelections: prev.petSelections.filter(s => s.pet.id !== id),
+            } : prev)} />}
+        </div>}
+        <div className="ht-booking-main">
+          <div className="ht-booking-panel">
       {lookupError && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{lookupError}</p>}
       {step === "verify" && <CustomerVerifyStep onSelectExisting={c => {
         setCustomer(c); setOwner({ name: c.full_name, contact: c.phone_number ?? "", address: c.address ?? "" }); setStep("pet-info");
@@ -133,40 +148,42 @@ export default function WalkInPage() {
       {step === "service" && <CustomerServiceChoiceStep choice={null} petSpecies={pets.map(p => p.species)} onChange={chooseService}
         onBack={() => setStep(completedLegs.length ? "add-more" : "pet-info")} onNext={() => {}} />}
       {step === "waiver" && currentLeg && <WaiverStep serviceType={currentLeg.serviceChoice} onBack={() => { setCurrentLeg(null); setStep(waiverBackStep); }} onAgree={() => setStep("selection")} />}
-      {(step === "selection" || step === "schedule") && legPets.length > 1 && <div className="mb-5"><CurrentLegSidebar pets={legPets} onRemove={id => setCurrentLeg(prev => prev && prev.petIds.length > 1 ? { ...prev, petIds: prev.petIds.filter(x => x !== id), petSelections: prev.petSelections.filter(s => s.pet.id !== id) } : prev)} /></div>}
-      {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingDetailsAndSchedule
+      {step === "selection" && currentLeg?.serviceChoice === "boarding" && <div className="ht-pos-service-step"><BoardingDetailsAndSchedule
         pets={legPets} selections={currentLeg.petSelections} kennels={kennels}
         alreadyGroomedPetIds={completedLegs.filter(l => ["grooming", "dog_grooming", "cat_grooming"].includes(l.serviceChoice)).flatMap(l => l.petIds)}
         scheduledDate={currentLeg.scheduledDate} petBelongings={currentLeg.petBelongings}
         specialRequests={currentLeg.specialRequests} onChange={updateSelections}
         onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
-        onBack={backFromSelection} onConfirmed={confirmSchedule} />}
+        onBack={backFromSelection} onConfirmed={confirmSchedule} /></div>}
       {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep pets={legPets} selections={currentLeg.petSelections}
         completedLegs={completedLegs} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
-      {step === "selection" && grooming && currentLeg && <CustomerGroomingSelectionStep serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
-        pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
-      {step === "schedule" && currentLeg && grooming && <HolidayAwareGroomingSchedule
+      {step === "selection" && grooming && currentLeg && <div className="ht-pos-service-step"><CustomerGroomingSelectionStep serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
+        pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} /></div>}
+      {step === "schedule" && currentLeg && grooming && <div className="ht-booking-schedule"><HolidayAwareGroomingSchedule
         petSelections={currentLeg.petSelections} scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime}
         specialRequests={currentLeg.specialRequests}
         onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
         onTimeChange={v => setCurrentLeg(l => l && { ...l, scheduledTime: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
         onSelectionsChange={updateSelections} onBack={() => setStep("selection")}
-        onConfirmed={confirmSchedule} />}
-      {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <CustomerGroomingScheduleStep
+        onConfirmed={confirmSchedule} /></div>}
+      {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <div className="ht-booking-schedule"><CustomerGroomingScheduleStep
         customer={customer} ownerContact={owner.contact} petSelections={currentLeg.petSelections} groomers={groomers} completedLegs={completedLegs}
         scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
         onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
         onTimeChange={v => setCurrentLeg(l => l && { ...l, scheduledTime: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
         onSelectionsChange={updateSelections}
-        onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} />}
+        onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} /></div>}
       {step === "add-more" && <AddAnotherServicePrompt eligibleServices={eligible} onAddService={chooseService}
         onDone={() => setStep("summary")} onBack={() => { const last = completedLegs[completedLegs.length - 1]; if (last) editLeg(last.id); else setStep("service"); }} />}
       {step === "summary" && <WalkInMultiServiceSummary customer={customer} owner={owner} legs={completedLegs} packagesByService={packagesByService}
         sizesByService={sizesByService} addonsByService={addonsByService} groomers={groomers}
         onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => window.location.assign("/admin/pos")} />}
+          </div>
+        </div>
+      </div>
     </div>
     {duplicateWarning && <div role="alertdialog" aria-modal="true" aria-label="Duplicate pet service" className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"><h2 className="text-lg font-bold text-amber-800">Service Already Selected</h2>
