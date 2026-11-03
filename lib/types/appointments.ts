@@ -20,6 +20,7 @@ export type Pet = {
   owner_name: string | null;
   owner_contact: string | null;
   created_at: string;
+  photo_url?: string | null;
 };
 
 export type AppointmentServiceType =
@@ -80,8 +81,6 @@ export type DraftPetSelection = {
   kennelId: string | null;
   boardingKennelSize?: "small" | "big" | null;
   boardingNights?: number | null;
-  // Boarding schedule is stored per pet. This is intentional: two pets
-  // with different kennel sizes must not share one appointment schedule.
   boardingScheduledDate?: string | null;
   boardingDropOffAt?: string | null;
   boardingPickUpAt?: string | null;

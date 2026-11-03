@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { CustomerPetFields, useCustomerPetForm, blankCustomerPet, type CustomerPetForm } from "@/components/dashboard/CustomerPetFields";
 import type { Pet } from "@/lib/types/appointments";
-import SpeciesIcon from "./SpeciesIcon";
+import PetAvatar from "@/components/dashboard/PetAvatar";
+import PetPhotoEditor from "@/components/shared/PetPhotoEditor";
 import PetServiceHistory from "@/components/shared/PetServiceHistory";
 
 type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null; vaccination_status?: CustomerPetForm["vaccination_status"] | null };
@@ -23,6 +24,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
   });
   const [displayPet, setDisplayPet] = useState<PetWithWeight>(initial);
   const [editing, setEditing] = useState(false);
+  const [photoEditing, setPhotoEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,8 +52,6 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
   async function save() {
     if (saving || !fields.validate()) return;
     const { form, size } = fields;
-    // A legacy record without a recorded weight must not lose its existing size
-    // just because staff corrected its name, breed, age, or sex.
     const keepLegacySize = !form.weight.trim() && form.species === displayPet.species;
     const changes = {
       name: form.name.trim(), breed: form.breed.trim(), species: form.species,
@@ -77,17 +77,28 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
     } finally { setSaving(false); }
   }
 
-  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 px-3 py-4" onMouseDown={e => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+  function updatePhoto(url: string) {
+    const updated = { ...displayPet, photo_url: url };
+    setDisplayPet(updated);
+    onUpdated(updated);
+  }
+
+  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 px-3 py-4" onMouseDown={e => { if (e.target === e.currentTarget && !saving && !photoEditing) onClose(); }}>
     <div role="dialog" aria-modal="true" aria-label={`${displayPet.name} profile and service history`}
       className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-xl">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-pink-100 bg-white px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-tint"><SpeciesIcon species={displayPet.species} className="h-7 w-7 text-brand-pink"/></div>
+          <PetAvatar pet={displayPet} size="md" />
           <div><h3 className="text-xl font-bold text-zinc-900">{displayPet.name}</h3><p className="text-xs text-zinc-500">{displayPet.breed} · {displayPet.sex ?? "—"}</p></div>
         </div>
         <button type="button" disabled={saving} onClick={onClose} aria-label="Close pet profile" className="rounded-full p-2 text-zinc-500 hover:bg-pink-50 hover:text-brand-pink">✕</button>
       </div>
       <div className="px-5 py-5 sm:px-7">
+        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-2xl border border-pink-100 p-4">
+          <PetAvatar pet={displayPet} size="lg" />
+          <div className="flex-1"><h4 className="font-semibold text-zinc-800">Profile picture</h4><p className="text-xs text-zinc-500">Use a real photo so staff can identify this pet quickly.</p></div>
+          <button type="button" disabled={saving} onClick={() => setPhotoEditing(true)} className="rounded-full border border-brand-pink px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-pink-50">{displayPet.photo_url ? "Change Photo" : "Add Photo"}</button>
+        </div>
         <div className="grid gap-5 md:grid-cols-2">
           <section className="rounded-2xl border border-pink-100 bg-pink-50/30 p-4">
             <h4 className="mb-3 font-bold text-zinc-800">Pet Information</h4>
@@ -114,6 +125,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
         <PetServiceHistory petId={displayPet.id}/>
       </div>
     </div>
+    {photoEditing && <PetPhotoEditor petId={displayPet.id} petName={displayPet.name} onSaved={updatePhoto} onClose={() => setPhotoEditing(false)} />}
   </div>;
 }
 function Row({label,value}:{label:string;value:React.ReactNode}) {return <div className="flex justify-between gap-3 text-sm"><span className="text-zinc-500">{label}</span><span className="text-right font-medium text-zinc-800">{value || "—"}</span></div>}
