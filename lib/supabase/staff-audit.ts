@@ -24,7 +24,10 @@ export async function fetchStaffAuditPage(filters: AuditFilters, page: number) {
   // characters so a typed search cannot alter the filter expression.
   if (search) {
     const term = search.replace(/[,%().*\\]/g, "").slice(0, 75);
-    if (term) query = query.or(`actor_name.ilike.%${term}%,action.ilike.%${term}%,entity_id.ilike.%${term}%`);
+    if (term) {
+      const numericId = /^\d+$/.test(term) && Number.isSafeInteger(Number(term)) && Number(term) > 0 ? Number(term) : null;
+      query = query.or(`${numericId !== null ? `id.eq.${numericId},` : ""}actor_name.ilike.%${term}%,action.ilike.%${term}%,entity_id.ilike.%${term}%`);
+    }
   }
   const { data, error, count } = await query.order("occurred_at", { ascending: false })
     .order("id", { ascending: false })

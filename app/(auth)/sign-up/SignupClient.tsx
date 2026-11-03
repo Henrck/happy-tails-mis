@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, PawPrint, Phone, UserRound, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { hasValidCustomerPhone, normalizeCustomerPhone } from "@/lib/utils/customer-phone";
+import { isUsernameTaken, validateUsernameFormat } from "@/lib/supabase/customer-auth";
 
 type Props = { landscapeUrl: string; portraitUrl: string; customPortrait: boolean };
 type Stage = "details" | "verify";
@@ -25,6 +26,7 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
   const supabase = useMemo(() => createClient(), []);
   const [stage, setStage] = useState<Stage>("details");
   const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,10 +71,13 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
     setError(""); setMessage("");
     const normalizedName = fullName.trim().replace(/\s+/g, " ");
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedUsername = username.trim();
     const normalizedPhone = normalizeCustomerPhone(phone);
     if (normalizedName.length < 2 || normalizedName.length > 120) {
       setError("Enter your full name (2–120 characters)."); return;
     }
+    const usernameError = validateUsernameFormat(normalizedUsername);
+    if (usernameError) { setError(usernameError); return; }
     if (!hasValidCustomerPhone(normalizedPhone)) {
       setError("Enter a valid Philippine mobile number: 09XXXXXXXXX or +639XXXXXXXXX."); return;
     }
@@ -87,12 +92,17 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
     }
     setBusy(true);
     try {
+      // This endpoint checks customer and staff usernames without exposing account emails.
+      const availability = await isUsernameTaken(normalizedUsername);
+      if (availability.error) { setError(availability.error); return; }
+      if (availability.taken) { setError("That username is already taken. Choose another username."); return; }
       const { data, error: signupError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
         options: {
           data: {
             full_name: normalizedName,
+            username: normalizedUsername,
             phone_number: normalizedPhone,
             account_type: "customer",
           },
@@ -107,6 +117,7 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
         return;
       }
       setEmail(normalizedEmail);
+      setUsername(normalizedUsername);
       setPhone(normalizedPhone);
       setPassword(""); setConfirmPassword("");
       setCode("");
@@ -130,18 +141,28 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
     if (profileError || !profile || profile.role === "admin" || profile.role === "superadmin") {
       setError("Your email is confirmed, but customer account setup could not be verified. Please contact support."); return;
     }
-    const updates: { full_name?: string; phone_number?: string } = {};
+    const updates: { full_name?: string; phone_number?: string; username?: string } = {};
     // First verification uses signup metadata if the page was refreshed.
     const name = fullName.trim() || (typeof auth.user.user_metadata?.full_name === "string" ? auth.user.user_metadata.full_name : "");
     const mobile = normalizeCustomerPhone(phone || (typeof auth.user.user_metadata?.phone_number === "string" ? auth.user.user_metadata.phone_number : ""));
+    const selectedUsername = username.trim() || (typeof auth.user.user_metadata?.username === "string" ? auth.user.user_metadata.username.trim() : "");
     if (name.length >= 2) updates.full_name = name;
     if (hasValidCustomerPhone(mobile)) updates.phone_number = mobile;
-    if (!updates.full_name || !updates.phone_number) {
-      setError("Your email is verified, but your name or phone number is missing. Contact HappyTails support."); return;
+    if (!validateUsernameFormat(selectedUsername)) updates.username = selectedUsername;
+    if (!updates.full_name || !updates.phone_number || !updates.username) {
+      setError("Your email is verified, but required account details are missing. Contact HappyTails support."); return;
     }
+    // The database's username uniqueness rule is authoritative, including
+    // simultaneous signups after both pass the initial availability check.
     const { data: customer, error: customerError } = await supabase.from("customers")
-      .update(updates).eq("id", userId).select("id,status").maybeSingle();
-    if (customerError || !customer || customer.status !== "active") {
+      .update(updates).eq("id", userId).select("id,status,username").maybeSingle();
+    if (customerError) {
+      setError(customerError.code === "23505"
+        ? "That username is now taken. Please contact HappyTails support to choose a new one."
+        : "Email verified, but account details could not be saved. Please try again.");
+      return;
+    }
+    if (!customer || customer.status !== "active" || customer.username?.toLowerCase() !== selectedUsername.toLowerCase()) {
       setError("Email verified, but your customer profile could not be completed. Contact support before signing in."); return;
     }
     // Verification signs the customer in temporarily. End that session and
@@ -168,7 +189,7 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
     setBusy(true);
     try {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email, token: code, type: "signup",
+        email, token: code.trim(), type: "email",
       });
       if (verifyError || !data.user || !data.session) {
         setError(verifyError?.message || "This code is invalid or expired. Request a new code and try again.");
@@ -220,6 +241,9 @@ export default function HappyTailsSignup({ landscapeUrl, portraitUrl, customPort
             <form className="ht-recovery-form ht-signup-form" onSubmit={handleSignup}>
               <label className="ht-recovery-label" htmlFor="ht-su-name">Full Name</label>
               <div className="ht-recovery-field"><UserRound aria-hidden="true" /><input id="ht-su-name" value={fullName} onChange={e => setFullName(e.target.value)} autoComplete="name" placeholder="Enter your full name" maxLength={120} disabled={busy} required /></div>
+              <label className="ht-recovery-label" htmlFor="ht-su-username">Username</label>
+              <div className="ht-recovery-field"><UserRound aria-hidden="true" /><input id="ht-su-username" value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Choose a unique username" minLength={3} maxLength={20} disabled={busy} required /></div>
+              <p className="ht-signup-password-hint">3–20 characters: letters, numbers, underscores, or periods. You can log in using this username or your email.</p>
               <label className="ht-recovery-label" htmlFor="ht-su-phone">Phone Number</label>
               <div className="ht-recovery-field"><Phone aria-hidden="true" /><input id="ht-su-phone" value={phone} onChange={e => setPhone(e.target.value)} type="tel" autoComplete="tel" inputMode="tel" placeholder="09XXXXXXXXX or +639XXXXXXXXX" maxLength={20} disabled={busy} required /></div>
               <label className="ht-recovery-label" htmlFor="ht-su-email">Email Address</label>
