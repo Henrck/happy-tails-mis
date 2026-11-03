@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPetsByCustomer, subscribeToCustomerPets } from "@/lib/supabase/appointments";
 import { listArchivedCustomerPets, setCustomerPetArchived, type ArchivedPet } from "@/lib/supabase/customer-pet-archive";
 import { insertCustomerPet } from "@/lib/utils/pet-size-guide";
+import { normalizePetAge } from "@/lib/utils/pet-age";
 import type { Pet } from "@/lib/types/appointments";
 import Link from "next/link";
 import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
@@ -19,14 +20,18 @@ function NewPetForm({ customerId, onClose, onSaved }: { customerId: string; onCl
     e.preventDefault();
     if (saving || !state.validate()) return;
     setSaving(true); setError("");
-    const { form, size } = state;
-    const { error: saveError } = await insertCustomerPet({ customer_id: customerId, name: form.name.trim(), species: form.species,
-      breed: form.breed.trim(), size_label: size?.label ?? "Unclassified", weight_kg: form.weight.trim() ? Number(form.weight) : null, pet_size_id: size?.id ?? null,
-      age: form.age.trim() ? Number(form.age) : null, sex: form.sex || null, vaccination_status: form.vaccination_status });
-    setSaving(false);
-    if (saveError) { setError(saveError.message); return; }
-    state.setForm(blankCustomerPet);
-    onSaved();
+    try {
+      const { form, size } = state;
+      const normalizedAge = normalizePetAge(form.age);
+      if (!normalizedAge) throw new Error("Enter a valid age such as 3 weeks, 6 months or 2 years.");
+      const { error: saveError } = await insertCustomerPet({ customer_id: customerId, name: form.name.trim(), species: form.species,
+        breed: form.breed.trim(), size_label: size?.label ?? "Unclassified", weight_kg: form.weight.trim() ? Number(form.weight) : null, pet_size_id: size?.id ?? null,
+        ...normalizedAge, sex: form.sex || null, vaccination_status: form.vaccination_status });
+      if (saveError) throw new Error(saveError.message);
+      state.setForm(blankCustomerPet);
+      onSaved();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to add pet."); }
+    finally { setSaving(false); }
   }
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget && !saving) onClose(); }}>
     <form noValidate onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="add-pet-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">

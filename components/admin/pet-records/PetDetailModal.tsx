@@ -6,6 +6,7 @@ import { CustomerPetFields, useCustomerPetForm, blankCustomerPet, type CustomerP
 import type { Pet } from "@/lib/types/appointments";
 import PetAvatar from "@/components/dashboard/PetAvatar";
 import PetPhotoEditor from "@/components/shared/PetPhotoEditor";
+import { normalizePetAge, petAgeLabel } from "@/lib/utils/pet-age";
 import PetServiceHistory from "@/components/shared/PetServiceHistory";
 
 type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null; vaccination_status?: CustomerPetForm["vaccination_status"] | null };
@@ -20,7 +21,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
     vaccination_status: initial.vaccination_status ?? blankCustomerPet.vaccination_status,
     name: pet.name, species: pet.species, breed: pet.breed,
     weight: initial.weight_kg == null ? "" : String(initial.weight_kg),
-    age: pet.age == null ? "" : String(pet.age), sex: pet.sex ?? "",
+    age: petAgeLabel(pet) ?? "", sex: pet.sex ?? "",
   });
   const [displayPet, setDisplayPet] = useState<PetWithWeight>(initial);
   const [editing, setEditing] = useState(false);
@@ -42,7 +43,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
       vaccination_status: displayPet.vaccination_status ?? blankCustomerPet.vaccination_status,
       name: displayPet.name, species: displayPet.species, breed: displayPet.breed,
       weight: displayPet.weight_kg == null ? "" : String(displayPet.weight_kg),
-      age: displayPet.age == null ? "" : String(displayPet.age), sex: displayPet.sex ?? "",
+      age: petAgeLabel(displayPet) ?? "", sex: displayPet.sex ?? "",
     });
     fields.setErrors({});
     setError(null);
@@ -52,11 +53,13 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
   async function save() {
     if (saving || !fields.validate()) return;
     const { form, size } = fields;
+    // A legacy record without a recorded weight must not lose its existing size
+    // just because staff corrected its name, breed, age, or sex.
     const keepLegacySize = !form.weight.trim() && form.species === displayPet.species;
     const changes = {
       name: form.name.trim(), breed: form.breed.trim(), species: form.species,
       vaccination_status: form.vaccination_status,
-      age: form.age.trim() ? Number(form.age) : null,
+      ...normalizePetAge(form.age)!,
       sex: form.sex || null,
       weight_kg: form.weight.trim() ? Number(form.weight) : null,
       size_label: size?.label ?? (keepLegacySize ? displayPet.size_label : "Unclassified"),
@@ -97,7 +100,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
         <div className="mb-5 flex flex-wrap items-center gap-4 rounded-2xl border border-pink-100 p-4">
           <PetAvatar pet={displayPet} size="lg" />
           <div className="flex-1"><h4 className="font-semibold text-zinc-800">Profile picture</h4><p className="text-xs text-zinc-500">Use a real photo so staff can identify this pet quickly.</p></div>
-          <button type="button" disabled={saving} onClick={() => setPhotoEditing(true)} className="rounded-full border border-brand-pink px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-pink-50">{displayPet.photo_url ? "Change Photo" : "Add Photo"}</button>
+          <button type="button" disabled={saving} onClick={()=>setPhotoEditing(true)} className="rounded-full border border-brand-pink px-4 py-2 text-sm font-semibold text-brand-pink">{displayPet.photo_url ? "Change Photo" : "Add Photo"}</button>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
           <section className="rounded-2xl border border-pink-100 bg-pink-50/30 p-4">
@@ -114,7 +117,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
               <Row label="Species" value={displayPet.species}/><Row label="Breed" value={displayPet.breed}/>
               <Row label="Estimated Size" value={displayPet.size_label}/>
               <Row label="Weight" value={displayPet.weight_kg == null ? "Not recorded" : `${displayPet.weight_kg} kg`}/>
-              <Row label="Age" value={displayPet.age != null ? `${displayPet.age} yrs` : null}/><Row label="Sex" value={displayPet.sex}/>
+              <Row label="Age" value={petAgeLabel(displayPet)}/><Row label="Sex" value={displayPet.sex}/>
               <button type="button" onClick={() => setEditing(true)} className="mt-3 w-full rounded-full border-2 border-brand-pink py-2 text-sm font-semibold text-brand-pink hover:bg-pink-50">Edit Pet Info</button>
             </div>}
           </section>
@@ -125,7 +128,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
         <PetServiceHistory petId={displayPet.id}/>
       </div>
     </div>
-    {photoEditing && <PetPhotoEditor petId={displayPet.id} petName={displayPet.name} onSaved={updatePhoto} onClose={() => setPhotoEditing(false)} />}
+    {photoEditing && <PetPhotoEditor petId={displayPet.id} petName={displayPet.name} onSaved={updatePhoto} onClose={()=>setPhotoEditing(false)}/>}
   </div>;
 }
 function Row({label,value}:{label:string;value:React.ReactNode}) {return <div className="flex justify-between gap-3 text-sm"><span className="text-zinc-500">{label}</span><span className="text-right font-medium text-zinc-800">{value || "—"}</span></div>}
