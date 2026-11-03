@@ -3,12 +3,13 @@ import { useState } from "react";
 import { Dog, Cat, Scissors, House, Sparkles, Check, ArrowLeft, ArrowRight } from "lucide-react";
 import type { Species } from "@/lib/types/appointments";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
-export default function CustomerServiceChoiceStep({ choice, onChange, onBack, onNext: _onNext, petSpecies = [] }: {
+export default function CustomerServiceChoiceStep({ choice, onChange, onBack, onNext: _onNext, petSpecies = [], onDraftChoiceChange }: {
   choice: WalkInServiceChoice | null;
   onChange: (choice: WalkInServiceChoice) => void;
   onBack: () => void;
   onNext: () => void;
   petSpecies?: Species[];
+  onDraftChoiceChange?: (choice: WalkInServiceChoice) => void;
 }) {
   const [selected, setSelected] = useState<WalkInServiceChoice | null>(choice);
   const mixed = petSpecies.includes("Dog") && petSpecies.includes("Cat");
@@ -25,7 +26,7 @@ export default function CustomerServiceChoiceStep({ choice, onChange, onBack, on
     </header>
     <div className="mt-7 grid gap-3 sm:grid-cols-3">{options.map(option => {
       const active = selected === option.id;
-      return <button type="button" key={option.id} aria-pressed={active} onClick={() => setSelected(option.id)} className={`relative flex min-h-48 flex-col items-center justify-center rounded-2xl border-2 bg-white p-5 text-center transition-colors ${active ? "border-brand-pink bg-pink-50/40" : "border-pink-100 hover:border-pink-300"}`}>
+      return <button type="button" key={option.id} aria-pressed={active} onClick={() => { setSelected(option.id); onDraftChoiceChange?.(option.id); }} className={`relative flex min-h-48 flex-col items-center justify-center rounded-2xl border-2 bg-white p-5 text-center transition-colors ${active ? "border-brand-pink bg-pink-50/40" : "border-pink-100 hover:border-pink-300"}`}>
         {active && <span className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-pink text-white"><Check size={15}/></span>}
         <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-pink-50 text-brand-pink"><option.Icon size={34} strokeWidth={1.6}/></span>
         <span className="text-base font-bold text-slate-800">{option.name}</span><span className="mt-2 text-xs leading-5 text-slate-500">{option.description}</span>

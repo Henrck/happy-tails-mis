@@ -14,11 +14,11 @@ const labels: Record<string, string> = { grooming: "Grooming", dog_grooming: "Do
 const prettyTime = (time?: string | null) => { if (!time || !/^\d{2}:\d{2}/.test(time)) return "—"; const [h, m] = time.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
 const selectionsOf = (leg: BookingLeg) => (leg.petSelections ?? []).filter((s): s is DraftPetSelection => !!s?.pet?.id);
 
-export default function MultiServiceSummaryStep({ customer, legs, packagesByService, sizesByService, addonsByService, groomers, onBack, onEditLeg }: {
+export default function MultiServiceSummaryStep({ customer, legs, packagesByService, sizesByService, addonsByService, groomers, onBack, onEditLeg, onBooked }: {
   customer: Customer; legs: BookingLeg[];
   packagesByService: Record<string, Package[]>; sizesByService: Record<string, PetSize[]>;
   addonsByService: Record<string, Addon[]>; groomers: Groomer[]; kennels: Kennel[];
-  onBack: () => void; onEditLeg: (legId: string) => void;
+  onBack: () => void; onEditLeg: (legId: string) => void; onBooked?: () => void;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -68,6 +68,7 @@ export default function MultiServiceSummaryStep({ customer, legs, packagesByServ
       const result = await createAppointmentsAtomic(writes);
       if (result.error) { setError(`Booking not completed: ${result.error}`); lock.current = false; return; }
       if (result.appointments.length !== writes.length) throw new Error("Unexpected booking confirmation. Check existing appointments before retrying.");
+      onBooked?.();
       setSaved(true);
     } catch (e) { setError(e instanceof Error ? e.message : "Unexpected booking result. Check appointments before retrying."); }
     finally { setSaving(false); }

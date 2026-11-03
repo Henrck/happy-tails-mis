@@ -1,0 +1,26 @@
+/* Sign-up uses the same existing, fixed no-overlap artwork system as Forgot Password. */
+.ht-signup-page .ht-signup-card { padding-top: 30px; padding-bottom: 25px; }
+.ht-signup-page .ht-recovery-heading h1 { font-size: clamp(31px, 3vw, 43px); }
+.ht-signup-page .ht-recovery-heading p { margin-bottom: 11px; max-width: 380px; }
+.ht-signup-page .ht-recovery-progress { margin-bottom: 15px; }
+.ht-signup-page .ht-recovery-progress span { width: 45px; }
+.ht-signup-form { gap: 8px; }
+.ht-signup-form .ht-recovery-label { margin: 3px 2px -3px; }
+.ht-signup-form .ht-recovery-field { min-height: 44px; border-radius: 14px; }
+.ht-signup-form .ht-recovery-field input { height: 42px; }
+.ht-signup-form .ht-recovery-field > svg { height: 20px; width: 20px; }
+.ht-signup-password-hint { margin: 1px 2px 0; font-size: 11px; line-height: 1.45; color: #746873; }
+.ht-signup-page .ht-recovery-primary { margin-top: 10px; min-height: 49px; }
+.ht-signup-page .ht-recovery-back { margin-top: 13px; }
+@media (min-width: 1024px) and (orientation: landscape) {
+  .ht-signup-page .ht-recovery-placement { padding-top: 28px; padding-bottom: 28px; }
+  .ht-signup-page .ht-signup-card { max-width: 535px; }
+}
+@media (max-width: 480px) {
+  .ht-signup-page .ht-signup-card { padding: 29px 18px 22px; }
+  .ht-signup-page .ht-recovery-heading h1 { font-size: 30px; }
+  .ht-signup-page .ht-recovery-heading p { font-size: 12px; }
+  .ht-signup-form { gap: 7px; }
+  .ht-signup-form .ht-recovery-field { min-height: 46px; }
+  .ht-signup-form .ht-recovery-field input { height: 44px; }
+}

@@ -6,7 +6,7 @@ import { manilaToday, useBookingClosures } from "@/lib/booking/use-booking-closu
 
 type Closures = ReturnType<typeof useBookingClosures>;
 export default function BookingDayCalendar({ value, onChange, closures, unavailable = {}, availability,
-  capacityLoading = false, capacityError = null, onMonthChange, title = "Choose a date", groupMode = false,
+  capacityLoading = false, capacityError = null, onMonthChange, title = "Choose a date", groupMode = false, onBlocked,
 }: {
   value: string | null;
   onChange: (date: string) => void;
@@ -19,6 +19,8 @@ export default function BookingDayCalendar({ value, onChange, closures, unavaila
   title?: string;
   /** Show a yes/no capacity result for the whole multi-pet booking instead of a misleading kennel count. */
   groupMode?: boolean;
+  /** Optional modal feedback for dates that cannot be booked. */
+  onBlocked?: (message: string) => void;
 }) {
   const today = manilaToday();
   const [explanation, setExplanation] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export default function BookingDayCalendar({ value, onChange, closures, unavaila
         const blocked = !inMonth || past || unavailableNow || (Boolean(availability) && inMonth && availability?.[date] === undefined);
         return <button type="button" key={index} disabled={blocked} aria-disabled={Boolean(reason)} aria-label={!inMonth ? "Outside month" : reason ? `${date}: Closed - ${reason}` : past ? `${date}: Past date` : date}
           title={reason ? `Unavailable: ${reason}` : availability && inMonth ? groupMode ? "Whole booking can fit" : `${availability[date] ?? "Checking"} kennels available for the selected stay` : undefined}
-          aria-pressed={value === date} onClick={() => { if (reason) { setExplanation(`${date}: ${reason}`); return; } setExplanation(null); onChange(date); }}
+          aria-pressed={value === date} onClick={() => { if (reason) { if (onBlocked) onBlocked(`${date}: ${reason}`); else setExplanation(`${date}: ${reason}`); return; } setExplanation(null); onChange(date); }}
           className={`flex min-h-12 flex-col items-center justify-center rounded-lg border px-0.5 py-1 text-xs font-semibold transition ${reason ? "border-rose-200 bg-rose-50 text-rose-700" : past ? "border-transparent bg-rose-50/60 text-rose-400" : value === date ? "border-brand-pink bg-brand-pink text-white" : "border-transparent text-zinc-700 hover:bg-pink-50"} disabled:cursor-not-allowed ${reason ? "cursor-not-allowed" : ""}`}>
           {inMonth ? day : ""}
           {reason ? <span className="mt-0.5 max-w-full truncate text-[8px] font-extrabold leading-3 text-rose-600">{reason.toLowerCase().includes("pickup") ? "Pickup closed" : reason.toLowerCase().includes("full") || reason.toLowerCase().includes("no ") ? "Full" : "Closed"}</span>

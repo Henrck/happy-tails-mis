@@ -7,6 +7,7 @@ import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, type BookingLeg } from "@/lib/types/booking-leg";
+import { findDuplicatePetAddon } from "@/lib/booking/unique-pet-addons";
 import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
@@ -42,6 +43,7 @@ export default function WalkInPage() {
   const [sizesByService, setSizesByService] = useState<Record<string, PetSize[]>>({});
   const [addonsByService, setAddonsByService] = useState<Record<string, Addon[]>>({});
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -95,7 +97,10 @@ export default function WalkInPage() {
   function confirmSchedule(selections?: DraftPetSelection[]) {
     if (!currentLeg) return;
     const confirmedLeg = Array.isArray(selections) ? { ...currentLeg, petSelections: selections } : currentLeg;
-    setCompletedLegs(prev => [...prev.filter(l => l.id !== currentLeg.id), confirmedLeg]);
+    const proposed = [...completedLegs.filter(l => l.id !== currentLeg.id), confirmedLeg];
+    const duplicate = findDuplicatePetAddon(proposed, addonsByService);
+    if (duplicate) { setDuplicateWarning(duplicate); setStep("selection"); return; }
+    setCompletedLegs(proposed);
     setCurrentLeg(null);
     setStep("add-more");
   }
@@ -137,7 +142,8 @@ export default function WalkInPage() {
         onBelongingsChange={v => setCurrentLeg(l => l && { ...l, petBelongings: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
         onBack={backFromSelection} onConfirmed={confirmSchedule} />}
-      {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
+      {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep pets={legPets} selections={currentLeg.petSelections}
+        completedLegs={completedLegs} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
       {step === "selection" && grooming && currentLeg && <CustomerGroomingSelectionStep serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
         pets={legPets} selections={currentLeg.petSelections} onChange={updateSelections} onBack={backFromSelection} onNext={() => setStep("schedule")} />}
       {step === "schedule" && currentLeg && grooming && <HolidayAwareGroomingSchedule
@@ -149,11 +155,12 @@ export default function WalkInPage() {
         onSelectionsChange={updateSelections} onBack={() => setStep("selection")}
         onConfirmed={confirmSchedule} />}
       {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <CustomerGroomingScheduleStep
-        customer={customer} ownerContact={owner.contact} petSelections={currentLeg.petSelections} groomers={groomers}
+        customer={customer} ownerContact={owner.contact} petSelections={currentLeg.petSelections} groomers={groomers} completedLegs={completedLegs}
         scheduledDate={currentLeg.scheduledDate} scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
         onDateChange={v => setCurrentLeg(l => l && { ...l, scheduledDate: v })}
         onTimeChange={v => setCurrentLeg(l => l && { ...l, scheduledTime: v })}
         onRequestsChange={v => setCurrentLeg(l => l && { ...l, specialRequests: v })}
+        onSelectionsChange={updateSelections}
         onBack={() => setStep("selection")} onConfirmed={() => confirmSchedule()} />}
       {step === "add-more" && <AddAnotherServicePrompt eligibleServices={eligible} onAddService={chooseService}
         onDone={() => setStep("summary")} onBack={() => { const last = completedLegs[completedLegs.length - 1]; if (last) editLeg(last.id); else setStep("service"); }} />}
@@ -161,5 +168,11 @@ export default function WalkInPage() {
         sizesByService={sizesByService} addonsByService={addonsByService} groomers={groomers}
         onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => window.location.assign("/admin/pos")} />}
     </div>
+    {duplicateWarning && <div role="alertdialog" aria-modal="true" aria-label="Duplicate pet service" className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"><h2 className="text-lg font-bold text-amber-800">Service Already Selected</h2>
+        <p className="mt-3 text-sm leading-relaxed text-zinc-700">{duplicateWarning}</p>
+        <button type="button" autoFocus onClick={() => setDuplicateWarning(null)} className="mt-5 w-full rounded-full bg-brand-pink px-5 py-2.5 font-semibold text-white">Review Selection</button>
+      </div>
+    </div>}
   </div>;
 }

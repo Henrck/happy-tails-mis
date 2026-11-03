@@ -8,6 +8,7 @@ import { MIN_EXTENDED_BOARDING_NIGHTS, MAX_BOARDING_NIGHTS, extendedBoardingNigh
 import type { Package, PackagePricing, Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 import { validShareGroup, shareError, shareGroups, withSharedKennelPrices, type ShareSelection } from "@/lib/booking/boarding-share";
+import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 
 type KennelSize = "small" | "big";
 function petTier(pet: Pet): "small" | "medium" | "large" | null {
@@ -44,6 +45,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   const [error, setError] = useState<string | null>(null);
   const [shareTargets, setShareTargets] = useState<string[]>([]);
   const [shareNotice, setShareNotice] = useState<string | null>(null);
+  const [blocker, setBlocker] = useState<string | null>(null);
   const [custom, setCustom] = useState<Record<string, string>>(() => Object.fromEntries(
     selections.filter(s => s.boardingNights != null).map(s => [s.pet.id, String(s.boardingNights)])
   ));
@@ -122,11 +124,11 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   function createGroup() {
     const group = selections.filter(s => shareTargets.includes(s.pet.id)) as ShareSelection[];
     if (!validShareGroup(group)) {
-      setShareNotice("Choose Small + Medium, Medium + Medium, or 3 Small pets. All must use the same Big kennel package and duration.");
+      setBlocker("A shared Big kennel allows 2 Small pets, Small + Medium, Medium + Medium, or 3 Small pets. Select the same Big-kennel package and duration for every pet in the group.");
       return;
     }
     if (group.some(s => (s as ShareSelection).boardingShareGroupId)) {
-      setShareNotice("A selected pet already belongs to a shared kennel. Remove that group before creating another.");
+      setBlocker("A selected pet already shares a kennel. Select Separate pets for that group before choosing a new arrangement.");
       return;
     }
     const groupId = `share:${group.map(s => s.pet.id).sort().join(":")}`;
@@ -157,8 +159,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
   return <section className="mx-auto max-w-3xl">
     <h2 className="text-center text-xl font-bold text-brand-pink">Pet Hotel / Boarding</h2>
     <p className="mt-2 text-center text-sm text-zinc-600">Step 1 of 2 — choose the kennel and duration for each pet. Next, check availability for the <strong>entire stay</strong> in the Dates step.</p>
-    {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-    <p className="mt-4 rounded-xl bg-pink-50 p-4 text-xs leading-5 text-zinc-700">Each Small kennel accepts one Small <b>or Medium</b> pet. Sharing one Big kennel is available for exactly Small + Medium, Medium + Medium, or three Small pets. All other pets use separate kennels. Live capacity is verified using active kennels for the entire stay. Free Bath & Dry begins at four nights.</p>
+    <p className="mt-4 rounded-xl bg-pink-50 p-4 text-xs leading-5 text-zinc-700">Each Small kennel accepts one Small <b>or Medium</b> pet. Sharing one Big kennel is available for 2 Small, Small + Medium, Medium + Medium, or three Small pets. All other pets use separate kennels. Live capacity is verified using active kennels for the entire stay. Free Bath & Dry begins at four nights.</p>
     {pets.map((pet) => {
       const s = forPet(pet), tier = petTier(pet), size = s?.boardingKennelSize;
       const eligible = size === "small" ? tier === "small" || tier === "medium" : true;
@@ -172,7 +173,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
         <h3 className="font-bold text-zinc-800">{pet.name} <span className="font-normal text-zinc-500">({pet.size_label})</span></h3>
         <p className="mt-3 text-sm font-semibold">Kennel size</p>
         <div className="mt-2 grid grid-cols-2 gap-2">{(["small", "big"] as KennelSize[]).map((kind) => <button type="button" key={kind}
-          disabled={kind === "small" && tier !== "small" && tier !== "medium"} onClick={() => chooseSize(pet, kind)}
+          aria-disabled={kind === "small" && tier !== "small" && tier !== "medium"} onClick={() => { if (kind === "small" && tier !== "small" && tier !== "medium") setBlocker("A Large or larger pet needs its own Big kennel. Small kennels can accommodate one Small or Medium pet."); else chooseSize(pet, kind); }}
           className={`rounded-xl border-2 p-3 text-sm font-semibold ${kind === "small" && tier !== "small" && tier !== "medium" ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400" : size === kind ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"}`}>
           {kind === "small" ? "Small Kennel" : "Big Kennel"}{kind === "small" && tier !== "small" && tier !== "medium" ? <span className="block text-xs">Small or Medium only</span> : null}
         </button>)}</div>
@@ -197,7 +198,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
         {rate && <><p className="mt-4 text-sm font-semibold">Optional boarding add-ons</p><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{addons.map((addon) => {
           const blocked = blockingReason(addon.name, nights, alreadyGroomedPetIds.includes(pet.id));
           const selected = s?.addonIds.includes(addon.id) ?? false;
-          return <button key={addon.id} type="button" disabled={!allowedAddons || !!blocked} title={blocked ?? undefined} onClick={() => toggle(pet, addon.id)}
+          return <button key={addon.id} type="button" aria-disabled={!allowedAddons || !!blocked} title={blocked ?? undefined} onClick={() => { if (!allowedAddons) setBlocker("Choose a valid boarding duration before adding extra services."); else if (blocked) setBlocker(`${addon.name}: ${blocked}`); else toggle(pet, addon.id); }}
             className={`rounded-xl border-2 p-3 text-left text-xs ${!allowedAddons || blocked ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400" : selected ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"}`}>
             <b>{addon.name}</b><span className="mt-1 block">{!allowedAddons ? "Enter duration" : blocked ? "Unavailable / Included" : `+₱${addonPrice(addon.id, pet).toLocaleString()}`}</span>
           </button>;
@@ -207,7 +208,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
     })}
     {pets.length > 1 && <section aria-label="Share one Big kennel" className="mt-6 rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
       <h3 className="text-lg font-bold text-emerald-900">Share One Big Kennel — Pay One Kennel Rate</h3>
-      <p className="mt-1 text-sm text-emerald-900">Choose compatible pets who will stay together. Allowed groups: <b>Small + Medium</b>, <b>Medium + Medium</b>, or <b>Small + Small + Small</b>. Two Small pets alone are not an eligible shared group.</p>
+      <p className="mt-1 text-sm text-emerald-900">Choose compatible pets who will stay together. Allowed groups: <b>Small + Small</b>, <b>Small + Medium</b>, <b>Medium + Medium</b>, or <b>Small + Small + Small</b>.</p>
       <p className="mt-2 text-xs text-emerald-800">First choose the <b>Big kennel</b> and <b>same package/duration</b> for every pet you want to share. Their add-ons stay individually priced.</p>
       <p className="mt-2 rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-xs leading-5 text-emerald-900"><b>One kennel, one base charge:</b> a 6-day / 5-night shared stay priced at ₱2,400 costs ₱2,400 total for the kennel, not ₱2,400 per pet (individual add-ons, if chosen, are extra). If one pet is collected earlier, staff can check out that pet separately; the remaining pet continues using the kennel until its scheduled pickup. An early pickup does not automatically reduce the agreed kennel price.</p>
       {selectedGroups.map(group => <div key={group[0].boardingShareGroupId} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white p-3 text-sm">
@@ -230,5 +231,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
     </section>}
     {combined ? <div className="mt-6 flex items-center justify-between gap-3"><button type="button" onClick={onBack} className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-semibold">Back to waiver</button><p className="text-xs text-zinc-500">{valid ? "Pick an available group date below ↓" : "Complete each pet to see availability."}</p></div>
       : <div className="mt-6 grid grid-cols-2 gap-3"><button onClick={onBack} className="rounded-full border border-zinc-300 py-3">Back</button><button disabled={!valid} onClick={() => { onChange(withSharedKennelPrices(selections.map(recalculate) as ShareSelection[],pricing)); onNext(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next: Boarding Dates</button></div>}
+    {blocker && <FeedbackDialog title="Boarding Selection Needs Attention" tone="warning" message={blocker} onClose={() => setBlocker(null)} />}
+    {error && <FeedbackDialog title="Could Not Load Boarding Services" message={error} onClose={() => setError(null)} />}
   </section>;
 }

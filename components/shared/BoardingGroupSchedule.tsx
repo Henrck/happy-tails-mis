@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
 import { useBookingClosures, manilaToday } from "@/lib/booking/use-booking-closures";
-import { checkBoardingGroup, fetchBoardingGroupMonth, type BoardingGroupPet, type BoardingGroupDay } from "@/lib/supabase/boarding-group-availability";
+import { checkBoardingGroup, fetchBoardingGroupMonth, type BoardingGroupPet, type BoardingGroupDay, fetchBoardingKennelCounts, type BoardingKennelCounts } from "@/lib/supabase/boarding-group-availability";
 import { hasValidBoardingDuration, isExtendedBoardingRate, parseExtendedBoardingNights } from "@/lib/booking/boarding-duration";
 import type { DraftPetSelection } from "@/lib/types/appointments";
 import type { PackagePricing } from "@/lib/types/services";
 import type { Kennel } from "@/lib/types/pet-services";
 import { shareGroups, type ShareSelection } from "@/lib/booking/boarding-share";
+import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 
 const BELONGINGS = ["Pet Bed", "Toys", "Cat Litter", "Leash/Collar", "Others"];
 const DAY_MS = 86_400_000;
@@ -68,6 +69,9 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const [checking, setChecking] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<BoardingKennelCounts | null>(null);
+  const [countsLoading, setCountsLoading] = useState(false);
+  const [countsError, setCountsError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [review, setReview] = useState(false);
   const [verified, setVerified] = useState<DraftPetSelection[]>([]);
@@ -86,6 +90,18 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
     nights: nightsFor(sel, pricing) ?? 0,
     share_group: (sel as ShareSelection).boardingShareGroupId ?? null,
   })), [petSelections, pricing]);
+  const longestStay = requirements.reduce((max, pet) => Math.max(max, pet.nights), 0);
+  useEffect(() => {
+    let active = true;
+    setCounts(null); setCountsError(null);
+    if (!date || !longestStay || !/^\d{2}:\d{2}$/.test(time)) { setCountsLoading(false); return; }
+    setCountsLoading(true);
+    void fetchBoardingKennelCounts(date, time, longestStay).then(({ counts: result, error: failure }) => {
+      if (!active) return;
+      setCounts(result); setCountsError(failure); setCountsLoading(false);
+    });
+    return () => { active = false; };
+  }, [date, time, longestStay, refresh]);
   const signature = JSON.stringify(requirements);
   const validDetails = petSelections.length > 0 && requirements.every((s, index) =>
     s.nights >= 1 && !!petSelections[index].packagePricingId && !!petSelections[index].boardingKennelSize &&
@@ -185,12 +201,12 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
     <div className="rounded-2xl border border-pink-100 bg-pink-50 p-4">
       <h2 className="text-lg font-bold text-brand-pink">Boarding Dates — Live Group Availability</h2><p className="mt-1 text-xs font-semibold text-zinc-500">Step 2 of 2 · Choose your drop-off day and review each pickup date</p>
       <p className="mt-1 text-sm text-zinc-700">The calendar checks all selected pets together. The current active capacity is {kennels.filter((k) => k.size === "small" && k.is_active !== false).length} Small and {kennels.filter((k) => k.size === "big" && k.is_active !== false).length} Big.</p>
-      <p className="mt-2 text-xs text-zinc-600"><b>Sharing rules:</b> One shared Big kennel holds Small + Medium, Medium + Medium, or three Small pets, only when the Share One Big Kennel option was selected in Details. A Large or larger pet uses one Big kennel alone. A Small kennel holds one Small or Medium pet.</p>
+      <p className="mt-2 text-xs text-zinc-600"><b>Sharing rules:</b> One shared Big kennel holds two Small pets, Small + Medium, Medium + Medium, or three Small pets, only when the Share One Big Kennel option was selected in Details. A Large or larger pet uses one Big kennel alone. A Small kennel holds one Small or Medium pet.</p>
     </div>
     <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">The calendar checks the <strong>entire stay</strong>, not just the arrival date. For example, arriving November 3 for six nights overlaps Big kennels reserved from November 5, so the date is unavailable. A stay that checks out before those reservations begin may still be available.</p>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_230px]">
       <BookingDayCalendar title="Group check-in" value={date} closures={boardingClosures}
-        availability={availability} unavailable={unavailable} groupMode
+        availability={availability} unavailable={unavailable} groupMode onBlocked={setError}
         capacityLoading={loading || checking || !validDetails} capacityError={loadError}
         onMonthChange={onMonthChange} onChange={(day) => { void choose(day); }}/>
       <div className="space-y-3 rounded-2xl border border-pink-100 bg-white p-4">
@@ -198,6 +214,17 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
           <input type="time" min="09:00" max="18:00" step={60} value={time} onChange={(e) => changeTime(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 p-3 text-sm"/>
         </label>
         <p className="text-xs leading-5 text-zinc-600">Pickup is calculated separately for each pet using the selected duration and the same arrival time.</p>
+        <div className="rounded-xl border border-pink-200 bg-pink-50 p-3" aria-live="polite">
+          <p className="text-sm font-bold text-zinc-800">Kennels available for your dates</p>
+          <p className="mt-1 text-[11px] leading-4 text-zinc-600">{date ? `${date} · ${longestStay} night${longestStay === 1 ? "" : "s"} from ${time} (entire longest selected stay)` : "Choose an available date to see live counts."}</p>
+          {date && (countsLoading ? <p className="mt-3 text-xs text-zinc-500">Checking active kennels…</p> : counts ?
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-white p-3 text-center"><span className="block text-xs text-zinc-600">Small kennels</span><strong className="text-xl text-brand-pink">{counts.small}</strong><span className="block text-[10px] text-zinc-500">of {counts.totalSmall} active</span></div>
+              <div className="rounded-lg bg-white p-3 text-center"><span className="block text-xs text-zinc-600">Big kennels</span><strong className="text-xl text-brand-pink">{counts.big}</strong><span className="block text-[10px] text-zinc-500">of {counts.totalBig} active</span></div>
+            </div> : <p className="mt-2 text-xs text-amber-800">{countsError ?? "Select a date to view available kennels."}</p>)}
+          <p className="mt-2 text-[11px] leading-4 text-zinc-500">Counts reflect existing reservations, before adding this booking. Final group allocation is checked again when saving.</p>
+        </div>
+
         {petSelections.map((s) => {
           const n = nightsFor(s, pricing);
           return <div key={s.pet.id} className="rounded-xl bg-slate-50 p-3 text-xs text-zinc-700">
@@ -210,7 +237,8 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
     </div>
     <div><p className="text-sm font-semibold text-zinc-800">Pet belongings (optional)</p><div className="mt-2 flex flex-wrap gap-2">{BELONGINGS.map((item) => <button key={item} type="button" onClick={() => onBelongingsChange(petBelongings.includes(item) ? petBelongings.filter((v) => v !== item) : [...petBelongings,item])} className={`rounded-full border px-3 py-2 text-xs font-semibold ${petBelongings.includes(item) ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-zinc-700"}`}>{item}</button>)}</div></div>
     <label className="block text-sm font-semibold text-zinc-800">Care instructions / special requests<textarea value={specialRequests} rows={3} onChange={(e) => onRequestsChange(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 bg-white p-3 text-sm"/></label>
-    {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+    {error && <FeedbackDialog title="Boarding Date Unavailable" tone="warning" message={error} onClose={() => setError(null)} />}
+    {loadError && <FeedbackDialog title="Could Not Check Boarding Calendar" message={loadError} onClose={() => setLoadError(null)} />}
     <div className="grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="rounded-full border border-pink-200 py-3 font-semibold text-brand-pink">Back</button><button type="button" disabled={!valid} onClick={() => { void confirm(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">{checking ? "Checking…" : "Review Schedule"}</button></div>
   </div>;
 }

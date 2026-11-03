@@ -13,6 +13,7 @@ import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg } from "@/lib/types/booking-leg";
+import { findDuplicatePetAddon } from "@/lib/booking/unique-pet-addons";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
 import CustomerServiceChoiceStep from "@/components/dashboard/booking/CustomerServiceChoiceStep";
 import BookingPetInformationStep from "@/components/dashboard/booking/BookingPetInformationStep";
@@ -45,6 +46,7 @@ export default function BookAppointmentPage() {
   const [packagesByService, setPackagesByService] = useState<Record<string, Package[]>>({});
   const [sizesByService, setSizesByService] = useState<Record<string, PetSize[]>>({});
   const [addonsByService, setAddonsByService] = useState<Record<string, Addon[]>>({});
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -56,12 +58,13 @@ export default function BookAppointmentPage() {
       setCustomer(customerRow);
       const { pets: petRows } = await fetchPetsByCustomer(user.id);
       setPets(petRows);
-      const [groomerResult, kennelResult, boardingAddonResult] = await Promise.all([
-        fetchGroomers({ activeOnly: true }), fetchKennels(), fetchAddonsByCategory("Boarding Add-ons"),
+      const [groomerResult, kennelResult, boardingAddonResult, alaCarteResult] = await Promise.all([
+        fetchGroomers({ activeOnly: true }), fetchKennels(), fetchAddonsByCategory("Boarding Add-ons"), fetchAddonsByCategory("Ala Carte"),
       ]);
       setGroomers(groomerResult.groomers);
       setKennels(kennelResult.kennels);
       setBoardingAddons(boardingAddonResult.addons);
+      setAddonsByService(prev => ({ ...prev, ala_carte: alaCarteResult.addons }));
       setLoading(false);
     }
     void load();
@@ -119,14 +122,16 @@ export default function BookAppointmentPage() {
   }
   function handleLegScheduleConfirmed(confirmedSelections?: DraftPetSelection[]) {
     if (!currentLeg) return;
-    // Only the grooming scheduler supplies a selections array. Do not allow a
-    // React click event to overwrite saved pet selections for other services.
     const selections = Array.isArray(confirmedSelections) ? confirmedSelections : currentLeg.petSelections;
     if (!selections.length || selections.some((selection) => !selection?.pet?.id)) {
       setStep("selection");
       return;
     }
-    setCompletedLegs((prev) => [...prev, { ...currentLeg, petSelections: selections }]); setCurrentLeg(null);
+    const updated = { ...currentLeg, petSelections: selections };
+    const proposed = [...completedLegs.filter(l => l.id !== currentLeg.id), updated];
+    const duplicate = findDuplicatePetAddon(proposed, addonsByService);
+    if (duplicate) { setDuplicateWarning(duplicate); setStep("selection"); return; }
+    setCompletedLegs(proposed); setCurrentLeg(null);
     if (queuedLegs.length > 0) startNextLeg(queuedLegs);
     else setStep("add-more");
   }
@@ -175,7 +180,7 @@ export default function BookAppointmentPage() {
           onRequestsChange={(text) => setCurrentLeg((leg) => leg && { ...leg, specialRequests: text })}
           onBack={() => setStep("waiver")} onConfirmed={(items) => handleLegScheduleConfirmed(items)} />}
         {step === "selection" && currentLeg?.serviceChoice === "ala_carte" && <AlaCarteSelectionStep
-          pets={legPets} selections={currentLeg.petSelections} onChange={handleLegSelectionChange}
+          pets={legPets} selections={currentLeg.petSelections} completedLegs={completedLegs} onChange={handleLegSelectionChange}
           onBack={() => setStep("waiver")} onNext={() => setStep("schedule")} />}
         {step === "selection" && isGrooming && currentLeg && <CustomerGroomingSelectionStep
           serviceType={currentLeg.serviceChoice as "grooming" | "dog_grooming" | "cat_grooming"}
@@ -192,11 +197,12 @@ export default function BookAppointmentPage() {
           onBack={() => setStep("selection")} onConfirmed={(items) => handleLegScheduleConfirmed(items)} /></div>}
         {step === "schedule" && currentLeg && currentLeg.serviceChoice === "ala_carte" && <div className="ht-booking-schedule"><CustomerGroomingScheduleStep
           customer={customer} ownerContact={customer.phone_number ?? ""} petSelections={currentLeg.petSelections}
-          groomers={groomers} scheduledDate={currentLeg.scheduledDate}
+          groomers={groomers} completedLegs={completedLegs} scheduledDate={currentLeg.scheduledDate}
           scheduledTime={currentLeg.scheduledTime} specialRequests={currentLeg.specialRequests}
           onDateChange={(date) => setCurrentLeg((l) => l && { ...l, scheduledDate: date })}
           onTimeChange={(time) => setCurrentLeg((l) => l && { ...l, scheduledTime: time })}
           onRequestsChange={(text) => setCurrentLeg((l) => l && { ...l, specialRequests: text })}
+          onSelectionsChange={handleLegSelectionChange}
           onBack={() => setStep("selection")} onConfirmed={() => handleLegScheduleConfirmed()} /></div>}
         {step === "add-more" && <AddAnotherServicePrompt eligibleServices={eligibleForMore}
           onAddService={handleServiceChosen} onDone={() => setStep("summary")} onBack={() => { const last = completedLegs[completedLegs.length - 1]; if (last) handleEditLeg(last.id); else setStep("service"); }} />}
@@ -206,5 +212,11 @@ export default function BookAppointmentPage() {
           onBack={() => setStep("add-more")} onEditLeg={handleEditLeg} />}
       </div>
     </div>
+    {duplicateWarning && <div role="alertdialog" aria-modal="true" aria-label="Duplicate pet service" className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"><h2 className="text-lg font-bold text-amber-800">Service Already Selected</h2>
+        <p className="mt-3 text-sm leading-relaxed text-zinc-700">{duplicateWarning}</p>
+        <button type="button" autoFocus onClick={() => setDuplicateWarning(null)} className="mt-5 w-full rounded-full bg-brand-pink px-5 py-2.5 font-semibold text-white">Review Selection</button>
+      </div>
+    </div>}
   </div>;
 }

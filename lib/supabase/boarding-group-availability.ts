@@ -6,6 +6,7 @@ export type BoardingGroupPet = {
   nights: number;
   share_group?: string | null;
 };
+export type BoardingKennelCounts = { small: number; big: number; totalSmall: number; totalBig: number };
 export type BoardingGroupDay = {
   day: string;
   available: boolean;
@@ -54,4 +55,29 @@ export async function fetchBoardingGroupMonth(month: string, time: string, pets:
     day: String(row.day), available: row.available,
     reason: typeof row.reason === "string" ? row.reason : null,
   })), error: null };
+}
+
+/** Physical kennels free throughout the longest selected stay, not just on arrival day.
+ * Shares and individual pets do not consume capacity until booking succeeds.
+ */
+export async function fetchBoardingKennelCounts(date: string, time: string, nights: number): Promise<{
+  counts: BoardingKennelCounts | null; error: string | null;
+}> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time) ||
+      !Number.isSafeInteger(nights) || nights < 1 || nights > 365) {
+    return { counts: null, error: "Choose valid arrival details to view kennel availability." };
+  }
+  const { data, error } = await createClient().rpc("happytails_boarding_available_kennel_counts", {
+    p_date: date, p_time: time, p_nights: nights,
+  });
+  if (error) return { counts: null, error: error.message };
+  const counts = data as Record<string, unknown> | null;
+  if (!counts || !["small", "big", "totalSmall", "totalBig"].every((key) =>
+    typeof counts[key] === "number" && Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0)) {
+    return { counts: null, error: "Kennel availability counts were not returned." };
+  }
+  return { counts: {
+    small: counts.small as number, big: counts.big as number,
+    totalSmall: counts.totalSmall as number, totalBig: counts.totalBig as number,
+  }, error: null };
 }

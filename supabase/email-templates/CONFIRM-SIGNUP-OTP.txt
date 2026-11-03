@@ -1,0 +1,17 @@
+Subject:
+{{ .Token }} is your HappyTails account verification code
+
+HTML:
+<h2>Verify your HappyTails account</h2>
+
+<p>Thank you for creating a HappyTails account.</p>
+
+<p>Enter the following 6-digit verification code on the HappyTails Sign Up verification page:</p>
+
+<p style="font-size: 32px; font-weight: 700; letter-spacing: 8px; margin: 24px 0;">
+  {{ .Token }}
+</p>
+
+<p>This code is used to verify your email address and complete your account registration. Do not share it with anyone.</p>
+
+<p>If you did not create a HappyTails account, you can safely ignore this email.</p>

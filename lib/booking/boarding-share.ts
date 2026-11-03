@@ -12,7 +12,7 @@ export function validShareGroup(selections: ShareSelection[]): boolean {
   if (![2, 3].includes(selections.length)) return false;
   const values = selections.map(s => tier(s.pet.size_label)).sort();
   const combo = values.join("+");
-  if (!(["medium+small", "medium+medium", "small+small+small"].includes(combo))) return false;
+  if (!(["small+small", "medium+small", "medium+medium", "small+small+small"].includes(combo))) return false;
   const first = selections[0];
   return selections.every(s => s.boardingKennelSize === "big" && s.packageId === first.packageId &&
     !!s.packagePricingId && s.packagePricingId === first.packagePricingId &&
@@ -27,7 +27,7 @@ export function shareGroups(selections: ShareSelection[]): ShareSelection[][] {
 }
 export function shareError(selections: ShareSelection[]): string | null {
   for (const group of shareGroups(selections)) {
-    if (!validShareGroup(group)) return "Shared Big kennels require Small + Medium, Medium + Medium, or 3 Small pets, with the same package and nights.";
+    if (!validShareGroup(group)) return "Shared Big kennels require 2 Small, Small + Medium, Medium + Medium, or 3 Small pets, with the same package and nights.";
   }
   return null;
 }

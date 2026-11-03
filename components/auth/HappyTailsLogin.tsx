@@ -47,6 +47,8 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
       setError("This account is inactive or archived. Please contact support.");
     } else if (params.get("access") === "unverified") {
       setError("Your account access could not be verified. Please retry or contact support.");
+    } else if (params.get("verified") === "1") {
+      setError(null);
     } else if (params.get("google_error") === "oauth") {
       setError("Google sign-in could not be completed. Please try again.");
     } else if (params.get("google_error") === "setup") {
@@ -196,6 +198,11 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
               {!busy && <ArrowRight aria-hidden="true" />}
             </button>
           </form>
+
+          {params.get("verified") === "1" && (
+            <p role="status" className="mt-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-center text-xs text-green-800">Email verified! Your HappyTails account is ready. Please log in.</p>
+          )}
+          <p className="mt-3 text-center text-[13px] text-zinc-600">New to HappyTails? <Link className="font-bold text-brand-pink underline underline-offset-2" href="/sign-up">Create an account</Link></p>
 
           <div className="ht-login-divider"><span>Or continue with</span></div>
           <button

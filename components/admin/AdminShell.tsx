@@ -11,7 +11,6 @@ export default function AdminShell({ children, role }: { children: React.ReactNo
   const [mobile, setMobile] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-
   useEffect(() => {
     const query = window.matchMedia("(max-width: 767px)");
     const sync = () => {
@@ -22,41 +21,36 @@ export default function AdminShell({ children, role }: { children: React.ReactNo
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
+  useEffect(() => { if (mobile) setSidebarOpen(false); }, [pathname, mobile]);
 
+  // The RPC validates the authenticated account and suppresses duplicate
+  // session-open events within 30 minutes; route navigations are not sign-ins.
   useEffect(() => {
-    if (mobile) setSidebarOpen(false);
-  }, [pathname, mobile]);
+    if (role !== "admin" && role !== "superadmin") return;
+    const db = createClient();
+    void db.rpc("happytails_staff_session_activity", { p_action: "Session opened" });
+  }, [role]);
 
   async function handleLogout() {
     setLogoutConfirmOpen(false);
     const supabase = createClient();
+    // Record before clearing the authenticated session. Do not prevent logout
+    // if audit logging is temporarily unavailable.
+    await supabase.rpc("happytails_staff_session_activity", { p_action: "Signed out" });
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
   }
 
-  return (
-    <div className="ht-admin-shell flex min-h-screen">
-      {mobile && sidebarOpen && (
-        <button type="button" className="ht-admin-backdrop" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />
-      )}
-      <div className={`ht-admin-navigation ${mobile && sidebarOpen ? "ht-admin-navigation-open" : ""}`}>
-        <AdminSidebar open={sidebarOpen} onToggle={() => setSidebarOpen((v) => !v)} onLogout={() => setLogoutConfirmOpen(true)} role={role} />
-      </div>
-      <main className="ht-admin-content flex-1 min-w-0 bg-[#FDF1F7] p-4 sm:p-6 md:p-8 overflow-y-auto">
-        {mobile && (
-          <div className="ht-admin-mobile-bar">
-            <button type="button" aria-label="Open navigation" onClick={() => setSidebarOpen(true)} className="ht-admin-menu-button">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-            </button>
-            <span className="font-semibold text-brand-pink">HappyTails {role === "admin" ? "Staff" : "Admin"}</span>
-          </div>
-        )}
-        {children}
-      </main>
-      {logoutConfirmOpen && (
-        <ConfirmDialog title="Log Out" message="Are you sure you want to log out?" confirmLabel="Log Out" danger onConfirm={handleLogout} onCancel={() => setLogoutConfirmOpen(false)} />
-      )}
+  return <div className="ht-admin-shell flex min-h-screen">
+    {mobile && sidebarOpen && <button type="button" className="ht-admin-backdrop" aria-label="Close navigation" onClick={() => setSidebarOpen(false)} />}
+    <div className={`ht-admin-navigation ${mobile && sidebarOpen ? "ht-admin-navigation-open" : ""}`}>
+      <AdminSidebar open={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} onLogout={() => setLogoutConfirmOpen(true)} role={role} />
     </div>
-  );
+    <main className="ht-admin-content flex-1 min-w-0 bg-[#FDF1F7] p-4 sm:p-6 md:p-8 overflow-y-auto">
+      {mobile && <div className="ht-admin-mobile-bar"><button type="button" aria-label="Open navigation" onClick={() => setSidebarOpen(true)} className="ht-admin-menu-button"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><span className="font-semibold text-brand-pink">HappyTails {role === "admin" ? "Staff" : "Admin"}</span></div>}
+      {children}
+    </main>
+    {logoutConfirmOpen && <ConfirmDialog title="Log Out" message="Are you sure you want to log out?" confirmLabel="Log Out" danger onConfirm={handleLogout} onCancel={() => setLogoutConfirmOpen(false)} />}
+  </div>;
 }
