@@ -1,30 +1,13 @@
 "use client";
-export default function InventoryTabs({
-  active,
-  onChange,
-}: {
+export default function InventoryTabs({ active, onChange }: {
   active: "products" | "stocks";
   onChange: (tab: "products" | "stocks") => void;
 }) {
-  const tabs: { key: "products" | "stocks"; label: string }[] = [
-    { key: "products", label: "Products" },
-    { key: "stocks", label: "Stocks" },
-  ];
-  return (
-    <div className="flex gap-2">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
-          className={`px-6 py-2 rounded-full text-sm font-semibold transition-colors ${
-            active === tab.key
-              ? "bg-brand-pink text-white"
-              : "bg-white border border-brand-pink text-brand-pink hover:bg-brand-tint"
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <div className="flex flex-wrap gap-2" role="tablist" aria-label="Inventory views">
+    {([ {key:"products",label:"Products"}, {key:"stocks",label:"Logs"}] as const).map(tab =>
+      <button key={tab.key} type="button" role="tab" aria-selected={active===tab.key}
+        onClick={()=>onChange(tab.key)} className={`min-h-10 rounded-full px-5 py-2 text-sm font-semibold transition-colors ${active===tab.key?"bg-brand-pink text-white":"border border-brand-pink bg-white text-brand-pink hover:bg-brand-tint"}`}>
+        {tab.label}
+      </button>)}
+  </div>;
 }
