@@ -20,6 +20,11 @@ const feedback:Record<ActionResult["action"],{title:string;description:string;co
  cancelled:{title:"Appointment Cancelled",description:"The appointment has been cancelled and the reason has been saved.",color:"text-rose-600 bg-rose-50"},
  verified:{title:"Weight & Price Verified",description:"The verified weight and customer-approved price have been saved.",color:"text-emerald-600 bg-emerald-50"},
 };
+function manilaToday():string {
+ const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Manila",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+ const part=(key:string)=>parts.find(item=>item.type===key)?.value??"";
+ return `${part("year")}-${part("month")}-${part("day")}`;
+}
 function Field({label,value}:{label:string;value:React.ReactNode}){return <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-1 text-sm"><span className="text-zinc-500">{label}</span><span className="min-w-0 break-words font-medium text-zinc-800">{value||"—"}</span></div>}
 function Section({title,children}:{title:string;children:React.ReactNode}){return <section className="rounded-2xl border border-pink-100 bg-white p-4"><h4 className="mb-3 text-sm font-bold text-brand-pink">{title}</h4>{children}</section>}
 
@@ -55,6 +60,11 @@ export default function AppointmentDetailModal({appointment,onClose,onUpdateStat
  const [result,setResult]=useState<ActionResult|null>(null);
  const onlineGrooming=!appointment.is_walk_in&&(appointment.service_type==="dog_grooming"||appointment.service_type==="cat_grooming");
  const [verified,setVerified]=useState(false),[checking,setChecking]=useState(onlineGrooming),[weightError,setWeightError]=useState<string|null>(null);
+ // Philippine date is the authoritative calendar date used for check-in.
+ // Refresh while the modal is open so midnight changes the button state.
+ const [today,setToday]=useState(manilaToday);
+ useEffect(()=>{const timer=window.setInterval(()=>setToday(manilaToday()),30000);const update=()=>setToday(manilaToday());window.addEventListener("focus",update);return()=>{window.clearInterval(timer);window.removeEventListener("focus",update)}},[]);
+ const scheduledToday=appointment.scheduled_date===today;
  useEffect(()=>{if(!onlineGrooming)return;let active=true;setChecking(true);void createClient().rpc("happytails_online_grooming_ready_for_checkin",{p_appointment_id:appointment.id}).then(({data,error})=>{if(!active)return;setVerified(!error&&data===true);setWeightError(error?.message??null);setChecking(false)});return()=>{active=false}},[onlineGrooming,appointment.id,result]);
  useEffect(()=>{let active=true;if(appointment.status!=="cancelled")return;void fetchStaffCancellationDetails(appointment.id).then(r=>{if(active)setRecord(r)}).catch(()=>{});return()=>{active=false}},[appointment.id,appointment.status]);
  async function refreshQuietly(){try{await onRefresh?.()}catch{ /* The mutation was confirmed by its API: a refresh issue must not report it as failed. */ }}
@@ -85,8 +95,6 @@ export default function AppointmentDetailModal({appointment,onClose,onUpdateStat
  async function checkedIn(){
   setCheckIn(false);setBusy(true);setError(null);
   try{
-   // The legacy check-in helper can report success when the final UPDATE
-   // touches zero rows. Confirm the saved status before showing success.
    const fresh=await fetchAppointmentDetail(appointment.id);
    if(fresh.error||fresh.row?.status!=="checked_in"){
     setError("Check-in could not be verified. Refresh the appointment and check its status before trying again.");
@@ -99,8 +107,6 @@ export default function AppointmentDetailModal({appointment,onClose,onUpdateStat
   finally{setBusy(false)}
  }
  async function verifiedOnlineGrooming(petName:string){
-  // Weight verification is NOT check-in. Previously this callback closed the
-  // appointment details, making the action look like it did nothing.
   await refreshQuietly();
   setResult({action:"verified",petName});
  }
@@ -128,10 +134,11 @@ export default function AppointmentDetailModal({appointment,onClose,onUpdateStat
      </div></div>
      <Section title="Appointment Actions">
       {error&&!cancelOpen&&<p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {appointment.status==="confirmed"&&!scheduledToday&&<p role="status" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Check-in is available only on the scheduled date. This appointment is scheduled for <strong>{appointment.scheduled_date}</strong>; today in Philippine time is <strong>{today}</strong>. Reschedule the appointment if a different check-in date is needed.</p>}
       {onlineGrooming&&appointment.status==="confirmed"&&!verified&&<p className="mb-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">{checking?"Verifying pet weight…":weightError??"Check-in requires verified pet weight and price."}</p>}
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
        <button type="button" disabled={busy||nextValidStatus(appointment.status)!=="confirmed"} onClick={()=>void update("confirmed")} className="rounded-full border-2 border-blue-400 p-3 text-sm font-semibold text-blue-600 disabled:opacity-40">{busy?"Please wait…":"Confirm"}</button>
-       <button type="button" disabled={busy||appointment.status!=="confirmed"||(onlineGrooming&&(!verified||checking))} onClick={()=>setCheckIn(true)} className="rounded-full border-2 border-violet-400 p-3 text-sm font-semibold text-violet-600 disabled:opacity-40">Check In</button>
+       <button type="button" disabled={busy||appointment.status!=="confirmed"||!scheduledToday||(onlineGrooming&&(!verified||checking))} onClick={()=>{if(!scheduledToday){setError("Check-in is allowed only on the scheduled date in Philippine time.");return;}setCheckIn(true);}} className="rounded-full border-2 border-violet-400 p-3 text-sm font-semibold text-violet-600 disabled:opacity-40">Check In</button>
        <button type="button" disabled={busy||nextValidStatus(appointment.status)!=="completed"} onClick={()=>void update("completed")} className="rounded-full border-2 border-green-500 p-3 text-sm font-semibold text-green-600 disabled:opacity-40">Complete</button>
        <button type="button" disabled={busy||!cancellable} onClick={()=>{setError(null);setCancelOpen(true)}} className="rounded-full border-2 border-red-400 p-3 text-sm font-semibold text-red-600 disabled:opacity-40">Cancel</button>
       </div>
@@ -147,7 +154,7 @@ export default function AppointmentDetailModal({appointment,onClose,onUpdateStat
    {error&&<p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
    <div className="mt-5 grid grid-cols-2 gap-3"><button disabled={busy} type="button" onClick={()=>setCancelOpen(false)} className="rounded-full border border-zinc-300 py-3 disabled:opacity-40">Back</button><button disabled={busy||effective.length<5||effective.length>500} type="button" onClick={()=>void cancelled()} className="rounded-full bg-red-600 py-3 font-semibold text-white disabled:opacity-40">{busy?"Cancelling…":"Confirm Cancellation"}</button></div>
   </div></div>}
-  {checkIn&&<CheckInAssignmentModal appointment={appointment} onClose={()=>setCheckIn(false)} onSuccess={checkedIn}/>}
+  {checkIn&&scheduledToday&&<CheckInAssignmentModal appointment={appointment} onClose={()=>setCheckIn(false)} onSuccess={checkedIn}/>}
   {result&&<ActionSuccessDialog result={result} appointment={appointment} onReview={()=>setResult(null)} onDone={onClose}/>}
  </>;
 }

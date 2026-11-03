@@ -1,0 +1,149 @@
+/* HappyTails: targeted Website Management + Service Management responsive fixes.
+   This file is additive and does not change desktop behavior or database actions. */
+.ht-website-management,
+.ht-service-management {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  /* The heading was a flex:1 sibling of three long actions. On narrow screens
+     it shrank down to 1-2 characters per line. Reserve a complete row. */
+  .ht-website-management h1 {
+    flex: 0 0 100% !important;
+    inline-size: 100% !important;
+    min-inline-size: 0 !important;
+    max-inline-size: 100%;
+    overflow-wrap: normal !important;
+    word-break: normal !important;
+    white-space: normal;
+    line-height: 1.2;
+    margin-bottom: .25rem;
+  }
+
+  /* First content toolbar: leave each action room to breathe and wrap labels
+     instead of making adjacent buttons force the title into a thin column. */
+  .ht-website-management div.flex.flex-wrap:has(> h1) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+    gap: .65rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .ht-website-management div.flex.flex-wrap:has(> h1) > h1 {
+    grid-column: 1 / -1;
+  }
+  .ht-website-management div.flex.flex-wrap:has(> h1) > :is(a, button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-align: center;
+    padding-inline: .7rem;
+  }
+  .ht-website-management div.flex.flex-wrap:has(> h1) > :is(a, button):last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* The Website preview remains horizontally scrollable only within itself. */
+  .ht-website-management > div,
+  .ht-website-management div:has(> h1) { min-width: 0; max-width: 100%; }
+
+  /* Size Guide: display each row as a compact card, with all three actions
+     exposed; no horizontal panning to reach Archive or Edit. */
+  .ht-service-management .ht-size-guide-table {
+    overflow: visible !important;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+  .ht-service-management .ht-size-guide-table table,
+  .ht-service-management .ht-size-guide-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+  .ht-service-management .ht-size-guide-table thead { display: none; }
+  .ht-service-management .ht-size-guide-table tbody {
+    display: grid;
+    gap: .75rem;
+    background: transparent;
+  }
+  .ht-service-management .ht-size-guide-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .4rem .8rem;
+    min-width: 0;
+    padding: .75rem;
+    border: 1px solid #fbcfe8;
+    border-radius: 1rem;
+    background: #fff;
+  }
+  .ht-service-management .ht-size-guide-table tbody td {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: .25rem;
+    overflow-wrap: anywhere;
+    white-space: normal !important;
+  }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(1)::before,
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(2)::before,
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(3)::before {
+    font-size: .7rem;
+    font-weight: 700;
+    color: #71717a;
+    margin-bottom: .2rem;
+  }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(1)::before { content: "Size"; }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(2)::before { content: "Weight range"; }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(3)::before { content: "Status"; }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(4) {
+    grid-column: 1 / -1;
+    padding-top: .65rem;
+    margin-top: .3rem;
+    border-top: 1px solid #fce7f3;
+  }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(4) > div {
+    flex-wrap: wrap;
+    width: 100%;
+    gap: .5rem;
+  }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(4) button {
+    min-height: 44px;
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+  .ht-service-management .ht-size-guide-table tbody td:nth-child(4) button:nth-child(2) {
+    padding: .5rem 1rem;
+  }
+  .ht-service-management .ht-size-guide-table tbody td[colspan] {
+    grid-column: 1 / -1;
+    display: block;
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .ht-website-management div.flex.flex-wrap:has(> h1) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ht-website-management div.flex.flex-wrap:has(> h1) > :is(a, button),
+  .ht-website-management div.flex.flex-wrap:has(> h1) > h1 {
+    grid-column: 1;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* On tablets keep the original table and allow local horizontal scrolling. */
+  .ht-service-management .ht-size-guide-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ht-service-management .ht-size-guide-table table { min-width: 650px; }
+}
