@@ -4,9 +4,10 @@ import { COMMON_BREEDS } from "@/lib/data/breed-suggestions";
 import type { Species, Sex } from "@/lib/types/appointments";
 import type { PetSize } from "@/lib/types/services";
 import { getActiveSizeGuide, matchPetSize, validatePetInput } from "@/lib/utils/pet-size-guide";
+import type { VaccinationStatus } from "@/lib/utils/pet-vaccination";
 
-export type CustomerPetForm = { name: string; species: Species; breed: string; weight: string; age: string; sex: Sex | "" };
-export const blankCustomerPet: CustomerPetForm = { name: "", species: "Dog", breed: "", weight: "", age: "", sex: "" };
+export type CustomerPetForm = { name: string; species: Species; breed: string; weight: string; age: string; sex: Sex | ""; vaccination_status: VaccinationStatus };
+export const blankCustomerPet: CustomerPetForm = { name: "", species: "Dog", breed: "", weight: "", age: "", sex: "", vaccination_status: "not_sure" };
 
 export function useCustomerPetForm(initial = blankCustomerPet) {
   const [form, setForm] = useState<CustomerPetForm>(initial);
@@ -70,6 +71,15 @@ export function CustomerPetFields({ state }: { state: ReturnType<typeof useCusto
     </div>
     <label>{title("Weight (KG)", false)}<input className={cls} type="number" min="0.01" step="0.01" placeholder="e.g. 7.5" value={form.weight} onChange={(e) => setField("weight", e.target.value)} aria-invalid={!!errors.weight} />{feedback("weight")}</label>
     <label>{title("Age (years)", false)}<input className={cls} type="number" min="0" max="100" step="1" placeholder="e.g. 2" value={form.age} onChange={(e) => setField("age", e.target.value)} aria-invalid={!!errors.age} />{feedback("age")}</label>
+    <div className="sm:col-span-2">
+      <label htmlFor="customer-pet-vaccination" className="block text-sm font-semibold text-zinc-700">Vaccination status <span className="text-red-500" aria-hidden="true">*</span></label>
+      <select id="customer-pet-vaccination" value={form.vaccination_status} onChange={(e) => setField("vaccination_status", e.target.value as VaccinationStatus)} className={cls}>
+        <option value="vaccinated">Vaccinated</option>
+        <option value="not_vaccinated">Not Vaccinated</option>
+        <option value="not_sure">Not Sure</option>
+      </select>
+      <p className="mt-1 text-xs text-zinc-500">Customer-reported status only. If unsure, select Not Sure. You can edit this later in your pet's profile.</p>
+    </div>
     <div className="sm:col-span-2 rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm">
       <span className="font-semibold text-zinc-700">Size Identifier: </span>
       <span className="font-bold text-brand-pink">{!form.weight.trim() ? "To be measured at the shop" : loadingGuide ? "Loading guide…" : size ? size.label : "Not determined"}</span>

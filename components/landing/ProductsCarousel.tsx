@@ -49,17 +49,13 @@ export default function ProductsCarousel({ products }: { products: Product[] }) 
   return (
     <section
       id="products"
-      className="bg-brand-pink py-8 md:py-9 lg:py-10"
+      className="bg-brand-pink pb-8 pt-4 md:pb-9 md:pt-4 lg:pb-10 lg:pt-5"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
       <div className="site-container">
-        <h2 className="text-center text-2xl font-bold text-white md:text-3xl">Our Products</h2>
-        <p className="mt-2 text-center text-sm text-white/90 md:text-base">
-          Browse what&apos;s available at our shop — visit us in person to purchase
-        </p>
-
-        <div className="mt-4">
+        {/* The editable title and description are rendered once by LandingTextSection. */}
+        <div>
           <CategoryTabs active={category} onChange={changeCategory} />
         </div>
 

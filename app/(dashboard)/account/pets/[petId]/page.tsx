@@ -6,12 +6,12 @@ import { fetchPetsByCustomer } from "@/lib/supabase/appointments";
 import { setCustomerPetArchived } from "@/lib/supabase/customer-pet-archive";
 import { editCustomerPet } from "@/lib/utils/pet-size-guide";
 import type { Pet } from "@/lib/types/appointments";
-import { CustomerPetFields, useCustomerPetForm } from "@/components/dashboard/CustomerPetFields";
+import { CustomerPetFields, useCustomerPetForm, blankCustomerPet, type CustomerPetForm } from "@/components/dashboard/CustomerPetFields";
 import { usePetAvatarSettings } from "@/lib/hooks/usePetAvatarSettings";
 import { resolvePetAvatar } from "@/lib/utils/pet-avatar";
 import PetServiceHistory from "@/components/shared/PetServiceHistory";
 
-type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null };
+type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null; vaccination_status?: CustomerPetForm["vaccination_status"] | null };
 export default function PetDetailPage() {
   const params = useParams<{petId:string}>();
   const router = useRouter();
@@ -36,7 +36,7 @@ export default function PetDetailPage() {
         if(!active)return;
         const row=(pets.find(p=>p.id===params.petId)??null) as PetWithWeight|null;
         setPet(row);
-        if(row)state.setForm({name:row.name,species:row.species,breed:row.breed,weight:row.weight_kg==null?"":String(row.weight_kg),sex:row.sex??"",age:row.age==null?"":String(row.age)});
+        if(row)state.setForm({...blankCustomerPet,vaccination_status:row.vaccination_status ?? blankCustomerPet.vaccination_status,name:row.name,species:row.species,breed:row.breed,weight:row.weight_kg==null?"":String(row.weight_kg),sex:row.sex??"",age:row.age==null?"":String(row.age)});
       } catch(e) {
         if(active)setMessage(e instanceof Error?e.message:"Unable to load pet details.");
       } finally {if(active)setLoading(false);}
@@ -52,13 +52,15 @@ export default function PetDetailPage() {
     const {form,size}=state;
     const keepLegacySize=!form.weight.trim()&&form.species===pet.species;
     try {
-      const {data,error}=await editCustomerPet(pet.id,{
+      const changes = {
         name:form.name.trim(),species:form.species,breed:form.breed.trim(),
+        vaccination_status: form.vaccination_status,
         size_label:size?.label??(keepLegacySize?pet.size_label:"Unclassified"),
         pet_size_id:size?.id??(keepLegacySize?pet.pet_size_id??null:null),
         weight_kg:form.weight.trim()?Number(form.weight):null,
         sex:form.sex||null,age:form.age.trim()?Number(form.age):null,
-      });
+      };
+      const {data,error}=await editCustomerPet(pet.id,changes);
       if(error)throw new Error(error.message);
       const saved=Array.isArray(data)?data[0]:null;
       if(!saved)throw new Error("The database did not confirm the update. Please try again.");

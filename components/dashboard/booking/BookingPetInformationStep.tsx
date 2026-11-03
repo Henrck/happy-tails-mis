@@ -6,6 +6,7 @@ import type { Customer } from "@/lib/types/users";
 import BookingPetCard from "./BookingPetCard";
 import AddPetModal from "./AddPetModal";
 import WalkInPetProfileModal from "@/components/admin/pos/walk-in/WalkInPetProfileModal";
+import PetSizeEstimateModal, { needsPetSizeEstimate } from "./PetSizeEstimateModal";
 
 export default function BookingPetInformationStep({ customer, pets, onPetsChange, selectedIds, onSelectionChange, onBack, onNext }: {
   customer: Customer; pets: Pet[]; onPetsChange: (pets: Pet[]) => void; selectedIds: string[];
@@ -13,6 +14,8 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
 }) {
   const [profilePet, setProfilePet] = useState<Pet | null>(null);
   const [addingPet, setAddingPet] = useState(false);
+  const [estimating, setEstimating] = useState<Pet | null>(null);
+  const [sizeReview, setSizeReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pageSize = 4;
   const [page, setPage] = useState(1);
@@ -24,17 +27,38 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
   useEffect(() => { setPage(current => Math.min(current, pageCount)); }, [pageCount]);
   useEffect(() => {
     if (selectedIds.some(id => !activeIds.has(id))) onSelectionChange(selectedIds.filter(id => activeIds.has(id)));
-  // Only trim selections when the active pet IDs change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only trim selections when the active pet IDs change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePets.map(p => p.id).join("|")]);
   const shownPets = activePets.slice((page - 1) * pageSize, page * pageSize);
   const toggle = (id: string) => { onSelectionChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedActiveIds,id]); setError(null); };
   const selectAll = () => { onSelectionChange(activePets.map(p => p.id)); setError(null); };
   const clearAll = () => { onSelectionChange([]); setError(null); };
+  const unknown = activePets.filter(p => selectedActiveIds.includes(p.id) && needsPetSizeEstimate(p));
+  useEffect(() => {
+    if (sizeReview && !estimating && selectedActiveIds.length && unknown.length === 0) {
+      setSizeReview(false); onNext();
+    }
+    // Advance only after updated pet data has reached the parent and rerendered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizeReview, estimating, pets]);
+  function advance() {
+    if (!selectedActiveIds.length) { setError("Select at least one active pet to continue."); return; }
+    if (unknown.length) { setSizeReview(true); setEstimating(unknown[0]); return; }
+    setError(null); onNext();
+  }
+  function saveEstimate(updated: Pet) {
+    const nextPets = pets.map(p => p.id === updated.id ? updated : p);
+    onPetsChange(nextPets);
+    const pending = nextPets.filter(p => selectedActiveIds.includes(p.id) && needsPetSizeEstimate(p));
+    if (pending.length) { setEstimating(pending[0]); return; }
+    setEstimating(null);
+    if (sizeReview) setError(null);
+  }
   return <section className="ht-pet-choice flex flex-col">
     <header className="text-center"><span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-pink-50 text-brand-pink"><PawPrint size={23}/></span>
       <h2 className="mt-3 text-2xl font-bold text-slate-800">Choose Your Pet</h2>
-      <p className="mt-1 text-sm text-slate-500">Select one or more active pets for this appointment. Archived pets can be restored in My Pets.</p>
+      <p className="mt-1 text-sm text-slate-500">Select one or more active pets. If a pet has no size yet, you can estimate it here without waiting for staff.</p>
     </header>
     <div className="mt-5 flex items-center justify-between gap-3"><p className="text-sm font-bold text-slate-800">Your active pets <span className="ml-1 text-xs font-medium text-slate-400">({activePets.length})</span></p>
       <button type="button" onClick={() => setAddingPet(true)} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-brand-pink px-4 text-xs font-semibold text-brand-pink hover:bg-pink-50"><Plus size={15}/> Add New Pet</button>
@@ -56,12 +80,14 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
       <button type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:opacity-40">Next</button>
       <span className="w-full text-center text-xs text-slate-500">Showing {(page - 1) * pageSize + 1}–{Math.min(activePets.length, page * pageSize)} of {activePets.length} pets</span>
     </nav>}
+    {unknown.length > 0 && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{unknown.length} selected pet{unknown.length === 1 ? " needs" : "s need"} a size estimate for service pricing and kennel safety. You can continue after estimating; no exact weight or staff assistance is required.</p>}
     {error && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
     <div className="mt-5 grid grid-cols-2 gap-3 border-t border-pink-100 pt-5">
       <button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border-2 border-pink-200 text-sm font-semibold text-brand-pink"><ArrowLeft size={16}/> Back</button>
-      <button type="button" disabled={selectedActiveIds.length === 0} onClick={() => selectedActiveIds.length ? (setError(null),onNext()) : setError("Select at least one active pet to continue.")} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Next <ArrowRight size={16}/></button>
+      <button type="button" disabled={selectedActiveIds.length === 0} onClick={advance} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Next <ArrowRight size={16}/></button>
     </div>
     {profilePet && <WalkInPetProfileModal pet={profilePet} owner={customer} onClose={() => setProfilePet(null)}/>}
     {addingPet && <AddPetModal customerId={customer.id} onClose={() => setAddingPet(false)} onAdded={(pet) => {onPetsChange([...pets,pet]);onSelectionChange([...selectedActiveIds,pet.id]);setAddingPet(false);setPage(Math.ceil((activePets.length + 1) / pageSize));}}/>}
+    {estimating && <PetSizeEstimateModal key={estimating.id} pet={estimating} onSaved={saveEstimate} onCancel={() => { setEstimating(null); setSizeReview(false); }} />}
   </section>;
 }

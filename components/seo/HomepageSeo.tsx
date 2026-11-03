@@ -1,6 +1,5 @@
-// Homepage-only business/site structured data and a useful, crawlable page heading.
-// Keep these facts in sync with the published homepage Footer and actual business details.
-// Do not add review ratings, business hours, social profiles, or extra branches until verified.
+// Homepage-only structured data. Keep this in sync with the public site.
+// Google chooses the displayed site name automatically; these are preferences.
 import { SITE_URL } from '@/lib/seo';
 
 const BUSINESS_NAME = 'Happy Tails Pet Grooming Cafe';
@@ -13,7 +12,7 @@ const structuredData = {
       '@id': `${SITE_URL}/#website`,
       url: `${SITE_URL}/`,
       name: BUSINESS_NAME,
-      alternateName: 'Happy Tails',
+      alternateName: ['HappyTails PGC', 'happytailspgc.vercel.app'],
       inLanguage: 'en-PH',
       publisher: { '@id': `${SITE_URL}/#business` },
     },
@@ -40,7 +39,6 @@ const structuredData = {
   ],
 };
 
-// Prevent untrusted future text from ending the <script> tag if this is made dynamic.
 const jsonLd = JSON.stringify(structuredData).replace(/</g, '\\u003c');
 
 export default function HomepageSeo() {

@@ -1,5 +1,5 @@
-// Site footer — contact info + logo, matching the design and using the
-// exact contact details Josh provided.
+// Existing public footer; exclude navigation/contact text from Google snippets
+// without hiding content from customers or changing links.
 import Image from "next/image";
 
 export default function Footer() {
@@ -14,7 +14,7 @@ export default function Footer() {
           className="w-24 h-auto md:w-28 shrink-0"
         />
 
-        <div className="text-center md:text-left">
+        <div data-nosnippet className="text-center md:text-left">
           <h3 className="font-bold text-zinc-800">Navigation</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-zinc-700">
             <li><a href="/" className="hover:text-brand-pink">Home</a></li>
@@ -23,7 +23,7 @@ export default function Footer() {
           </ul>
         </div>
 
-        <div className="text-center md:text-left">
+        <div data-nosnippet className="text-center md:text-left">
           <h3 className="font-bold text-zinc-800">Contact Us</h3>
           <ul className="mt-2 space-y-2 text-sm text-zinc-700">
             <li className="flex items-center gap-2 justify-center md:justify-start">

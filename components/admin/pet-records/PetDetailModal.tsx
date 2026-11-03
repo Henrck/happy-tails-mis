@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { CustomerPetFields, useCustomerPetForm } from "@/components/dashboard/CustomerPetFields";
+import { CustomerPetFields, useCustomerPetForm, blankCustomerPet, type CustomerPetForm } from "@/components/dashboard/CustomerPetFields";
 import type { Pet } from "@/lib/types/appointments";
 import SpeciesIcon from "./SpeciesIcon";
 import PetServiceHistory from "@/components/shared/PetServiceHistory";
 
-type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null };
+type PetWithWeight = Pet & { weight_kg?: number | null; pet_size_id?: string | null; vaccination_status?: CustomerPetForm["vaccination_status"] | null };
 
 export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddress, onClose, onUpdated }: {
   pet: Pet; ownerName: string | null; ownerContact: string | null; ownerAddress: string | null;
@@ -15,6 +15,8 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
 }) {
   const initial = pet as PetWithWeight;
   const fields = useCustomerPetForm({
+    ...blankCustomerPet,
+    vaccination_status: initial.vaccination_status ?? blankCustomerPet.vaccination_status,
     name: pet.name, species: pet.species, breed: pet.breed,
     weight: initial.weight_kg == null ? "" : String(initial.weight_kg),
     age: pet.age == null ? "" : String(pet.age), sex: pet.sex ?? "",
@@ -34,6 +36,8 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
 
   function cancel() {
     fields.setForm({
+      ...blankCustomerPet,
+      vaccination_status: displayPet.vaccination_status ?? blankCustomerPet.vaccination_status,
       name: displayPet.name, species: displayPet.species, breed: displayPet.breed,
       weight: displayPet.weight_kg == null ? "" : String(displayPet.weight_kg),
       age: displayPet.age == null ? "" : String(displayPet.age), sex: displayPet.sex ?? "",
@@ -51,6 +55,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
     const keepLegacySize = !form.weight.trim() && form.species === displayPet.species;
     const changes = {
       name: form.name.trim(), breed: form.breed.trim(), species: form.species,
+      vaccination_status: form.vaccination_status,
       age: form.age.trim() ? Number(form.age) : null,
       sex: form.sex || null,
       weight_kg: form.weight.trim() ? Number(form.weight) : null,

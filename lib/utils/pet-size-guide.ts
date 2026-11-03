@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import type { PetSize } from "@/lib/types/services";
 import type { Species } from "@/lib/types/appointments";
+import type { VaccinationStatus } from "@/lib/utils/pet-vaccination";
 
 // HappyTails grooming pricing policy (not a universal veterinary classification).
 // Use only the shop's existing Small/Large cat tier IDs; no database changes.
@@ -70,18 +71,17 @@ export function validatePetInput(form: { name: string; species: Species; breed: 
   return errors;
 }
 
-// The customer-specific save path includes the new columns without changing
-// existing walk-in or appointment APIs.
 export async function insertCustomerPet(input: {
   customer_id: string; name: string; species: Species; breed: string;
   size_label: string; weight_kg: number | null; pet_size_id: string | null;
-  age: number | null; sex: "Male" | "Female" | null;
+  age: number | null; sex: "Male" | "Female" | null; vaccination_status: VaccinationStatus;
 }) {
   return createClient().from("pets").insert(input).select().single();
 }
 export async function editCustomerPet(id: string, input: {
   name: string; species: Species; breed: string; size_label: string;
   weight_kg: number | null; pet_size_id: string | null; age: number | null; sex: "Male" | "Female" | null;
+  vaccination_status: VaccinationStatus;
 }) {
   const { data, error } = await createClient().from("pets").update(input).eq("id", id).select();
   if (error) return { data, error };

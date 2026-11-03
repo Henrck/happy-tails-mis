@@ -22,6 +22,7 @@ export default function AddPetModal({ customerId, onClose, onAdded }: { customer
       customer_id: customerId, name: form.name.trim(), species: form.species,
       breed: form.breed.trim(), size_label: size?.label ?? "Unclassified", weight_kg: form.weight.trim() ? Number(form.weight) : null,
       pet_size_id: size?.id ?? null, age: form.age.trim() ? Number(form.age) : null, sex: form.sex || null,
+      vaccination_status: form.vaccination_status,
     });
     setSaving(false);
     if (saveError || !data) { setError(saveError?.message ?? "Unable to add pet."); return; }
