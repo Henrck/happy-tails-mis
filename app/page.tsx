@@ -14,6 +14,8 @@ import BranchesCarousel from '@/components/landing/BranchesCarousel';
 import DynamicAbout from '@/components/landing/DynamicAbout';
 import Gallery from '@/components/landing/Gallery';
 import Footer from '@/components/landing/Footer';
+import FAQSection from '@/components/landing/FAQSection';
+import { FAQ_TEXT_KEY, parseFAQs } from '@/lib/website/faq';
 import HomepageSeo from '@/components/seo/HomepageSeo';
 import { PoliciesModalProvider } from '@/components/landing/PoliciesModalContext';
 import PoliciesModal from '@/components/landing/PoliciesModal';
@@ -108,6 +110,7 @@ export default async function Home() {
         <LandingTextSection tone="pink" heading={copy('products_heading', text)} subheading={copy('products_subheading', text)}><ProductsCarousel products={(productsResult.data ?? []) as Product[]} /></LandingTextSection>
         <BranchesCarousel branches={branches} />
         <DynamicAbout backgroundUrl={get('about_us_background')?.image_url} heading={copy('about_heading', text)} description={copy('about_description', text)} />
+        <FAQSection items={parseFAQs(text[FAQ_TEXT_KEY])} />
       </main>
       <Footer />
       <PoliciesModal />

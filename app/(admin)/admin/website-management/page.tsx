@@ -27,6 +27,8 @@ import DynamicAbout from "@/components/landing/DynamicAbout";
 import Gallery from "@/components/landing/Gallery";
 import { PoliciesModalProvider } from "@/components/landing/PoliciesModalContext";
 import PoliciesModal from "@/components/landing/PoliciesModal";
+import FAQSection from "@/components/landing/FAQSection";
+import { FAQ_TEXT_KEY, parseFAQs } from "@/lib/website/faq";
 import type { Product } from "@/lib/types/products";
 import { copy, type WebsiteService } from "@/lib/website/catalog";
 import type { PublicPricingCatalog } from "@/lib/landing/public-pricing";
@@ -149,6 +151,7 @@ export default function WebsiteManagementPage() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="min-w-0 flex-1 text-2xl font-bold text-brand-pink sm:text-3xl">Website Management</h1>
           <Link href="/admin/website-management/login" className="inline-flex min-h-11 items-center justify-center rounded-full border-2 border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint">Login Configuration</Link>
+          <Link href="/admin/website-management/faqs" className="inline-flex min-h-11 items-center justify-center rounded-full border-2 border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint">Manage FAQs</Link>
           <button type="button" onClick={() => setManagePetAvatars(true)} className="min-h-11 rounded-full border-2 border-brand-pink bg-white px-4 py-2 text-sm font-semibold text-brand-pink hover:bg-brand-tint">Configure Pet Avatars</button>
           <button type="button" onClick={() => setEditMode((v) => !v)} className={`min-h-11 rounded-full border-2 px-5 py-2 text-sm font-semibold ${editMode ? "border-brand-pink bg-brand-pink text-white" : "border-brand-pink text-brand-pink"}`}>{editMode ? "Done Editing" : "Edit"}</button>
         </div>
@@ -167,6 +170,7 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="Spa Banner" onEdit={() => openUploadFor("spa_banner_background")}><SpaBanner description={copy("spa_banner_description", websiteText)} backgroundUrl={get("spa_banner_background")?.image_url} width={get("spa_banner_background")?.image_width} height={get("spa_banner_background")?.image_height} /></EditableSection>
           <LandingTextSection tone="pink" heading={copy("products_heading", websiteText)} subheading={copy("products_subheading", websiteText)}><ProductsCarousel products={products} /></LandingTextSection>
           <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><DynamicAbout backgroundUrl={get("about_us_background")?.image_url} heading={copy("about_heading", websiteText)} description={copy("about_description", websiteText)} /></EditableSection>
+          <EditableSection editMode={editMode} label="Frequently Asked Questions" onEdit={() => window.location.assign("/admin/website-management/faqs")}><FAQSection items={parseFAQs(websiteText[FAQ_TEXT_KEY])} /></EditableSection>
         </div>
         <p className="mt-3 text-xs text-zinc-400">This is the live site. Toggle "Edit" to reveal edit controls over each section.</p>
         {manageHeroSlides && <HeroSlidesManager onClose={async () => { setManageHeroSlides(false); await loadContent(); }} />}

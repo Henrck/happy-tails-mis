@@ -1,5 +1,5 @@
-// Homepage-only structured data. Keep this in sync with the public site.
-// Google chooses the displayed site name automatically; these are preferences.
+// Homepage-only structured data. Invisible to visitors; preserves SEO metadata
+// without inserting a duplicate welcome banner into the landing page.
 import { SITE_URL } from '@/lib/seo';
 
 const BUSINESS_NAME = 'Happy Tails Pet Grooming Cafe';
@@ -42,20 +42,5 @@ const structuredData = {
 const jsonLd = JSON.stringify(structuredData).replace(/</g, '\\u003c');
 
 export default function HomepageSeo() {
-  return (
-    <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
-      <section aria-label="Welcome to Happy Tails" className="bg-white px-6 py-7 text-center sm:py-9">
-        <div className="mx-auto max-w-4xl">
-          <h1 className="text-xl font-extrabold tracking-tight text-zinc-900 sm:text-2xl md:text-3xl">
-            Happy Tails Pet Grooming Cafe in Noveleta, Cavite
-          </h1>
-          <p className="mx-auto mt-3 max-w-3xl text-sm leading-6 text-zinc-700 sm:text-base">
-            Explore dog and cat grooming, pet boarding, spa care, and pet supplies.
-            Browse our services and book your pet&apos;s next appointment online.
-          </p>
-        </div>
-      </section>
-    </>
-  );
+  return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />;
 }
