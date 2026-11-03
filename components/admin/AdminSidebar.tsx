@@ -21,7 +21,7 @@ function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     grid: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
     calendar: "M4 5h16v16H4zM4 9h16M8 3v4M16 3v4",
-    paw: "M8 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 13a2 2 0 1 0-4 0 2 2 0 0 0 0 4zM19 13a2 2 0 1 0-4 0 2 2 0 0 0 0 4zM12 21c-3 0-6-1.5-6-4.5S9 13 12 13s6 .5 6 3.5S15 21 12 21z",
+    paw: "M8 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM16 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM5 13a2 2 0 1 0-4 0 2 2 0 0 0 0 4zM19 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 21c-3 0-6-1.5-6-4.5S9 13 12 13s6 .5 6 3.5S15 21 12 21z",
     cart: "M3 4h2l2.5 12h11L21 8H6M9 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM18 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
     box: "M4 8l8-4 8 4-8 4zM4 8v8l8 4 8-4zM12 12v8",
     file: "M6 3h9l5 5v13H6zM14 3v6h6",
@@ -61,7 +61,7 @@ export default function AdminSidebar({
             <div className="flex items-center gap-2 min-w-0">
               <Image src="/images/logo.png" alt="Happy Tails" width={36} height={36} className="w-9 h-auto shrink-0" />
               <div className="min-w-0">
-                <span className="text-sm font-bold truncate block">{isStaff ? "Staff" : "Admin"}</span>
+                <span className="text-sm font-bold truncate block">{isStaff ? "Manager" : "Admin"}</span>
               </div>
             </div>
           )}

@@ -56,9 +56,16 @@ export default function MultiServiceSummaryStep({ customer, legs, packagesByServ
           writes.push(makeInput(leg, s.pet.species === "Cat" ? "cat_grooming" : "dog_grooming", [s], s.groomingScheduledTime));
         }
       } else if (leg.serviceChoice === "ala_carte") {
-        if (!leg.scheduledDate || !leg.scheduledTime) { setError("Choose a date and time for À La Carte."); return; }
-        if (selectionsOf(leg).some(s => !s.addonIds?.length || Number(s.lineAmount) <= 0)) { setError("À La Carte service pricing is missing. Edit and select a priced service for each pet."); return; }
-        writes.push(makeInput(leg, "ala_carte", selectionsOf(leg), leg.scheduledTime));
+        if (!leg.scheduledDate) { setError("Choose an À La Carte date."); return; }
+        for (const selection of selectionsOf(leg)) {
+          const s = selection as DraftPetSelection & { alaCarteScheduledTime?: string | null };
+          if (!s.addonIds?.length || Number(s.lineAmount) <= 0 || !s.groomerId || !s.alaCarteScheduledTime) {
+            setError(`Select À La Carte items, a time, and an available groomer for ${s.pet.name}.`); return;
+          }
+          // Individual appointments retain each pet's own start time and
+          // allow sequential reuse of the same groomer without overlap.
+          writes.push(makeInput(leg, "ala_carte", [s], s.alaCarteScheduledTime));
+        }
       }
     }
     lock.current = true; setSaving(true);
@@ -98,11 +105,12 @@ export default function MultiServiceSummaryStep({ customer, legs, packagesByServ
             <p className="font-bold text-zinc-900">{s.pet.name} <span className="font-normal text-zinc-500">({s.pet.breed})</span></p>
             {leg.serviceChoice === "boarding" ? <><p>Kennel: {s.boardingKennelSize ?? "—"}</p><p>Drop-off: {s.boardingDropOffAt ?? "—"}</p><p>Pick-up: {s.boardingPickUpAt ?? "—"}</p></> :
               <><p>Package: {pkg?.name ?? (s.packageId ? "—" : "À La Carte")}</p>{size && <p>Size: {size.label}</p>}
-                {isGrooming(leg.serviceChoice) && <p>Start: {prettyTime(start)} · Groomer: {groomer?.name ?? "Assigned at booking"}</p>}</>}
+                {isGrooming(leg.serviceChoice) && <p>Start: {prettyTime(start)} · Groomer: {groomer?.name ?? "Assigned at booking"}</p>}
+                {leg.serviceChoice === "ala_carte" && <p>Start: {prettyTime((s as DraftPetSelection & { alaCarteScheduledTime?: string | null }).alaCarteScheduledTime)} · Groomer: {groomer?.name ?? "—"}</p>}</>}
             {addonNames && <p>Add-ons: {addonNames}</p>}<p className="mt-1 font-semibold">₱{Number(s.lineAmount).toLocaleString()}</p>
           </div>;
         })}
-        {leg.serviceChoice !== "boarding" && <p className="mt-2 text-sm text-zinc-600">Date: {leg.scheduledDate ?? "—"}{leg.serviceChoice === "ala_carte" ? ` · Time: ${prettyTime(leg.scheduledTime)}` : ""}</p>}
+        {leg.serviceChoice !== "boarding" && <p className="mt-2 text-sm text-zinc-600">Date: {leg.scheduledDate ?? "—"}</p>}
         {!!leg.specialRequests && <p className="mt-2 text-sm text-zinc-600">Notes: {leg.specialRequests}</p>}
         <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{amount.toLocaleString()}</p>
       </section>;

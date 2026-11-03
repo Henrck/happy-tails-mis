@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
 import { groomingAddonPrice } from "@/lib/booking/boarding-promotions";
 import { catGroomingSizeGuide, CAT_SMALL_MAX_KG } from "@/lib/utils/pet-size-guide";
+import BookingStepConfirmation from "@/components/shared/BookingStepConfirmation";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 
@@ -35,6 +36,7 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activePetIdx, setActivePetIdx] = useState(0);
+  const [prompt, setPrompt] = useState<"back" | "proceed" | null>(null);
   useEffect(() => {
     let valid = true;
     setLoading(true); setError(null);
@@ -75,7 +77,6 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
     const rate = draft.packageId && size ? rateFor(draft.packageId, size) : null;
     const addons = draft.addonIds.map(id => addonRate(id, size?.label));
     draft.lineAmount = (rate?.price ?? 0) + addons.reduce((sum, row) => sum + (row?.price ?? 0), 0);
-    // Groomer is chosen only after date and time have been selected.
     draft.groomerId = null;
     onChange([...selections.filter(s => s.pet.id !== pet.id), draft]);
   }
@@ -91,7 +92,7 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
   const ready = pets.length > 0 && pets.every(configured);
   function next() {
     if (!pet || !configured(pet)) return;
-    if (ready) { onNext(); return; }
+    if (ready) { setPrompt("proceed"); return; }
     const idx = Array.from({ length: pets.length - 1 }, (_, offset) => (activePetIdx + offset + 1) % pets.length)
       .find(i => !configured(pets[i]));
     if (idx !== undefined) setActivePetIdx(idx);
@@ -139,7 +140,15 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
           })}</div></>}
       </>}
     </div>
-    <div className="mt-8 flex gap-3"><button type="button" onClick={onBack} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500">Back</button>
+    <div className="mt-8 flex gap-3"><button type="button" onClick={() => { if (selections.length) setPrompt("back"); else onBack(); }} className="flex-1 rounded-full border-2 border-zinc-300 py-2.5 font-semibold text-zinc-500">Back</button>
       <button type="button" onClick={next} disabled={!configured(pet)} className="flex-1 rounded-full bg-brand-pink py-2.5 font-semibold text-white disabled:opacity-40">{ready ? "Next: Schedule" : "Next Pet"}</button></div>
+    {prompt === "back" && <BookingStepConfirmation title="Return to the service waiver?"
+      description="Your grooming choices stay in this booking draft, but changing the service or selected pets may require choosing packages and sizes again."
+      confirmLabel="Go Back" danger onCancel={() => setPrompt(null)}
+      onConfirm={() => { setPrompt(null); onBack(); }} />}
+    {prompt === "proceed" && <BookingStepConfirmation title="Proceed to grooming schedule?"
+      description="Confirm that every pet has the correct grooming package, size, and add-ons. You will choose an available date, time, and groomer next."
+      confirmLabel="Proceed" onCancel={() => setPrompt(null)}
+      onConfirm={() => { setPrompt(null); onNext(); }} />}
   </div>;
 }

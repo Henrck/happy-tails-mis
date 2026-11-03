@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Clock3, UserRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, Clock3, UserRound } from "lucide-react";
 import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
 import { createClient } from "@/lib/supabase/client";
 import { manilaTime, manilaToday, useBookingClosures } from "@/lib/booking/use-booking-closures";
@@ -9,17 +9,10 @@ import type { DraftPetSelection } from "@/lib/types/appointments";
 import type { Customer } from "@/lib/types/users";
 import type { Groomer } from "@/lib/types/pet-services";
 import type { BookingLeg } from "@/lib/types/booking-leg";
-import { clockMinutes, isPendingGroomerBusy, pendingGroomerSelections, type PendingGroomerInterval } from "@/lib/booking/ala-carte-pending-groomers";
+import { clockMinutes, pendingGroomerSelections, type PendingGroomerInterval } from "@/lib/booking/ala-carte-pending-groomers";
 
-const SLOTS = Array.from({ length: 17 }, (_, i) => {
-  const minutes = 9 * 60 + i * 30;
-  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-});
-function timeLabel(value: string) {
-  const [hour, minute] = value.split(":").map(Number);
-  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
-}
-
+type TimedSelection = DraftPetSelection & { alaCarteScheduledTime?: string | null };
+type Availability = { slot_time: string; groomer_id: string; available: boolean };
 type Props = {
   customer: Customer | null;
   ownerContact: string;
@@ -37,226 +30,355 @@ type Props = {
   onConfirmed: () => void;
 };
 
-type Availability = { groomer_id: string; available: boolean };
+const EMPTY_LEGS: BookingLeg[] = [];
+const SLOT_TIMES = Array.from({ length: 17 }, (_, i) => {
+  const minutes = 540 + i * 30;
+  return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+});
+function timeLabel(value: string): string {
+  const [hours, minutes] = value.split(":").map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")} ${hours >= 12 ? "PM" : "AM"}`;
+}
+function overlaps(aStart: number, aDuration: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && aStart + aDuration > bStart;
+}
 
-/** Shared by customer and walk-in POS. The server checks existing appointments
- * for ALL customers (including Grooming), not just appointments by this owner. */
+/**
+ * À La Carte uses individual appointment times, just like multi-pet Grooming.
+ * A free groomer may handle more than one pet SEQUENTIALLY, never simultaneously.
+ * Stored appointments and other selected (not yet submitted) services are both checked.
+ */
 export default function CustomerGroomingScheduleStep({
-  customer: _customer, ownerContact: _ownerContact, petSelections, groomers, completedLegs = [], scheduledDate, scheduledTime,
-  specialRequests, onDateChange, onTimeChange, onRequestsChange, onSelectionsChange, onBack, onConfirmed,
+  customer: _customer, ownerContact: _ownerContact, petSelections, groomers, completedLegs = EMPTY_LEGS,
+  scheduledDate, scheduledTime: _scheduledTime, specialRequests,
+  onDateChange, onTimeChange, onRequestsChange, onSelectionsChange, onBack, onConfirmed,
 }: Props) {
-  void _customer; void _ownerContact;
+  void _customer;
+  void _ownerContact;
   const closures = useBookingClosures();
-  const [checking, setChecking] = useState(false);
-  const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availability, setAvailability] = useState<Record<string, string[]>>({});
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+  const [durationByAddon, setDurationByAddon] = useState<Map<string, number>>(new Map());
+  const [durationLoading, setDurationLoading] = useState(true);
+  const [durationError, setDurationError] = useState<string | null>(null);
   const [pendingIntervals, setPendingIntervals] = useState<PendingGroomerInterval[]>([]);
-  const [loadingPending, setLoadingPending] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
   const [pendingError, setPendingError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
-  const [, setClockTick] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setClockTick(n => n + 1), 30_000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const today = manilaToday();
-  const nowTime = manilaTime();
-  const closed = closures.nameFor(scheduledDate);
-  const isPast = (date: string | null, time: string) =>
-    !date || date < today || (date === today && time <= nowTime);
-  const calendarReady = !closures.loading && !closures.error;
-  const dateReady = !!scheduledDate && !closed && calendarReady;
+  const [checking, setChecking] = useState(false);
+  const [, setTick] = useState(0);
   const activeGroomers = groomers.filter(g => g.status === "active");
-  const groomersFreeAt = (time: string, rows: Record<string, string[]> = availability) => {
-    const start = clockMinutes(time);
-    if (start === null) return [] as string[];
-    return (rows[time] ?? []).filter(id => !isPendingGroomerBusy(pendingIntervals, id, start));
-  };
-  const availableAt = scheduledTime ? groomersFreeAt(scheduledTime) : [];
-  const validAssignment = petSelections.length > 0 &&
-    petSelections.every(s => !!s.groomerId && availableAt.includes(s.groomerId)) &&
-    new Set(petSelections.map(s => s.groomerId)).size === petSelections.length;
-  const canProceed = dateReady && !!scheduledTime && !isPast(scheduledDate, scheduledTime) &&
-    !checking && !loadingAvailability && !loadingPending && !availabilityError && !pendingError && validAssignment;
+  const selected = petSelections as TimedSelection[];
+  const today = manilaToday();
+  const now = manilaTime();
+  const isPast = (time: string) => !scheduledDate || scheduledDate < today || (scheduledDate === today && time <= now);
+  const calendarReady = !closures.loading && !closures.error;
+  const dateReady = !!scheduledDate && calendarReady && !closures.nameFor(scheduledDate);
 
   const loadAvailability = useCallback(async (date: string) => {
     const { data, error: failure } = await createClient().rpc("happytails_ala_carte_groomer_availability_v1", { p_date: date });
     if (failure) throw new Error(failure.message);
-    const grouped: Record<string, string[]> = {};
-    for (const item of (data ?? []) as Array<Availability & { slot_time: string }>) {
-      if (item.available) (grouped[item.slot_time] ??= []).push(item.groomer_id);
+    const rows: Record<string, string[]> = {};
+    for (const result of (data ?? []) as Availability[]) {
+      if (result.available) (rows[result.slot_time] ??= []).push(result.groomer_id);
     }
-    return grouped;
+    return rows;
   }, []);
 
   useEffect(() => {
-    if (!scheduledDate) { setAvailability({}); return; }
+    if (!scheduledDate) { setAvailability({}); setAvailabilityError(null); setLoadingAvailability(false); return; }
     let active = true;
     setLoadingAvailability(true); setAvailabilityError(null); setAvailability({});
-    void loadAvailability(scheduledDate).then(rows => { if (active) setAvailability(rows); })
-      .catch(cause => { if (active) setAvailabilityError(cause instanceof Error ? cause.message : "Unable to check groomer availability."); })
+    void loadAvailability(scheduledDate)
+      .then(rows => { if (active) setAvailability(rows); })
+      .catch(cause => { if (active) setAvailabilityError(cause instanceof Error ? cause.message : "Unable to load groomer availability."); })
       .finally(() => { if (active) setLoadingAvailability(false); });
     return () => { active = false; };
   }, [scheduledDate, loadAvailability]);
 
-  // Database availability does not know about Grooming or À La Carte legs
-  // already selected in this checkout but not yet saved. Load their actual
-  // verified Grooming durations, then mask all overlapping 30-minute slots.
+  // Verify item durations from Groomer Management. Never assume a 30-minute
+  // service is safe when an admin has configured it to take longer.
   useEffect(() => {
-    if (!scheduledDate) { setPendingIntervals([]); setPendingError(null); setLoadingPending(false); return; }
+    let active = true;
+    const addonIds = [...new Set([
+      ...selected.flatMap(s => s.addonIds ?? []),
+      ...completedLegs.filter(l => l.serviceChoice === "ala_carte")
+        .flatMap(l => l.petSelections.flatMap(s => s.addonIds ?? [])),
+    ])];
+    setDurationLoading(true); setDurationError(null); setDurationByAddon(new Map());
+    if (!addonIds.length) { setDurationLoading(false); return; }
+    void (async () => {
+      const { data, error: failure } = await createClient()
+        .from("ala_carte_service_durations")
+        .select("addon_id,duration_minutes,verified").in("addon_id", addonIds);
+      if (failure) {
+        // Older installations predate the duration-verification table and
+        // still enforce the original 30-minute rule. Only that specific
+        // missing-table case may safely use the legacy default.
+        if (failure.code === "PGRST205" || failure.code === "42P01" ||
+          /could not find the table.*ala_carte_service_durations/i.test(failure.message)) {
+          return new Map<string, number>();
+        }
+        throw new Error(`${failure.message}. Check À La Carte durations in Supabase.`);
+      }
+      return new Map((data ?? []).filter(row => row.verified === true)
+        .map(row => [row.addon_id, Number(row.duration_minutes)] as const));
+    })().then(durations => { if (active) setDurationByAddon(durations); })
+      .catch(cause => { if (active) setDurationError(cause instanceof Error ? cause.message : "Unable to check service durations."); })
+      .finally(() => { if (active) setDurationLoading(false); });
+    return () => { active = false; };
+    // Add-on identities change when the user changes their selection; string key
+    // avoids re-fetching durations on every parent render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected.flatMap(s => s.addonIds ?? []).join("|"), completedLegs]);
+
+  const durationOf = useCallback((addonIds: string[]) =>
+    addonIds.reduce((sum, id) => sum + (durationByAddon.get(id) ?? 30), 0) || 30,
+  [durationByAddon]);
+  const durations = useMemo(() => new Map<string, number>(selected.map(s =>
+    [s.pet.id, durationOf(s.addonIds ?? [])] as const)), [selected, durationOf]);
+
+  useEffect(() => {
+    if (!scheduledDate) { setPendingIntervals([]); setPendingError(null); setPendingLoading(false); return; }
     let active = true;
     const pending = pendingGroomerSelections(completedLegs, scheduledDate);
     setPendingIntervals([]); setPendingError(null);
-    if (!pending.length) { setLoadingPending(false); return; }
-    setLoadingPending(true);
+    if (!pending.length) { setPendingLoading(false); return; }
+    setPendingLoading(true);
     void (async () => {
-      const ids = [...new Set(pending.map(p => p.packagePricingId).filter((id): id is string => !!id))];
+      const rates = [...new Set(pending.map(p => p.packagePricingId).filter((id): id is string => !!id))];
       const durationByRate = new Map<string, number>();
-      if (ids.length) {
+      if (rates.length) {
         const db = createClient();
-        const { data: rates, error: rateError } = await db.from("package_pricing").select("id,package_id").in("id", ids);
-        if (rateError) throw rateError;
-        if ((rates ?? []).length !== ids.length) throw new Error("A selected Grooming rate could not be verified. Please review the Grooming schedule.");
-        const packageIds = [...new Set((rates ?? []).map(rate => rate.package_id))];
-        const { data: durations, error: durationError } = await db.from("grooming_package_durations")
-          .select("package_id,duration_minutes,verified").in("package_id", packageIds);
-        if (durationError) throw durationError;
-        const byPackage = new Map((durations ?? []).filter(d => d.verified === true &&
-          Number.isSafeInteger(d.duration_minutes) && d.duration_minutes >= 30)
-          .map(d => [d.package_id, d.duration_minutes]));
-        for (const rate of rates ?? []) durationByRate.set(rate.id, byPackage.get(rate.package_id) ?? 30);
+        const { data: pricing, error: pricingError } = await db.from("package_pricing")
+          .select("id,package_id").in("id", rates);
+        if (pricingError) throw pricingError;
+        if ((pricing ?? []).length !== rates.length) throw new Error("A grooming rate was changed. Review the Grooming booking.");
+        const pkgIds = [...new Set((pricing ?? []).map(r => r.package_id))];
+        const { data: durationRows, error: durationFailure } = await db.from("grooming_package_durations")
+          .select("package_id,duration_minutes,verified").in("package_id", pkgIds);
+        if (durationFailure) throw durationFailure;
+        const byPkg = new Map<string, number>((durationRows ?? []).filter(r => r.verified && Number(r.duration_minutes) >= 30)
+          .map(r => [r.package_id, Number(r.duration_minutes)] as const));
+        for (const rate of pricing ?? []) durationByRate.set(rate.id, byPkg.get(rate.package_id) ?? 30);
       }
       return pending.map(p => ({
-        groomerId: p.groomerId, startMinute: p.startMinute,
-        endMinute: p.startMinute + (p.packagePricingId ? durationByRate.get(p.packagePricingId) ?? 30 : 30),
+        groomerId: p.groomerId,
+        startMinute: p.startMinute,
+        endMinute: p.startMinute + (p.packagePricingId
+          ? durationByRate.get(p.packagePricingId) ?? 30 : durationOf(p.addonIds ?? [])),
       }));
     })().then(intervals => { if (active) setPendingIntervals(intervals); })
-      .catch(cause => { if (active) setPendingError(cause instanceof Error ? cause.message : "Could not verify other selected services."); })
-      .finally(() => { if (active) setLoadingPending(false); });
+      .catch(cause => { if (active) setPendingError(cause instanceof Error ? cause.message : "Unable to check other selected services."); })
+      .finally(() => { if (active) setPendingLoading(false); });
     return () => { active = false; };
-  }, [completedLegs, scheduledDate]);
+  }, [scheduledDate, completedLegs, durationOf]);
 
   useEffect(() => {
-    if (scheduledDate && closures.nameFor(scheduledDate) && scheduledTime) onTimeChange("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scheduledDate, scheduledTime, closures.dates]);
+    const timer = window.setInterval(() => setTick(n => n + 1), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  function changeAssignments(next: DraftPetSelection[]) {
-    onSelectionsChange(next);
+  const ready = dateReady && !loadingAvailability && !durationLoading && !pendingLoading &&
+    !availabilityError && !durationError && !pendingError && activeGroomers.length > 0;
+  // Groomer preferences are distinct from confirmed assignments. The same groomer
+  // can be preferred for multiple pets because the planner staggers their times.
+  const [preferences, setPreferences] = useState<Record<string, string>>(() =>
+    Object.fromEntries(petSelections.map(s => [s.pet.id, s.groomerId ?? ""])));
+  const [preferredStart, setPreferredStart] = useState(() => _scheduledTime || "09:00");
+  const [arranged, setArranged] = useState(false);
+  const [planned, setPlanned] = useState<TimedSelection[]>([]);
+  const [quickPreference, setQuickPreference] = useState("");
+
+  function clearArrangement() {
+    setArranged(false);
+    setPlanned([]);
     setError(null);
-    setConfirmed(false);
+    // Unverified assignments must not silently survive a change of preference.
+    if (selected.some(s => s.groomerId || s.alaCarteScheduledTime)) {
+      onSelectionsChange(selected.map(s => ({ ...s, groomerId: null, alaCarteScheduledTime: null })));
+    }
   }
   function chooseDate(date: string) {
-    onDateChange(date); onTimeChange("");
-    changeAssignments(petSelections.map(s => ({ ...s, groomerId: null })));
+    onDateChange(date);
+    clearArrangement();
   }
-  function chooseTime(time: string) {
-    if (!scheduledDate) return;
+  function chooseStart(time: string) {
+    setPreferredStart(time);
     onTimeChange(time);
-    changeAssignments(petSelections.map(s => ({ ...s, groomerId: null })));
+    clearArrangement();
   }
-  function chooseGroomer(petId: string, groomerId: string) {
-    // A groomer can work on only one À La Carte pet in the same time slot.
-    if (groomerId && petSelections.some(s => s.pet.id !== petId && s.groomerId === groomerId)) {
-      setError("This groomer is already assigned to another pet at the same time. Choose another groomer.");
-      return;
+  function chooseQuickGroomer(groomerId: string) {
+    setQuickPreference(groomerId);
+    setPreferences(Object.fromEntries(selected.map(s => [s.pet.id, groomerId])));
+    clearArrangement();
+  }
+  function choosePreference(petId: string, groomerId: string) {
+    setPreferences(previous => ({ ...previous, [petId]: groomerId }));
+    setQuickPreference("");
+    clearArrangement();
+  }
+  function availableForPlan(
+    groomerId: string, start: number, duration: number,
+    rows: Record<string, string[]>, reserved: PendingGroomerInterval[],
+  ): boolean {
+    // Last service must finish by 5:30 PM. Server slots start at 9 AM–5 PM.
+    if (start < 540 || start + duration > 1050) return false;
+    for (let minute = start; minute < start + duration; minute += 30) {
+      const key = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+      if (!rows[key]?.includes(groomerId)) return false;
     }
-    changeAssignments(petSelections.map(s => s.pet.id === petId ? { ...s, groomerId: groomerId || null } : s));
+    return !reserved.some(item => item.groomerId === groomerId &&
+      overlaps(start, duration, item.startMinute, item.endMinute));
   }
-  async function verify() {
-    if (!scheduledDate || !scheduledTime || checking || !canProceed) return;
-    setChecking(true); setError(null);
-    try {
-      const closedMessage = await closures.verifyOpen(scheduledDate);
-      if (closedMessage) throw new Error(closedMessage);
-      if (isPast(scheduledDate, scheduledTime)) throw new Error("This time has passed. Choose a future appointment time.");
-      // Refresh immediately before continuing: stale slots and groomer conflicts must not pass.
-      const fresh = await loadAvailability(scheduledDate);
-      setAvailability(fresh);
-      const free = groomersFreeAt(scheduledTime, fresh);
-      if (petSelections.some(s => !s.groomerId || !free.includes(s.groomerId)) ||
-          new Set(petSelections.map(s => s.groomerId)).size !== petSelections.length) {
-        throw new Error("One or more chosen groomers are no longer available. Select different groomers or another time.");
-      }
-      setConfirmed(true);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to check groomer availability.");
-    } finally { setChecking(false); }
+  function toClock(minute: number) {
+    return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
   }
 
-  if (confirmed && scheduledDate && scheduledTime) return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="À La Carte schedule selected">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl">
-        <Check className="mx-auto text-emerald-600" size={38}/>
-        <h2 className="mt-4 text-xl font-bold text-zinc-800">Schedule & Groomers Selected</h2>
-        <p className="mt-2 text-sm text-zinc-500">{scheduledDate} at {timeLabel(scheduledTime)}</p>
-        {petSelections.map(s => <p key={s.pet.id} className="mt-2 text-sm text-zinc-700">{s.pet.name}: <strong>{activeGroomers.find(g => g.id === s.groomerId)?.name ?? "Assigned groomer"}</strong></p>)}
-        <button type="button" onClick={onConfirmed} className="mt-6 w-full rounded-full bg-brand-pink px-5 py-3 font-semibold text-white">Continue to More Services</button>
-      </div>
-    </div>
-  );
+  async function arrange() {
+    if (!scheduledDate || !ready || checking || !selected.length) return;
+    const firstMinute = clockMinutes(preferredStart);
+    if (firstMinute === null) return;
+    setChecking(true); setError(null); setArranged(false); setPlanned([]);
+    try {
+      const closed = await closures.verifyOpen(scheduledDate);
+      if (closed) throw new Error(closed);
+      const latest = await loadAvailability(scheduledDate);
+      setAvailability(latest);
+      const candidates = activeGroomers.map(g => g.id);
+      const built: TimedSelection[] = [];
+      const reserved: PendingGroomerInterval[] = [...pendingIntervals];
+      const options = selected.map(s => ({
+        pet: s, duration: durations.get(s.pet.id) ?? 30,
+        preference: preferences[s.pet.id] || "",
+      }));
+      // Most-constrained pets first: a groomer requested for multiple pets
+      // should be scheduled sequentially rather than rejected immediately.
+      options.sort((a, b) => Number(!!b.preference) - Number(!!a.preference) || b.duration - a.duration);
+      let checks = 0;
+      const plan = (index: number): boolean => {
+        if (index === options.length) return true;
+        if (++checks > 30000) return false;
+        const { pet, duration, preference } = options[index];
+        const ids = preference ? [preference] : candidates;
+        for (let minute = firstMinute; minute <= 1020; minute += 30) {
+          if (scheduledDate === today && toClock(minute) <= now) continue;
+          for (const groomerId of ids) {
+            if (!availableForPlan(groomerId, minute, duration, latest, reserved)) continue;
+            reserved.push({ groomerId, startMinute: minute, endMinute: minute + duration });
+            built.push({ ...pet, groomerId, alaCarteScheduledTime: toClock(minute) });
+            if (plan(index + 1)) return true;
+            built.pop(); reserved.pop();
+          }
+        }
+        return false;
+      };
+      if (!plan(0)) {
+        throw new Error("No valid arrangement was found for the selected start time and groomer preferences. Choose an earlier time, another date, or allow automatic groomer assignment.");
+      }
+      const plannedByPet = new Map(built.map(item => [item.pet.id, item]));
+      const result = selected.map(s => plannedByPet.get(s.pet.id) ?? s);
+      setPlanned(result);
+      setArranged(true);
+      onSelectionsChange(result);
+      const first = result.map(s => s.alaCarteScheduledTime).filter((value): value is string => !!value).sort()[0];
+      if (first) onTimeChange(first);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to arrange À La Carte appointments.");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return <section className="ht-ala-carte-schedule mx-auto w-full max-w-4xl space-y-5">
-    <header className="text-center"><h2 className="text-2xl font-bold text-brand-pink">À La Carte Schedule</h2>
-      <p className="mt-2 text-sm text-zinc-600">Choose a date, time, and available groomer for each pet. You may request a specific groomer.</p></header>
+    <header className="text-center">
+      <h2 className="text-2xl font-bold text-brand-pink">À La Carte Schedule</h2>
+      <p className="mt-2 text-sm text-zinc-600">Choose a preferred start time and groomers. We will arrange non-overlapping appointments for your pets automatically.</p>
+    </header>
     <p className="rounded-xl border border-pink-100 bg-pink-50 px-4 py-3 text-center text-xs text-zinc-700">
-      30-minute service slots · 9:00 AM–5:00 PM start times · Philippine time · A groomer cannot serve two pets simultaneously.
+      30-minute start intervals · Verified service durations · Philippine time · One groomer may handle multiple pets sequentially.
     </p>
     <BookingDayCalendar value={scheduledDate} onChange={chooseDate} closures={closures} title="À La Carte" />
-    <section><h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-zinc-800"><Clock3 size={17} className="text-brand-pink"/> Choose preferred start time</h3>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" aria-label="À La Carte start times">
-        {SLOTS.map(time => {
-          const count = groomersFreeAt(time).length;
-          const databaseCount = availability[time]?.length ?? 0;
-          const busyInThisBooking = databaseCount > count;
-          const baseUnavailable = !dateReady || isPast(scheduledDate, time) || loadingAvailability || loadingPending || !!availabilityError || !!pendingError;
-          const capacityBlocked = !baseUnavailable && count < petSelections.length;
-          const selected = !baseUnavailable && !capacityBlocked && scheduledTime === time;
-          const reason = busyInThisBooking
-            ? "One or more groomers already have another service selected in this booking during this time. Choose another slot or groomer."
-            : "Not enough groomers are free at this time. Choose another available slot.";
-          return <button key={time} type="button" disabled={baseUnavailable} aria-pressed={selected}
-            title={capacityBlocked ? reason : undefined}
-            onClick={() => capacityBlocked ? setError(reason) : chooseTime(time)}
-            className={`flex min-h-14 flex-col items-center justify-center rounded-xl border px-2 py-2 text-xs font-semibold transition ${capacityBlocked ? "border-rose-200 bg-rose-50 text-rose-700" : selected ? "border-brand-pink bg-pink-50 text-brand-pink" : "border-pink-200 bg-white text-zinc-700 hover:border-brand-pink"} disabled:cursor-not-allowed disabled:bg-zinc-50 disabled:text-zinc-400 disabled:opacity-60`}>
-            <span>{timeLabel(time)}</span>
-            <span className={`mt-0.5 text-[10px] ${selected ? "text-brand-pink" : capacityBlocked ? "text-rose-700" : "text-zinc-500"}`}>{loadingAvailability || loadingPending ? "Checking…" : capacityBlocked ? busyInThisBooking ? "Reserved in booking" : "Fully booked" : baseUnavailable ? "Unavailable" : `${count} groomer${count === 1 ? "" : "s"} free`}</span>
+    <section className="rounded-2xl border border-pink-100 bg-white p-4 sm:p-5">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-zinc-800"><Clock3 size={17} className="text-brand-pink" /> Choose preferred start time</h3>
+      <p className="mt-1 text-xs leading-5 text-zinc-500">This is the earliest time you would like to begin. The system will assign individual start times, based on the available groomers and the length of each service.</p>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {SLOT_TIMES.map(time => {
+          const unavailable = !ready || isPast(time);
+          // Capacity displayed is an indication at the selected instant, not a
+          // promise that every pet can start simultaneously.
+          const count = !unavailable ? (availability[time]?.length ?? 0) : 0;
+          const active = preferredStart === time;
+          return <button type="button" key={time} disabled={unavailable} aria-pressed={active} onClick={() => chooseStart(time)}
+            className={`min-h-14 rounded-xl border px-2 py-2 text-xs font-semibold ${unavailable ? "border-zinc-200 bg-zinc-50 text-zinc-400" : active ? "border-brand-pink bg-pink-50 text-brand-pink" : "border-pink-200 text-zinc-700 hover:border-brand-pink"}`}>
+            <span className="block">{timeLabel(time)}</span>
+            <span className="mt-1 block text-[10px]">{unavailable ? "Unavailable" : `${count} free now`}</span>
           </button>;
         })}
       </div>
-      {pendingError && <p role="alert" className="mt-2 text-sm text-red-700">Unable to verify other selected services: {pendingError}. Please review your Grooming schedule.</p>}
-      {availabilityError && <p role="alert" className="mt-2 text-sm text-red-700">Unable to load live availability: {availabilityError}. Refresh or choose another date.</p>}
-      <p className="mt-2 text-xs text-zinc-500">Availability checks saved bookings and Grooming / À La Carte services already selected in this booking. Conflicting groomers and time slots are blocked before checkout.</p>
+      <div className="mt-6 rounded-2xl border border-pink-200 bg-white p-4">
+        <h3 className="flex items-center gap-2 font-bold text-zinc-800"><UserRound size={18} className="text-brand-pink" /> Groomer preference for each pet</h3>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">You can select one groomer for all pets, choose different groomers, or leave the assignment automatic. A shared groomer will handle pets one after another.</p>
+        <div className="mt-4 rounded-xl border border-pink-200 bg-pink-50/60 p-3">
+          <label className="block text-sm font-semibold text-zinc-800" htmlFor="ala-quick-groomer">Quick select — apply to all {selected.length} pet{selected.length === 1 ? "" : "s"}</label>
+          <p className="mt-1 text-xs text-zinc-500">Choose the same groomer for the group, or use automatic assignment.</p>
+          <select id="ala-quick-groomer" value={quickPreference} onChange={e => chooseQuickGroomer(e.target.value)}
+            className="mt-2 w-full rounded-xl border border-pink-200 bg-white px-3 py-3 text-sm">
+            <option value="">No preference — assign automatically</option>
+            {activeGroomers.map(g => <option value={g.id} key={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+        <div className="mt-4 space-y-3">
+          {selected.map(s => <label key={s.pet.id} className="block text-sm font-semibold text-zinc-800">{s.pet.name}
+            <select value={preferences[s.pet.id] ?? ""} onChange={e => choosePreference(s.pet.id, e.target.value)}
+              className="mt-1 block w-full rounded-xl border border-pink-200 bg-white px-3 py-3 text-sm">
+              <option value="">No preference — assign automatically</option>
+              {activeGroomers.map(g => <option value={g.id} key={g.id}>{g.name}</option>)}
+            </select>
+            <span className="mt-1 block text-[11px] font-normal text-zinc-500">Estimated service duration: {durations.get(s.pet.id) ?? 30} minutes</span>
+          </label>)}
+        </div>
+        <button type="button" disabled={!ready || checking || !selected.length || isPast(preferredStart)}
+          onClick={() => void arrange()} className="mt-5 min-h-12 w-full rounded-full border-2 border-brand-pink px-5 py-3 text-sm font-bold text-brand-pink disabled:opacity-40">
+          {checking ? "Checking live availability…" : "Check & Arrange À La Carte Times"}
+        </button>
+      </div>
     </section>
-    {scheduledDate && scheduledTime && !loadingAvailability && !loadingPending && !pendingError && <section className="rounded-2xl border border-pink-200 bg-white p-4">
-      <h3 className="flex items-center gap-2 font-bold text-zinc-800"><UserRound size={18} className="text-brand-pink"/> Assign a groomer for each pet</h3>
-      <p className="mt-1 text-xs text-zinc-500">Pick your preferred groomer if they are free. Each pet requires one available groomer; occupied groomers are marked unavailable.</p>
-      <div className="mt-4 space-y-3">{petSelections.map(s => <label key={s.pet.id} className="block text-sm font-semibold text-zinc-700">{s.pet.name}
-        <select value={s.groomerId ?? ""} onChange={e => chooseGroomer(s.pet.id, e.target.value)}
-          className="mt-1 block w-full rounded-xl border border-pink-200 bg-white px-3 py-3 text-sm">
-          <option value="">Select a groomer</option>
-          {activeGroomers.map(g => {
-            const available = availableAt.includes(g.id) && !petSelections.some(other => other.pet.id !== s.pet.id && other.groomerId === g.id);
-            return <option key={g.id} value={g.id} disabled={!available}>{g.name}{available ? " — Available" : " — Unavailable"}</option>;
+    {arranged && planned.length > 0 && <section aria-label="Proposed À La Carte appointments" className="rounded-2xl border border-pink-200 bg-pink-50/60 p-4 sm:p-5">
+      <h3 className="text-sm font-bold text-zinc-900">Proposed non-overlapping appointments</h3>
+      <p className="mt-1 text-xs leading-5 text-zinc-600">Review the arranged times and groomers below. To make changes, select a different time or groomer and run Check &amp; Arrange again.</p>
+      <div className="mt-3 space-y-2">
+        {[...planned].sort((a, b) => (a.alaCarteScheduledTime ?? "").localeCompare(b.alaCarteScheduledTime ?? ""))
+          .map(s => {
+            const start = s.alaCarteScheduledTime ?? "09:00";
+            const startMinute = clockMinutes(start) ?? 540;
+            const duration = durations.get(s.pet.id) ?? 30;
+            return <div key={s.pet.id} className="flex flex-col gap-1 rounded-xl bg-white px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+              <strong className="text-zinc-900">{s.pet.name}</strong>
+              <span className="text-zinc-700 sm:text-right">{activeGroomers.find(g => g.id === s.groomerId)?.name ?? "Groomer"} · {timeLabel(start)}–{timeLabel(toClock(startMinute + duration))} · {duration} min</span>
+            </div>;
           })}
-        </select>
-      </label>)}</div>
-      {!validAssignment && <p className="mt-3 text-xs text-amber-700">Select a different available groomer for every pet before continuing.</p>}
+      </div>
+      <p className="mt-3 text-xs text-zinc-600">These arrangements are checked again at checkout; they are not final reservations until booking is completed.</p>
     </section>}
+    {loadingAvailability || durationLoading || pendingLoading ? <p className="text-sm text-zinc-500">Checking live groomer availability and verified durations…</p> : null}
+    {[availabilityError, durationError, pendingError].filter(Boolean).map(message =>
+      <p role="alert" key={message} className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{message}</p>)}
     <label className="block text-sm font-semibold text-zinc-800">Special Requests
       <textarea rows={3} value={specialRequests} onChange={e => onRequestsChange(e.target.value)}
-        className="mt-2 w-full rounded-xl border border-pink-200 p-3 text-sm" placeholder="Allergies, handling instructions, or other notes"/>
+        className="mt-2 w-full rounded-xl border border-pink-200 p-3 text-sm" placeholder="Allergies, handling instructions, or other notes" />
     </label>
-    {error && <div role="alertdialog" aria-modal="true" aria-label="Booking availability notice" className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl"><h3 className="text-lg font-bold text-rose-700">Unable to continue</h3>
-        <p className="mt-3 text-sm text-zinc-700">{error}</p><button type="button" onClick={() => setError(null)} className="mt-5 rounded-full bg-brand-pink px-6 py-2.5 font-semibold text-white">OK</button>
-      </div></div>}
+    {error && <div role="alertdialog" aria-modal="true" aria-label="Booking availability notice" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"><h3 className="text-lg font-bold text-rose-700">Unable to arrange appointments</h3>
+        <p className="mt-3 text-sm text-zinc-700">{error}</p>
+        <button type="button" onClick={() => setError(null)} className="mt-5 rounded-full bg-brand-pink px-6 py-2.5 font-semibold text-white">Review Preferences</button>
+      </div>
+    </div>}
     <div className="grid grid-cols-2 gap-3">
-      <button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-pink-200 font-semibold text-brand-pink"><ArrowLeft size={16}/>Back</button>
-      <button type="button" onClick={() => void verify()} disabled={!canProceed} className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink font-semibold text-white disabled:opacity-40">{checking ? "Checking…" : "Next"}<ArrowRight size={16}/></button>
+      <button type="button" onClick={onBack} className="flex min-h-12 items-center justify-center gap-2 rounded-full border border-pink-200 font-semibold text-brand-pink"><ArrowLeft size={16} /> Back</button>
+      <button type="button" disabled={!arranged || checking} onClick={onConfirmed}
+        className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-brand-pink font-semibold text-white disabled:opacity-40">Continue <ArrowRight size={16} /></button>
     </div>
   </section>;
 }
