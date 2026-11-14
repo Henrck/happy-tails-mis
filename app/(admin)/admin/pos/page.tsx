@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { fetchProducts } from "@/lib/supabase/products";
 import { checkoutPosSale } from "@/lib/supabase/pos-checkout";
-import type { Product, ProductCategory } from "@/lib/types/products";
+import type { PetType, Product, ProductCategory } from "@/lib/types/products";
 import PosCategoryTabs from "@/components/admin/pos/PosCategoryTabs";
 import ProductPosCard from "@/components/admin/pos/ProductPosCard";
 import CartPanel, { type CartLine } from "@/components/admin/pos/CartPanel";
@@ -18,6 +18,7 @@ export default function PointOfSalePage() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState<ProductCategory | "all">("all");
+  const [activePetType, setActivePetType] = useState<PetType | "all">("all");
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -54,10 +55,11 @@ export default function PointOfSalePage() {
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allProducts.filter((p) =>
+      (activePetType === "all" || (p.pet_types ?? []).includes(activePetType)) &&
       (category === "all" || p.category === category) &&
       (!q || p.name.toLowerCase().includes(q))
     );
-  }, [allProducts, category, search]);
+  }, [allProducts, activePetType, category, search]);
 
   const cartLines: CartLine[] = Object.entries(cart)
     .filter(([, qty]) => qty > 0)
@@ -194,7 +196,12 @@ export default function PointOfSalePage() {
         </div>
 
         <div className="mt-3">
-          <PosCategoryTabs active={category} onChange={setCategory} />
+          <PosCategoryTabs
+            active={category}
+            onChange={setCategory}
+            activePetType={activePetType}
+            onPetTypeChange={setActivePetType}
+          />
         </div>
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">

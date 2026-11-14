@@ -6,6 +6,7 @@ export type ProductCategory =
   | "Hygiene";
 
 export type ProductStatus = "active" | "discontinued";
+export type PetType = "dog" | "cat";
 
 export type Product = {
   id: string;
@@ -19,6 +20,8 @@ export type Product = {
   image_url: string | null;
   status: ProductStatus;
   created_at: string;
+  description?: string;
+  pet_types?: PetType[];
 
   // Current quantity calculated from product_batches.
   // This is used by POS to prevent adding an out-of-stock product.
