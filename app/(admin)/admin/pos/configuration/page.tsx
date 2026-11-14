@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchProducts, addProduct, setProductStatus } from "@/lib/supabase/products";
 import { createClient } from "@/lib/supabase/client";
-import type { Product, ProductCategory } from "@/lib/types/products";
+import type { PetType, Product, ProductCategory } from "@/lib/types/products";
 import ProductManageCard from "@/components/admin/operations/ProductManageCard";
 import ProductFormModal from "@/components/admin/operations/ProductFormModal";
 import ArchiveConfirmModal from "@/components/admin/operations/ArchiveConfirmModal";
@@ -46,22 +46,27 @@ export default function PosManagementPage() {
 
   async function handleSave(data: {
     name: string; unit: string; package_size: string | null; price: number;
-    min_stock: number; category: ProductCategory;
+    min_stock: number; category: ProductCategory; pet_types?: PetType[];
   }, id?: string): Promise<{ id: string; product_code: string }> {
+    const payload = {
+      ...data,
+      pet_types: data.pet_types ?? (id ? products.find(p => p.id === id)?.pet_types ?? [] : []),
+    };
+
     if (id) {
       const current = products.find(p => p.id === id);
       if (!current) throw new Error("This item is no longer in the loaded catalog. Refresh and try again.");
       const { data: updated, error: updateError } = await createClient().from("products")
-        .update(data).eq("id", id).select("id");
+        .update(payload).eq("id", id).select("id");
       if (updateError) throw new Error(updateError.message);
       if (!updated?.length) throw new Error("The item was not updated. Check your database permissions.");
-      setNotice(`Updated ${data.name}.`);
+      setNotice(`Updated ${payload.name}.`);
       return { id, product_code: current.product_code };
     }
-    const result = await addProduct(data);
+    const result = await addProduct(payload);
     if (result.error) throw new Error(result.error.message);
     if (!result.data) throw new Error("The new item could not be confirmed. Please refresh the catalog.");
-    setNotice(`Added ${data.name}.`);
+    setNotice(`Added ${payload.name}.`);
     return { id: result.data.id, product_code: result.data.product_code };
   }
 

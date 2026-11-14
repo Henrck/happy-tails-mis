@@ -104,25 +104,25 @@ export default function WalkInMultiServiceSummary({
       const problem = await verifyGroomingLegPlans(legs);
       if (problem) { setError(problem); lock.current = false; return; }
       const result = await createAppointmentsAtomic(writes);
-      if (result.error) { setError(`Walk-in booking could not be saved: ${result.error}`); lock.current = false; return; }
+      if (result.error) { setError(`Appointment could not be saved: ${result.error}`); lock.current = false; return; }
       if (result.appointments.length !== writes.length) {
         throw new Error("Unconfirmed appointment result. Check the appointment table before retrying.");
       }
       setSaved(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unconfirmed booking result. Check the appointment table before retrying.");
+      setError(cause instanceof Error ? cause.message : "Unconfirmed appointment result. Check the appointment table before retrying.");
     } finally { setSaving(false); }
   }
 
   if (saved) return <section className="mx-auto max-w-xl py-10 text-center">
-    <h2 className="text-2xl font-bold text-emerald-700">Walk-in Booking Complete</h2>
+    <h2 className="text-2xl font-bold text-emerald-700">Appointment Created</h2>
     <p className="mt-2 text-zinc-600">All appointments were recorded together. Each pet has an individual groomer reservation and start time.</p>
     <p className="mt-3 font-semibold text-brand-pink">Total recorded: ₱{total.toLocaleString()}</p>
-    <button type="button" onClick={onDone} className="mt-5 rounded-full bg-brand-pink px-6 py-3 font-semibold text-white">Return to POS</button>
+    <button type="button" onClick={onDone} className="mt-5 rounded-full bg-brand-pink px-6 py-3 font-semibold text-white">Return to Appointments</button>
   </section>;
 
   return <div className="mx-auto w-full max-w-3xl">
-    <h2 className="text-center text-2xl font-extrabold text-brand-pink">Walk-in Booking Summary</h2>
+    <h2 className="text-center text-2xl font-extrabold text-brand-pink">Appointment Summary</h2>
     <p className="mt-1 text-center text-sm text-zinc-500">Review each pet, groomer, appointment time and total before saving.</p>
     <div className="mt-5 space-y-4">{legs.map(leg => <section key={leg.id} className="rounded-2xl border-2 border-pink-100 bg-white p-5">
       <div className="flex justify-between gap-3"><h3 className="font-bold text-brand-pink">{labels[leg.serviceChoice]}</h3>
@@ -155,6 +155,6 @@ export default function WalkInMultiServiceSummary({
     </label>}
     {error && <p role="alert" className="mt-4 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     <div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={onBack} className="rounded-full border border-zinc-300 py-3 font-semibold">Back</button>
-      <button type="button" onClick={() => void save()} disabled={saving || !legs.length || (hasGrooming && !approved)} className="rounded-full bg-brand-pink py-3 font-bold text-white disabled:opacity-40">{saving ? "Saving…" : "Complete Walk-in Booking"}</button></div>
+      <button type="button" onClick={() => void save()} disabled={saving || !legs.length || (hasGrooming && !approved)} className="rounded-full bg-brand-pink py-3 font-bold text-white disabled:opacity-40">{saving ? "Saving…" : "Create Appointment"}</button></div>
   </div>;
 }

@@ -20,7 +20,7 @@ export type Product = {
   image_url: string | null;
   status: ProductStatus;
   created_at: string;
-  description?: string;
+  description?: string | null;
   pet_types?: PetType[];
 
   // Current quantity calculated from product_batches.

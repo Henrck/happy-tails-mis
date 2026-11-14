@@ -113,15 +113,15 @@ export default function WalkInPage() {
   }
   function backFromSelection() { setStep("waiver"); }
 
-  // POS uses the same responsive layout as Customer Booking. The POS-only
-  // identity verification and atomic walk-in checkout remain unchanged.
+  // Reuses the existing staff-created booking workflow from the Appointments module.
+  // The appointment validation and atomic save behavior remain unchanged.
   const showPetSummary = (step === "selection" || step === "schedule") && legPets.length > 0;
   return <div className="ht-pos-booking ht-booking-v4 min-w-0 pb-8">
-    <button type="button" onClick={() => router.push("/admin/pos")} className="text-sm font-semibold text-zinc-500 hover:text-brand-pink">← Back to POS</button>
+    <button type="button" onClick={() => router.push("/admin/appointments")} className="text-sm font-semibold text-zinc-500 hover:text-brand-pink">← Back to Appointments</button>
     <div className="mx-auto mt-5 w-full max-w-7xl min-w-0">
       <div className="ht-pos-intro mb-5 rounded-2xl border border-pink-100 bg-white px-4 py-4 sm:px-6">
-        <h1 className="text-xl font-extrabold text-brand-pink">Walk-in Booking</h1>
-        <p className="mt-1 text-sm text-zinc-500">Same multi-pet and multi-service booking process as customer appointments, with walk-in records.</p>
+        <h1 className="text-xl font-extrabold text-brand-pink">New Appointment</h1>
+        <p className="mt-1 text-sm text-zinc-500">Create an appointment for an existing or new customer, with multi-pet and multi-service booking.</p>
         {completedLegs.length > 0 && <p className="mt-2 text-sm font-semibold text-zinc-700">Services ready: {completedLegs.length} · Pets: {pets.length}</p>}
       </div>
       <div className={`ht-booking-shell ${step === "verify" ? "ht-pos-verify" : ""}`}>
@@ -180,7 +180,7 @@ export default function WalkInPage() {
         onDone={() => setStep("summary")} onBack={() => { const last = completedLegs[completedLegs.length - 1]; if (last) editLeg(last.id); else setStep("service"); }} />}
       {step === "summary" && <WalkInMultiServiceSummary customer={customer} owner={owner} legs={completedLegs} packagesByService={packagesByService}
         sizesByService={sizesByService} addonsByService={addonsByService} groomers={groomers}
-        onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => window.location.assign("/admin/pos")} />}
+        onBack={() => setStep("add-more")} onEditLeg={editLeg} onDone={() => window.location.assign("/admin/appointments")} />}
           </div>
         </div>
       </div>

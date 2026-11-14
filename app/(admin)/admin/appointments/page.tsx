@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { fetchAppointments, updateAppointmentStatus, subscribeToAppointments, type AppointmentRow } from "@/lib/supabase/appointment-management";
 import type { AppointmentStatus } from "@/lib/types/appointments";
 import AppointmentStats from "@/components/admin/appointments/AppointmentStats";
@@ -31,6 +32,7 @@ function manilaDate() {
   return `${find("year")}-${find("month")}-${find("day")}`;
 }
 export default function AdminAppointmentsPage() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -78,7 +80,12 @@ export default function AdminAppointmentsPage() {
     return null;
   }
   return <div>
-    <div className="flex items-center gap-3"><h1 className="text-3xl font-bold text-brand-pink">Appointments</h1>{live && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">● Live update</span>}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3"><h1 className="text-3xl font-bold text-brand-pink">Appointments</h1>{live && <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">● Live update</span>}</div>
+      <button type="button" onClick={() => router.push("/admin/pos/walk-in")} className="inline-flex items-center gap-2 rounded-full border-2 border-brand-pink bg-brand-pink px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-pink-dark">
+        <span aria-hidden="true" className="text-lg leading-none">+</span> New Appointment
+      </button>
+    </div>
     <div className="mt-6"><AppointmentStats refreshKey={refreshKey}/></div>
     <div className="mt-6"><AppointmentFilters filters={filters} onChange={x => { setFilters(x); setPage(0); }}/></div>
     {loadError && <FeedbackDialog title="Appointments Could Not Load" message={loadError} onClose={() => setLoadError(null)} actionLabel="Retry Loading" onAction={() => { setLoadError(null); void load(); }}/>} 

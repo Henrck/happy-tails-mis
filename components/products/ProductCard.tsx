@@ -9,13 +9,18 @@ export default function ProductCard({ product, onView }: { product: Product; onV
         <div className="relative m-3 mb-0 flex aspect-square items-center justify-center overflow-hidden rounded-xl bg-[#F9FAFB] p-5">
           <span className="absolute left-2.5 top-2.5 z-[1] max-w-[65%] truncate rounded-full border border-pink-100 bg-white/95 px-2.5 py-1 text-[10px] font-bold text-brand-pink">{product.category}</span>
           {product.image_url ? (
-            <div className="relative h-full w-full transition-transform duration-300 group-hover:scale-105"><Image src={product.image_url} alt={product.name} fill className="object-contain" sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px" unoptimized /></div>
+            <div className="relative h-full w-full transition-transform duration-300 group-hover:scale-105">
+              <Image src={product.image_url} alt={product.name} fill className="object-contain" sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 240px" unoptimized />
+            </div>
           ) : (
             <div className="flex h-full w-full items-center justify-center text-5xl text-pink-200" aria-hidden="true">🐾</div>
           )}
         </div>
         <div className="flex flex-1 flex-col p-3 pt-3.5 sm:p-4">
           <h2 className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-zinc-900 transition-colors group-hover:text-brand-pink sm:text-[15px]" title={product.name}>{product.name}</h2>
+          <p className="mt-1 line-clamp-2 min-h-9 text-xs leading-4 text-zinc-500">
+            {product.description?.trim() || "View product details for more information."}
+          </p>
           <div className="mt-2 flex items-end justify-between gap-2">
             <span className="min-w-0 truncate rounded-md bg-zinc-100 px-2 py-1 text-[10px] font-medium text-zinc-500 sm:text-xs" title={size}>{size}</span>
             <span className="shrink-0 text-sm font-extrabold text-brand-pink sm:text-base">₱{Number(product.price).toLocaleString("en-PH", { maximumFractionDigits: 2 })}</span>

@@ -1,8 +1,4 @@
-// Query + mutation helpers for User Account Management. Status changes
-// (active/inactive/archive/restore) go straight through the client —
-// RLS already restricts writes to superadmin, so there's no need for a
-// server route for these. Only actions touching auth.users itself
-// (delete, password reset) need the service-role API routes.
+// Query + mutation helpers for User Account Management.
 import { createClient } from "./client";
 import type { StaffMember, Customer, AccountStatus } from "@/lib/types/users";
 
@@ -14,8 +10,30 @@ export async function fetchStaff() {
 
 export async function fetchCustomers() {
   const supabase = createClient();
-  const { data, error } = await supabase.from("customers").select("*").order("registered_at", { ascending: false });
-  return { customers: (data ?? []) as Customer[], error: error?.message };
+  const [{ data, error }, { data: penalties, error: penaltyError }] = await Promise.all([
+    supabase.from("customers").select("*").order("registered_at", { ascending: false }),
+    supabase.from("customer_booking_penalties").select("customer_id,penalty_count,penalty_restricted_until,manual_restricted,manual_restricted_until,manual_restriction_reason"),
+  ]);
+  const byCustomer = new Map((penalties ?? []).map((row) => [row.customer_id, row]));
+  const now = Date.now();
+  const customers = (data ?? []).map((customer) => {
+    const penalty = byCustomer.get(customer.id);
+    const penaltyActive = !!penalty?.penalty_restricted_until && new Date(penalty.penalty_restricted_until).getTime() > now;
+    const manualActive = !!penalty?.manual_restricted && (!penalty.manual_restricted_until || new Date(penalty.manual_restricted_until).getTime() > now);
+    const activeDates = [penaltyActive ? penalty?.penalty_restricted_until : null, manualActive ? penalty?.manual_restricted_until : null].filter((value): value is string => Boolean(value));
+    const bookingRestrictedUntil = manualActive && !penalty?.manual_restricted_until ? null : activeDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+    return {
+      ...customer,
+      penalty_count: penalty?.penalty_count ?? 0,
+      penalty_restricted_until: penalty?.penalty_restricted_until ?? null,
+      manual_restricted: penalty?.manual_restricted ?? false,
+      manual_restricted_until: penalty?.manual_restricted_until ?? null,
+      manual_restriction_reason: penalty?.manual_restriction_reason ?? null,
+      is_booking_restricted: penaltyActive || manualActive,
+      booking_restricted_until: bookingRestrictedUntil,
+    } as Customer;
+  });
+  return { customers, error: error?.message ?? penaltyError?.message };
 }
 
 export async function setStaffStatus(id: string, status: AccountStatus) {
@@ -39,12 +57,5 @@ export async function logAudit(action: string, targetType: "staff" | "customer",
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  await supabase.from("audit_logs").insert({
-    actor_id: user.id,
-    actor_role: profile?.role,
-    action,
-    target_type: targetType,
-    target_id: targetId,
-    details,
-  });
+  await supabase.from("audit_logs").insert({ actor_id: user.id, actor_role: profile?.role, action, target_type: targetType, target_id: targetId, details });
 }

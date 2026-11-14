@@ -190,9 +190,6 @@ export default function PointOfSalePage() {
             </svg>
             <input type="text" placeholder="Search items" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-full border border-pink-200 bg-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-pink" />
           </div>
-          <button onClick={() => router.push("/admin/pos/walk-in")} className="border-2 border-brand-pink text-brand-pink font-semibold text-sm px-6 py-2 rounded-full hover:bg-brand-pink hover:text-white transition-colors">
-            Walk In
-          </button>
         </div>
 
         <div className="mt-3">

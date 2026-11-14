@@ -2,7 +2,7 @@
 // by Supabase; reductions use an auditable, transactional server-side RPC.
 import { createClient } from "./client";
 import { philippinesToday } from "@/lib/utils/inventory-expiration";
-import type { Product, ProductBatch, ProductCategory } from "@/lib/types/products";
+import type { PetType, Product, ProductBatch, ProductCategory } from "@/lib/types/products";
 
 // PostgREST usually caps a single response at 1,000 rows. Never silently
 // under-count stock or omit batches because inventory grew past that limit.
@@ -56,13 +56,34 @@ export function computeTotalStock(productId: string, batches: ProductBatch[]) {
 export function computeStatus(qty: number, minStock: number): "Out of Stock" | "Low Stock" | "In Stock" {
   return qty <= 0 ? "Out of Stock" : qty <= minStock ? "Low Stock" : "In Stock";
 }
-export async function addProduct(product: { name: string; category: ProductCategory; unit: string; package_size: string | null; price: number; min_stock: number }) {
-  return createClient().from("products").insert(product).select().single();
+
+type ProductWriteFields = {
+  name: string;
+  category: ProductCategory;
+  unit: string;
+  package_size?: string | null;
+  price?: number;
+  min_stock: number;
+  description?: string;
+  pet_types?: PetType[];
+};
+
+export async function addProduct(product: ProductWriteFields) {
+  return createClient().from("products").insert({
+    ...product,
+    description: product.description?.trim() ?? "",
+    pet_types: product.pet_types ?? [],
+  }).select().single();
 }
-export async function updateProduct(id: string, fields: { name: string; category: ProductCategory; unit: string; min_stock: number }) {
-  const { data, error } = await createClient().from("products").update(fields).eq("id", id).select("id");
+
+export async function updateProduct(id: string, fields: ProductWriteFields) {
+  const { data, error } = await createClient().from("products").update({
+    ...fields,
+    ...(fields.description !== undefined ? { description: fields.description.trim() } : {}),
+  }).eq("id", id).select("id");
   return { error: error ?? (!data?.length ? { message: "No product was updated; check inventory permissions." } : null) };
 }
+
 export async function uploadProductImage(file: File, productCode: string) {
   const db = createClient();
   const ext = file.name.split(".").pop();
