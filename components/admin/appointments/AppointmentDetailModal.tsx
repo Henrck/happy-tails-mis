@@ -7,7 +7,6 @@ import { fetchAppointmentDetail, nextValidStatus, type AppointmentRow } from "@/
 import type { AppointmentStatus } from "@/lib/types/appointments";
 import CheckInAssignmentModal from "./CheckInAssignmentModal";
 import OnlineGroomingVerification from "./OnlineGroomingVerification";
-import NoShowControl from "./NoShowControl";
 import { X, AlertTriangle, CheckCircle2, ShieldCheck, CalendarCheck, ClipboardCheck } from "lucide-react";
 
 const names: Record<string, string> = { dog_grooming: "Dog Grooming", cat_grooming: "Cat Grooming", boarding: "Boarding", ala_carte: "À La Carte" };
@@ -94,7 +93,6 @@ export default function AppointmentDetailModal({ appointment, onClose, onUpdateS
               <button type="button" disabled={busy || nextValidStatus(appointment.status) !== "completed"} onClick={() => void update("completed")} className="rounded-full border-2 border-green-500 p-3 text-sm font-semibold text-green-600 disabled:opacity-40">Complete</button>
               <button type="button" disabled={busy || !cancellable} onClick={() => { setError(null); setCancelOpen(true); }} className="rounded-full border-2 border-red-400 p-3 text-sm font-semibold text-red-600 disabled:opacity-40">Cancel</button>
             </div>
-            <NoShowControl appointment={appointment} onRecorded={refreshQuietly}/>
           </Section>
         </div>
       </div>

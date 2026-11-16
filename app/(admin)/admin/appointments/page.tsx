@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { fetchAppointments, updateAppointmentStatus, subscribeToAppointments, type AppointmentRow } from "@/lib/supabase/appointment-management";
+import { processOverdueNoShows } from "@/lib/supabase/no-shows";
 import type { AppointmentStatus } from "@/lib/types/appointments";
 import AppointmentStats from "@/components/admin/appointments/AppointmentStats";
 import AppointmentFilters, { type FilterState } from "@/components/admin/appointments/AppointmentFilters";
@@ -50,7 +51,8 @@ export default function AdminAppointmentsPage() {
     setAppointments(r.rows);
     setSelected(x => x ? r.rows.find(y => y.id === x.id) ?? x : null);
   }, []);
-  useEffect(() => { setLoading(true); void load().finally(() => setLoading(false)); }, [load]);
+  // Auto-cancel overdue no-shows first so staff never see them as still open.
+  useEffect(() => { setLoading(true); void processOverdueNoShows().then(load).finally(() => setLoading(false)); }, [load]);
   useEffect(() => {
     const off = subscribeToAppointments(() => {
       void load();

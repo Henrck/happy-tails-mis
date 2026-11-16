@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { processOverdueNoShows } from "@/lib/supabase/no-shows";
 import { AlertTriangle, HelpCircle, ShieldCheck, X } from "lucide-react";
 
 type PenaltyRow = {
@@ -43,6 +44,9 @@ export default function CustomerPenaltyCounter() {
         if (active) setLoading(false);
         return;
       }
+      // Apply any overdue no-show first so the counter shows current points.
+      await processOverdueNoShows();
+      if (!active) return;
 
       const refresh = async () => {
         const { data } = await supabase
@@ -147,19 +151,22 @@ export default function CustomerPenaltyCounter() {
             </div>
             <div className="mt-4 space-y-3 text-sm leading-6 text-zinc-600">
               <p>
-                <strong className="text-zinc-800">Three-day grace period:</strong> You may cancel an appointment at least 72 hours before its scheduled start without receiving a penalty, regardless of how many appointments you cancel that day.
+                <strong className="text-zinc-800">Three-day grace period:</strong> Cancelling 3 or more days before the appointment date is free.
               </p>
               <p>
-                <strong className="text-zinc-800">Daily late-cancellation allowance:</strong> The first three late cancellations in a Philippine calendar day are allowed. Exceeding the limit applies one penalty point and a one-day booking restriction for that day.
+                <strong className="text-zinc-800">Daily cancellation limit:</strong> Up to 3 cancellations per day follow the rules above. The 4th and any later cancellation on the same day adds 1 penalty point and restricts new bookings for 12 hours.
               </p>
               <p>
-                <strong className="text-zinc-800">No-show:</strong> Not arriving for an appointment adds two penalty points and a one-day booking restriction.
+                <strong className="text-zinc-800">Late cancellation:</strong> Cancelling less than 3 days before the appointment date adds 1 penalty point and restricts new bookings for 12 hours.
               </p>
               <p>
-                <strong className="text-zinc-800">Maximum penalty:</strong> At three penalty points, new appointment booking is restricted for one month.
+                <strong className="text-zinc-800">No-show:</strong> If no pet is checked in within 24 hours of the scheduled time, the appointment is cancelled automatically. A no-show adds 2 penalty points and restricts new bookings for 2 days.
+              </p>
+              <p>
+                <strong className="text-zinc-800">Maximum penalty:</strong> At 3 penalty points, new bookings are restricted for 1 month.
               </p>
               <p className="rounded-xl bg-pink-50 p-3 text-xs">
-                Penalty points remain on record after a restriction expires; the restriction ending does not reset the counter. An administrator may lift a restriction early, but that does not erase the recorded points. Existing confirmed appointments are not automatically cancelled.
+                Penalty points remain on record after a restriction expires; the restriction ending does not reset the counter. An administrator may lift a restriction early, but that does not erase the recorded points. Your other existing appointments are not cancelled by a restriction.
               </p>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="mt-5 w-full rounded-full bg-brand-pink py-3 font-bold text-white">

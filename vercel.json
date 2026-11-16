@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/boarding-pickup", "schedule": "0 0 * * *" }
+    { "path": "/api/cron/boarding-pickup", "schedule": "0 0 * * *" },
+    { "path": "/api/cron/no-shows", "schedule": "0 16 * * *" }
   ]
 }

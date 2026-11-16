@@ -58,7 +58,7 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
 
         <section className="mt-5 rounded-2xl border border-pink-100 bg-pink-50/50 p-4">
           <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-zinc-800">Cancellation Penalties</h4><span className={`rounded-full px-3 py-1 text-sm font-bold ${points >= 3 ? "bg-red-100 text-red-700" : points > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{points}/3</span></div>
-          <p className="mt-2 text-xs leading-5 text-zinc-600">Penalty points are separate from account login status. Late cancellations beyond the daily allowance add 1 point; a no-show adds 2 points.</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-600">Penalty points are separate from account login status. A cancellation less than 3 days before the appointment, or a customer&apos;s 4th+ cancellation in one day, adds 1 point (12-hour restriction); an automatic no-show adds 2 points (2-day restriction); 3 points restrict booking for 1 month.</p>
           <div className="mt-3 rounded-xl bg-white p-3 text-sm">
             <Row label="Booking restriction" value={restricted ? <span className="font-bold text-red-600">Active</span> : <span className="font-bold text-emerald-600">None</span>} />
             {restricted && <Row label="Restriction until" value={customer.booking_restricted_until ? manilaDate(customer.booking_restricted_until) : "Until manually lifted"} />}
