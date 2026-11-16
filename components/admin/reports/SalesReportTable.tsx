@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useState } from "react";
-import type { SalesReportRow } from "@/lib/data/sales-reports-mock";
+import type { SalesReportRow } from "@/lib/types/reports";
 import SortableHeader, { type SortDirection } from "./SortableHeader";
 
 const columns = [

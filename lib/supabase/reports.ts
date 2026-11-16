@@ -3,7 +3,7 @@
 import { createClient } from "./client";
 import { fetchAppointments, type AppointmentRow } from "./appointment-management";
 import type { AppointmentStatus, AppointmentServiceType } from "@/lib/types/appointments";
-import type { ServiceReport, ReportStatus, ServiceCategory } from "@/lib/data/service-reports-mock";
+import type { ServiceReport, ReportStatus, ServiceCategory } from "@/lib/types/reports";
 
 function mapStatus(status: AppointmentStatus): ReportStatus {
   switch (status) {

@@ -1,11 +1,7 @@
-import type { InventoryReportRow, InventoryReportStatus } from "@/lib/data/inventory-reports-mock";
+import type { InventoryReportRow, InventoryReportStatus } from "@/lib/types/reports";
 import SortableHeader, { type SortDirection } from "./SortableHeader";
 
-// NOTE (unrelated to this width fix, flagging since I noticed it while
-// in here): this table's data still comes from
-// lib/data/inventory-reports-mock, a separate mock from the real
-// Inventory module — not the same data ProductsTable/StocksTable now
-// use. Not fixing that now, just not hiding it either.
+// Rows come from Supabase via fetchInventoryReportRows (lib/supabase/inventory-reports.ts).
 const statusStyles: Record<InventoryReportStatus, string> = {
   "In Stock": "bg-emerald-50 text-emerald-600",
   "Low Stock": "bg-amber-50 text-amber-600",

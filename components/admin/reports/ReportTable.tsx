@@ -1,4 +1,4 @@
-import type { ServiceReport, ReportStatus } from "@/lib/data/service-reports-mock";
+import type { ServiceReport, ReportStatus } from "@/lib/types/reports";
 import SortableHeader, { type SortDirection } from "./SortableHeader";
 
 const statusStyles: Record<ReportStatus, string> = {

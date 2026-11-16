@@ -1,6 +1,6 @@
 import { createClient } from "./client";
 import type { Groomer, Kennel } from "@/lib/types/pet-services";
-import type { BoardingStage } from "@/lib/data/boarding-kennels-mock";
+import type { BoardingStage } from "@/lib/types/pet-services";
 export type GroomingSessionRow = {
   appointmentId: string; appointmentPetId: string; petId: string; petName: string; breed: string;
   ownerName: string; scheduledDate: string; scheduledTime: string | null; groomerId: string; groomerName: string;

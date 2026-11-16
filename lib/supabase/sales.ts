@@ -1,7 +1,7 @@
 // POS sales ledger. One row per INVOICE for reporting, with nested items.
 // recordSale is retained unchanged for existing POS code compatibility.
 import { createClient } from "./client";
-import type { SalesReportRow, SalesInvoiceItem } from "@/lib/data/sales-reports-mock";
+import type { SalesReportRow, SalesInvoiceItem } from "@/lib/types/reports";
 
 export type SaleLineInput = { productId: string; quantity: number; unitPrice: number };
 

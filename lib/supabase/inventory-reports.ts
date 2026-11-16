@@ -2,7 +2,7 @@
 // Expired batches remain in the audit history, but do not inflate stock.
 import { fetchProducts, fetchAllBatches, computeStatus } from "./products";
 import { sellableStock } from "@/lib/utils/inventory-expiration";
-import type { InventoryReportRow, InventoryReportStatus } from "@/lib/data/inventory-reports-mock";
+import type { InventoryReportRow, InventoryReportStatus } from "@/lib/types/reports";
 
 export async function fetchInventoryReportRows() {
   const [{ products, error: productsError }, { batches, error: batchesError }] = await Promise.all([

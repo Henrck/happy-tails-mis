@@ -2,7 +2,7 @@
 // History modal: groomers with their completed-session counts, expandable
 // to show which pets they were for.
 import { useState } from "react";
-import type { GroomingSession } from "@/lib/data/grooming-sessions-mock";
+import type { GroomingSession } from "@/lib/types/pet-services";
 
 export default function HistoryModal({
   completedSessions,

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { InventoryReportRow } from "@/lib/data/inventory-reports-mock";
+import type { InventoryReportRow } from "@/lib/types/reports";
 import ExportMenu from "@/components/admin/reports/ExportMenu";
 import type { ExportColumn } from "@/lib/utils/report-export";
 

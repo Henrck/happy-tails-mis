@@ -6,9 +6,9 @@ import { useState, useMemo, useEffect } from "react";
 import { Inter } from "next/font/google";
 import { sortRows, nextSortState, type SortDirection } from "@/lib/utils/sort";
 
-import type { ServiceReport } from "@/lib/data/service-reports-mock";
-import type { InventoryReportRow } from "@/lib/data/inventory-reports-mock";
-import type { SalesReportRow } from "@/lib/data/sales-reports-mock";
+import type { ServiceReport } from "@/lib/types/reports";
+import type { InventoryReportRow } from "@/lib/types/reports";
+import type { SalesReportRow } from "@/lib/types/reports";
 import { fetchServiceReports } from "@/lib/supabase/reports";
 import { fetchInventoryReportRows } from "@/lib/supabase/inventory-reports";
 import { fetchSalesReportRows } from "@/lib/supabase/sales";

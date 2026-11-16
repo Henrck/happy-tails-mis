@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { SessionStage } from "@/lib/data/grooming-sessions-mock";
+import type { SessionStage } from "@/lib/types/pet-services";
 
 export type SessionFilterState = { search: string; status: SessionStage | "all"; groomer: string | "all" };
 

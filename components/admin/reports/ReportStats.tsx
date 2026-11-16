@@ -1,4 +1,4 @@
-import type { ServiceReport } from "@/lib/data/service-reports-mock";
+import type { ServiceReport } from "@/lib/types/reports";
 
 export default function ReportStats({ reports }: { reports: ServiceReport[] }) {
   const total = reports.length;

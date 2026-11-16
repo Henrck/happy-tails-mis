@@ -1,4 +1,4 @@
-import type { ServiceReport, ReportStatus } from "@/lib/data/service-reports-mock";
+import type { ServiceReport, ReportStatus } from "@/lib/types/reports";
 
 const statusStyles: Record<ReportStatus, string> = {
   Completed: "bg-emerald-50 text-emerald-600",

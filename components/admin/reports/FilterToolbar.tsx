@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { ReportStatus, ServiceCategory, AppointmentSource, ServiceReport } from "@/lib/data/service-reports-mock";
+import type { ReportStatus, ServiceCategory, AppointmentSource, ServiceReport } from "@/lib/types/reports";
 import ExportMenu from "@/components/admin/reports/ExportMenu";
 import type { ExportColumn } from "@/lib/utils/report-export";
 
