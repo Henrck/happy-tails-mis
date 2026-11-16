@@ -66,7 +66,7 @@ export default function OnlineGroomingVerification({ appointment, pet, onSaved }
       <div className="flex justify-between"><span>Original quote</span><strong>₱{preview.previousLineAmount.toLocaleString()}</strong></div>
       <div className="flex justify-between"><span>Revised price (including existing extras)</span><strong>₱{preview.newLineAmount.toLocaleString()}</strong></div>
       <div className="flex justify-between border-t border-pink-200 pt-2"><span>Difference</span><strong>{delta >= 0 ? "+" : "−"}₱{Math.abs(delta).toLocaleString()}</strong></div>
-      <label className="flex items-start gap-2 pt-2 text-xs text-zinc-700"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)} className="mt-0.5 accent-pink-500" /><span>I have explained the revised final price and received the customer's approval.</span></label>
+      <label className="flex items-start gap-2 pt-2 text-xs text-zinc-700"><input type="checkbox" checked={approved} onChange={e=>setApproved(e.target.checked)} className="mt-0.5 accent-pink-500" /><span>I have explained the revised final price and received the customer&apos;s approval.</span></label>
       <button type="button" disabled={!approved || busy} onClick={confirm} className="w-full rounded-full bg-brand-pink py-2.5 text-sm font-bold text-white disabled:opacity-40">{busy ? "Saving…" : "Confirm Verified Weight & Price"}</button>
     </div>}
     {error && <p role="alert" className="mt-2 rounded-lg bg-red-50 p-2 text-xs text-red-700">{error}</p>}

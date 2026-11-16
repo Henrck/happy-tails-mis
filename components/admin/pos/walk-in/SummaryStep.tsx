@@ -23,7 +23,7 @@ function formatTime12h(time: string | null): string {
 }
 
 export default function SummaryStep({
-  draft, packages, sizes, addons, groomers, onBack, onDone,
+  draft, packages, sizes, addons, groomers, onBack, onDone: _onDone,
 }: {
   draft: WalkInDraft;
   packages: Package[];

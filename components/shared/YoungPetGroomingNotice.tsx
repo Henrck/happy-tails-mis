@@ -28,7 +28,7 @@ export default function YoungPetGroomingNotice({ onContinue, onCancel }: {
         <h2 id={titleId} className="text-xl font-extrabold text-zinc-900">A quick note about young pets</h2>
         <div id={descriptionId} className="mt-3 space-y-3 text-sm leading-6 text-zinc-700">
           <p><strong>About 8–16 weeks</strong> is a common age range for introducing pets to gentle grooming and handling. It is <strong>not a universal minimum age</strong> or a guarantee that professional grooming is appropriate.</p>
-          <p>Before arranging a professional grooming session for a puppy or kitten, ask your veterinarian about the pet's health, vaccinations, and readiness. The groomer may need to assess the pet before providing the service.</p>
+          <p>Before arranging a professional grooming session for a puppy or kitten, ask your veterinarian about the pet&apos;s health, vaccinations, and readiness. The groomer may need to assess the pet before providing the service.</p>
           <p className="rounded-xl bg-pink-50 p-3 text-xs text-zinc-700">You can still register your pet at any age. This reminder does not block pet registration or approve a grooming booking.</p>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3">

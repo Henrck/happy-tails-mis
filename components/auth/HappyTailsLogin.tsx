@@ -42,7 +42,12 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
     } catch { /* private-browsing storage can be unavailable */ }
   }, []);
 
-  useEffect(() => {
+  // Show the message for the current URL flags whenever they change. Adjusting
+  // state during render (instead of in an effect) avoids an extra render pass.
+  const paramKey = params.toString();
+  const [seenParamKey, setSeenParamKey] = useState<string | null>(null);
+  if (seenParamKey !== paramKey) {
+    setSeenParamKey(paramKey);
     if (params.get("deactivated") === "1") {
       setError("This account is inactive or archived. Please contact support.");
     } else if (params.get("access") === "unverified") {
@@ -54,7 +59,7 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
     } else if (params.get("google_error") === "setup") {
       setError("Your Google account was verified, but HappyTails account setup is incomplete. Please contact support.");
     }
-  }, [params]);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

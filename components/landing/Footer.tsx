@@ -1,6 +1,7 @@
 // Existing public footer; exclude navigation/contact text from Google snippets
 // without hiding content from customers or changing links.
 import Image from "next/image";
+import Link from "next/link";
 
 export default function Footer() {
   return (
@@ -17,9 +18,9 @@ export default function Footer() {
         <div data-nosnippet className="text-center md:text-left">
           <h3 className="font-bold text-zinc-800">Navigation</h3>
           <ul className="mt-2 space-y-1.5 text-sm text-zinc-700">
-            <li><a href="/" className="hover:text-brand-pink">Home</a></li>
-            <li><a href="/#services" className="hover:text-brand-pink">Services</a></li>
-            <li><a href="/#about" className="hover:text-brand-pink">About Us</a></li>
+            <li><Link href="/" className="hover:text-brand-pink">Home</Link></li>
+            <li><Link href="/#services" className="hover:text-brand-pink">Services</Link></li>
+            <li><Link href="/#about" className="hover:text-brand-pink">About Us</Link></li>
           </ul>
         </div>
 

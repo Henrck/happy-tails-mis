@@ -18,13 +18,14 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
   const [sizeReview, setSizeReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pageSize = 4;
-  const [page, setPage] = useState(1);
+  const [requestedPage, setPage] = useState(1);
   const activePets = pets.filter(p => !(p as Pet & { archived_at?: string | null }).archived_at);
   const activeIds = new Set(activePets.map(p => p.id));
   const selectedActiveIds = selectedIds.filter(id => activeIds.has(id));
   const allSelected = activePets.length > 0 && selectedActiveIds.length === activePets.length;
   const pageCount = Math.max(1, Math.ceil(activePets.length / pageSize));
-  useEffect(() => { setPage(current => Math.min(current, pageCount)); }, [pageCount]);
+  // Clamp during render so removing pets never leaves an empty page selected.
+  const page = Math.min(requestedPage, pageCount);
   useEffect(() => {
     if (selectedIds.some(id => !activeIds.has(id))) onSelectionChange(selectedIds.filter(id => activeIds.has(id)));
     // Only trim selections when the active pet IDs change.
@@ -75,9 +76,9 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
       : <div className="py-12 text-center text-sm text-slate-500">No active pets available. Add a new pet or restore one in My Pets.</div>}
     </div>
     {activePets.length > pageSize && <nav aria-label="Pet pages" className="mt-3 flex flex-wrap items-center justify-center gap-2">
-      <button type="button" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:opacity-40">Previous</button>
+      <button type="button" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:opacity-40">Previous</button>
       {Array.from({length: pageCount}, (_, i) => i + 1).map(n => <button type="button" key={n} onClick={() => setPage(n)} aria-current={page === n ? "page" : undefined} className={`h-8 min-w-8 rounded-full px-2 text-xs font-bold ${page === n ? "bg-brand-pink text-white" : "border border-pink-200 bg-white text-brand-pink"}`}>{n}</button>)}
-      <button type="button" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:opacity-40">Next</button>
+      <button type="button" onClick={() => setPage(Math.min(pageCount, page + 1))} disabled={page === pageCount} className="rounded-full border border-pink-200 px-3 py-1.5 text-xs font-semibold text-brand-pink disabled:opacity-40">Next</button>
       <span className="w-full text-center text-xs text-slate-500">Showing {(page - 1) * pageSize + 1}–{Math.min(activePets.length, page * pageSize)} of {activePets.length} pets</span>
     </nav>}
     {unknown.length > 0 && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">{unknown.length} selected pet{unknown.length === 1 ? " needs" : "s need"} a size estimate for service pricing and kennel safety. You can continue after estimating; no exact weight or staff assistance is required.</p>}

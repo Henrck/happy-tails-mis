@@ -69,6 +69,7 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const [counts, setCounts] = useState<BoardingKennelCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(false);
@@ -124,7 +125,7 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month, time, signature, validDetails, refresh]);
   useEffect(() => {
-    const timer = setInterval(() => setRefresh((x) => x + 1), 30_000);
+    const timer = setInterval(() => { setRefresh((x) => x + 1); setNow(Date.now()); }, 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -139,7 +140,7 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
     availability[item.day] = item.available ? 1 : 0;
     if (!item.available) {
       const selectedDropOff = new Date(`${item.day}T${time}:00+08:00`).getTime();
-      unavailable[item.day] = item.day === today && selectedDropOff <= Date.now()
+      unavailable[item.day] = item.day === today && selectedDropOff <= now
         ? "Drop-off time has passed"
         : item.reason ?? "Fully booked for the selected group";
     }
@@ -175,7 +176,7 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const selectedAvailable = !!date && days.some((row) => row.day === date && row.available);
   const valid = validDetails && selectedAvailable && !loading && !checking && !loadError && !closures.loading && !closures.error &&
     /^\d{2}:\d{2}$/.test(time) && time >= "09:00" && time <= "18:00" &&
-    new Date(`${date}T${time}:00+08:00`).getTime() > Date.now();
+    new Date(`${date}T${time}:00+08:00`).getTime() > now;
   async function confirm() {
     if (!valid || checking) return;
     setChecking(true); setError(null);

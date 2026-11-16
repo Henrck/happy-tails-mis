@@ -1,5 +1,4 @@
 import type { Customer } from "@/lib/types/users";
-import type { ServiceType } from "@/lib/types/services";
 import type { Pet, DraftPetSelection, AppointmentServiceType } from "@/lib/types/appointments";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
 

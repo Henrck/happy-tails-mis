@@ -21,7 +21,13 @@ export default function AdminShell({ children, role }: { children: React.ReactNo
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
-  useEffect(() => { if (mobile) setSidebarOpen(false); }, [pathname, mobile]);
+  // Close the mobile drawer after navigating. Adjusting state during render
+  // avoids an extra effect pass; the media-query sync already closes it on resize.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (pathname !== lastPathname) {
+    setLastPathname(pathname);
+    if (mobile) setSidebarOpen(false);
+  }
 
   // The RPC validates the authenticated account and suppresses duplicate
   // session-open events within 30 minutes; route navigations are not sign-ins.

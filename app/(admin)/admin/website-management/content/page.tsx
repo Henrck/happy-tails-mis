@@ -3,6 +3,9 @@ import { useEffect,useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { textDefaults,type WebsiteService,type WebsitePackage,type WebsitePackageMedia } from '@/lib/website/catalog';
 
+// Unique storage path per upload; runs only when an image is uploaded, never during render.
+const uploadPath=(kind:'services'|'packages',id:string,ext:string)=>`website-content/${kind}/${id}/${Date.now()}.${ext}`;
+
 export default function ContentEditor(){
  const [text,setText]=useState<Record<string,string>>({...textDefaults});
  const [services,setServices]=useState<WebsiteService[]>([]);
@@ -22,7 +25,7 @@ export default function ContentEditor(){
  async function upload(file:File,kind:'services'|'packages',id:string){
   if(!file.type.startsWith('image/')||file.size>8*1024*1024)throw Error('Choose an image up to 8 MB.');
   const ext=file.name.split('.').pop()?.toLowerCase()??'jpg';if(!['jpg','jpeg','png','webp'].includes(ext))throw Error('Use JPG, PNG, or WebP.');
-  const path=`website-content/${kind}/${id}/${Date.now()}.${ext}`;
+  const path=uploadPath(kind,id,ext);
   const {error}=await db.storage.from('site-images').upload(path,file,{contentType:file.type,upsert:false});if(error)throw error;
   const url=db.storage.from('site-images').getPublicUrl(path).data.publicUrl;
   if(kind==='services')await patchService(id,{image_url:url});else await patchMedia(id,{image_url:url});

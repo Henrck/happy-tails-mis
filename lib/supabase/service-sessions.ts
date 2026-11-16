@@ -16,20 +16,36 @@ export async function fetchGroomingSessions() {
     .not("groomer_id", "is", null).eq("appointments.status", "checked_in")
     .in("appointments.service_type", ["dog_grooming", "cat_grooming", "ala_carte"]);
   if (error) return { sessions: [] as GroomingSessionRow[], error: error.message };
-  return { sessions: ((data ?? []) as any[]).map(r => ({
+  return { sessions: ((data ?? []) as unknown as GroomingJoinRow[]).map(r => ({
     appointmentId: r.appointments.id, appointmentPetId: r.id, petId: r.pets?.id ?? r.pet_id,
     petName: r.pets?.name ?? "Unknown pet", breed: r.pets?.breed ?? "—", ownerName: r.appointments.owner_name,
     scheduledDate: r.appointments.scheduled_date, scheduledTime: r.appointments.scheduled_time,
     groomerId: r.groomers?.id ?? r.groomer_id, groomerName: r.groomers?.name ?? "Unassigned",
   })) as GroomingSessionRow[], error: null };
 }
+type KennelCheckPetRow = {
+  id: string; kennel_id: string | null;
+  packages: { name: string } | null;
+  package_pricing: { size_label: string | null; size_detail: string | null; packages: { name: string } | null } | null;
+};
+type SessionPet = { id: string; name: string | null; breed: string | null } | null;
+type GroomingJoinRow = {
+  id: string; pet_id: string; groomer_id: string;
+  appointments: { id: string; owner_name: string; scheduled_date: string; scheduled_time: string | null };
+  pets: SessionPet; groomers: { id: string; name: string } | null;
+};
+type BoardingJoinRow = {
+  id: string; pet_id: string; kennel_id: string;
+  appointments: { id: string; owner_name: string; drop_off_at: string | null; pick_up_at: string | null; status: string };
+  pets: SessionPet; kennels: { id: string; size: string; number: number } | null;
+};
 export async function fetchBoardingSessions() {
   const s = createClient();
   const { data, error } = await s.from("appointment_pets").select(`id,pet_id,kennel_id,appointments!inner(id,owner_name,drop_off_at,pick_up_at,status,service_type),pets(id,name,breed),kennels(id,size,number)`)
     .not("kennel_id", "is", null).in("appointments.status", ["confirmed", "checked_in"])
     .eq("appointments.service_type", "boarding").neq("status", "completed");
   if (error) return { sessions: [] as BoardingSessionRow[], error: error.message };
-  return { sessions: ((data ?? []) as any[]).map(r => ({
+  return { sessions: ((data ?? []) as unknown as BoardingJoinRow[]).map(r => ({
     appointmentId: r.appointments.id, appointmentPetId: r.id, petId: r.pets?.id ?? r.pet_id,
     petName: r.pets?.name ?? "Unknown pet", breed: r.pets?.breed ?? "—", ownerName: r.appointments.owner_name,
     dropOffAt: r.appointments.drop_off_at, pickUpAt: r.appointments.pick_up_at,
@@ -81,10 +97,10 @@ export async function checkInAppointment(id: string, assignments: { appointmentP
       s.from("kennels").select("id,size,is_active").in("id", assignments.map(x => x.resourceId)),
     ]);
     if (pe || ke) return { error: pe?.message ?? ke?.message ?? "Unable to verify kennels." };
-    const pets = new Map((petRows ?? []).map((r: any) => [r.id, r]));
-    const kennels = new Map((kennelRows ?? []).map((k: any) => [k.id, k]));
+    const pets = new Map(((petRows ?? []) as unknown as KennelCheckPetRow[]).map((r) => [r.id, r]));
+    const kennels = new Map(((kennelRows ?? []) as { id: string; size: string; is_active: boolean | null }[]).map((k) => [k.id, k]));
     for (const x of assignments) {
-      const row: any = pets.get(x.appointmentPetId); const kennel: any = kennels.get(x.resourceId);
+      const row = pets.get(x.appointmentPetId); const kennel = kennels.get(x.resourceId);
       if (!row || !kennel || kennel.is_active !== true) return { error: "The selected kennel is disabled or no longer exists." };
       if (row.kennel_id && row.kennel_id !== x.resourceId) return { error: "This pet already has a reserved kennel. Confirm the booked kennel instead of replacing it." };
       if (!row.kennel_id && busy.has(x.resourceId)) return { error: "This kennel is currently occupied. Choose another active kennel." };

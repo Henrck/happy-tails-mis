@@ -1,6 +1,6 @@
 "use client";
 // Booking workflow: existing data sources, pricing, multiple-pet and multi-service logic preserved.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { fetchPetsByCustomer } from "@/lib/supabase/appointments";
@@ -45,7 +45,7 @@ export default function BookAppointmentPage() {
   const [boardingAddons, setBoardingAddons] = useState<Addon[]>([]);
   const [packagesByService, setPackagesByService] = useState<Record<string, Package[]>>({});
   const [sizesByService, setSizesByService] = useState<Record<string, PetSize[]>>({});
-  const [addonsByService, setAddonsByService] = useState<Record<string, Addon[]>>({});
+  const [fetchedAddons, setFetchedAddons] = useState<Record<string, Addon[]>>({});
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function BookAppointmentPage() {
       setGroomers(groomerResult.groomers);
       setKennels(kennelResult.kennels);
       setBoardingAddons(boardingAddonResult.addons);
-      setAddonsByService(prev => ({ ...prev, ala_carte: alaCarteResult.addons }));
+      setFetchedAddons(prev => ({ ...prev, ala_carte: alaCarteResult.addons }));
       setLoading(false);
     }
     void load();
@@ -77,7 +77,7 @@ export default function BookAppointmentPage() {
     ]);
     setPackagesByService((prev) => ({ ...prev, [serviceType]: pkgResult.packages }));
     setSizesByService((prev) => ({ ...prev, [serviceType]: sizeResult.sizes }));
-    setAddonsByService((prev) => ({ ...prev, [serviceType]: addonResult.addons }));
+    setFetchedAddons((prev) => ({ ...prev, [serviceType]: addonResult.addons }));
   }, [packagesByService]);
 
   const loadLookupsForChoice = useCallback((choice: WalkInServiceChoice) => {
@@ -85,7 +85,8 @@ export default function BookAppointmentPage() {
     else if (choice === "dog_grooming" || choice === "cat_grooming") void loadGroomingLookups(choice);
   }, [loadGroomingLookups]);
 
-  useEffect(() => { setAddonsByService((prev) => ({ ...prev, boarding: boardingAddons })); }, [boardingAddons]);
+  // Boarding add-ons always come from their own fetch; derive instead of copying in an effect.
+  const addonsByService = useMemo(() => ({ ...fetchedAddons, boarding: boardingAddons }), [fetchedAddons, boardingAddons]);
 
   const selectedPets = pets.filter((p) => selectedPetIds.includes(p.id));
   const selectedSpecies = selectedPets.map((p) => p.species);

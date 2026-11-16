@@ -237,7 +237,7 @@ export default function AdminDashboardPage() {
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-tint text-brand-pink">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6"><rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 9h18" strokeLinecap="round"/></svg>
             </span>
-            <span><span className="block text-xs font-medium text-zinc-500">Today's Appointments</span><span className="mt-0.5 block text-3xl font-extrabold text-zinc-900">{todayAppointments.length}</span></span>
+            <span><span className="block text-xs font-medium text-zinc-500">Today&apos;s Appointments</span><span className="mt-0.5 block text-3xl font-extrabold text-zinc-900">{todayAppointments.length}</span></span>
           </div>
           <span className="text-xl text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-brand-pink">›</span>
         </Link>

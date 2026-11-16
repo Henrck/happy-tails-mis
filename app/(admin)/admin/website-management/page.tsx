@@ -172,7 +172,7 @@ export default function WebsiteManagementPage() {
           <EditableSection editMode={editMode} label="About Us Background" onEdit={() => openUploadFor("about_us_background")}><DynamicAbout backgroundUrl={get("about_us_background")?.image_url} heading={copy("about_heading", websiteText)} description={copy("about_description", websiteText)} /></EditableSection>
           <EditableSection editMode={editMode} label="Frequently Asked Questions" onEdit={() => window.location.assign("/admin/website-management/faqs")}><FAQSection items={parseFAQs(websiteText[FAQ_TEXT_KEY])} /></EditableSection>
         </div>
-        <p className="mt-3 text-xs text-zinc-400">This is the live site. Toggle "Edit" to reveal edit controls over each section.</p>
+        <p className="mt-3 text-xs text-zinc-400">This is the live site. Toggle &quot;Edit&quot; to reveal edit controls over each section.</p>
         {manageHeroSlides && <HeroSlidesManager onClose={async () => { setManageHeroSlides(false); await loadContent(); }} />}
         {manageServicesImages && <ServicesImagesManager settings={settings} onEdit={(key) => { setManageServicesImages(false); openUploadFor(key); }} onClose={() => setManageServicesImages(false)} />}
         {managePricingImages && <PricingImagesManager settings={settings} onEdit={(key) => { setManagePricingImages(false); openUploadFor(key); }} onClose={() => setManagePricingImages(false)} />}

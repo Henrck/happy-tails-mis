@@ -139,7 +139,7 @@ function ProfilePageInner() {
   }
 
   if (loading) return <p className="text-zinc-400">Loading profile...</p>;
-  if (!profile) return <p className="text-red-500">Couldn't load your profile.</p>;
+  if (!profile) return <p className="text-red-500">Couldn&apos;t load your profile.</p>;
 
   const inputClass = (disabled: boolean) =>
     `mt-1.5 w-full rounded-xl border px-4 py-2.5 text-sm transition-shadow focus:outline-none ${

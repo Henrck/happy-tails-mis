@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { Camera, Check, ImagePlus, MapPin, Pencil, Trash2, UploadCloud, X } from "lucide-react";
+import { Camera, Check, ImagePlus, Trash2, UploadCloud, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { WebsiteBranch } from "@/lib/types/website-branches";
 

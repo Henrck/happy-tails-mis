@@ -57,24 +57,26 @@ export function canFitInKennel(kennelSize:"small"|"big",occupants:KennelOccupant
     : ["small","medium","large","medium+small","medium+medium","small+small","small+small+small"].includes(key);
   return okay?{fits:true}:{fits:false,reason:"This combination exceeds the kennel's capacity or sharing policy."};
 }
+type OccupantRow={pets:{size_label:string|null}|null;appointments:{drop_off_at:string|null;pick_up_at:string|null}|null};
+type GroomerConflictRow={appointments:{customer_id:string|null;owner_contact:string|null;scheduled_date:string;scheduled_time:string|null;status:string}|null};
 export async function fetchKennelOccupants(kennelId:string,date:string){
   const {data,error}=await createClient().from("appointment_pets")
    .select("pet_id,pets(size_label),appointments!inner(scheduled_date,drop_off_at,pick_up_at,status)")
    .eq("kennel_id",kennelId).neq("appointments.status","cancelled");
   if(error)return {occupants:[] as KennelOccupant[],error:error.message};
   const time=new Date(date).getTime();
-  const found=(data??[]).filter((item:any)=>{
+  const found=((data??[]) as unknown as OccupantRow[]).filter((item)=>{
     const start=item.appointments?.drop_off_at?new Date(item.appointments.drop_off_at).getTime():null;
     const end=item.appointments?.pick_up_at?new Date(item.appointments.pick_up_at).getTime():null;
     return start!==null&&end!==null&&time>=start&&time<=end;
   });
-  return {occupants:found.map((item:any)=>({size_label:item.pets?.size_label??""})),error:null};
+  return {occupants:found.map((item)=>({size_label:item.pets?.size_label??""})),error:null};
 }
 export async function checkGroomerTimeConflict(groomerId:string,date:string,time:string,customerId:string|null,ownerContact:string){
   const {data,error}=await createClient().from("appointment_pets")
     .select("appointments!inner(id,customer_id,owner_contact,scheduled_date,scheduled_time,status)").eq("groomer_id",groomerId);
   if(error)return {conflict:false,error:error.message};
-  const conflict=(data??[]).some((item:any)=>{
+  const conflict=((data??[]) as unknown as GroomerConflictRow[]).some((item)=>{
     const a=item.appointments;
     if(!a||a.status==="cancelled"||a.scheduled_date!==date||a.scheduled_time!==time)return false;
     return customerId?a.customer_id===customerId:a.owner_contact===ownerContact;

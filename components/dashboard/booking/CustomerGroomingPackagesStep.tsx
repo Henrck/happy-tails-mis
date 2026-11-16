@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
 import { fetchGroomers } from "@/lib/supabase/pet-services";
-import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
+import type { Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
 import type { Groomer } from "@/lib/types/pet-services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 

@@ -5,29 +5,38 @@ import type { AppointmentRow } from "@/lib/supabase/appointment-management";
 import { AlertTriangle, UserX } from "lucide-react";
 
 export default function NoShowControl({ appointment, onRecorded }: { appointment: AppointmentRow; onRecorded: () => Promise<void> | void }) {
-  const [recorded, setRecorded] = useState(false);
-  const [checking, setChecking] = useState(true);
+  // The no-show lookup result is keyed by appointment id, so switching to a
+  // different appointment shows "Checking…" again instead of a stale answer.
+  const [check, setCheck] = useState<{ id: string; recorded: boolean } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [reason, setReason] = useState("Customer did not arrive for the scheduled appointment.");
+  // Re-read the clock periodically so the button enables once the schedule passes.
+  const [now, setNow] = useState(() => Date.now());
+  const eligible = !!appointment.customer_id && appointment.status === "confirmed";
 
   useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!eligible) return;
     let active = true;
-    if (!appointment.customer_id || appointment.status !== "confirmed") { setChecking(false); return; }
     void createClient().rpc("happytails_appointment_has_no_show", { p_appointment_id: appointment.id }).then(({ data, error: rpcError }) => {
-      if (!active) return;
-      setRecorded(!rpcError && data === true);
-      setChecking(false);
+      if (active) setCheck({ id: appointment.id, recorded: !rpcError && data === true });
     });
     return () => { active = false; };
-  }, [appointment.id, appointment.customer_id, appointment.status]);
+  }, [appointment.id, eligible]);
 
+  const checking = check?.id !== appointment.id;
+  const recorded = !checking && check?.recorded === true;
   const scheduledStart = appointment.service_type === "boarding" && appointment.drop_off_at
     ? new Date(appointment.drop_off_at).getTime()
     : new Date(`${appointment.scheduled_date}T${(appointment.scheduled_time ?? "00:00").slice(0, 5)}:00+08:00`).getTime();
-  const schedulePassed = Number.isFinite(scheduledStart) && scheduledStart <= Date.now();
-  if (!appointment.customer_id || appointment.status !== "confirmed") return null;
+  const schedulePassed = Number.isFinite(scheduledStart) && scheduledStart <= now;
+  if (!eligible) return null;
 
   async function markNoShow() {
     if (busy || reason.trim().length < 5 || reason.trim().length > 500) return;
@@ -35,7 +44,7 @@ export default function NoShowControl({ appointment, onRecorded }: { appointment
     try {
       const { error: rpcError } = await createClient().rpc("happytails_record_customer_no_show", { p_appointment_id: appointment.id, p_reason: reason.trim() });
       if (rpcError) throw new Error(rpcError.message);
-      setRecorded(true); setConfirmOpen(false);
+      setCheck({ id: appointment.id, recorded: true }); setConfirmOpen(false);
       await onRecorded();
     } catch (e) { setError(e instanceof Error ? e.message : "Unable to record this no-show."); }
     finally { setBusy(false); }

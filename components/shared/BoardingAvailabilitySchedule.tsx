@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
-import { useBookingClosures, manilaToday, manilaTime } from "@/lib/booking/use-booking-closures";
+import { useBookingClosures, manilaToday } from "@/lib/booking/use-booking-closures";
 import { fetchBoardingMonth, checkBoardingStay, type BoardingDayCapacity } from "@/lib/supabase/boarding-availability";
 import { hasValidBoardingDuration, isExtendedBoardingRate, parseExtendedBoardingNights } from "@/lib/booking/boarding-duration";
 import type { DraftPetSelection } from "@/lib/types/appointments";
@@ -164,7 +164,7 @@ export default function BoardingAvailabilitySchedule({
     setError(null);
     const okay = Boolean(next.date && next.time && hasValidBoardingDuration(sel, pricing) &&
       !closures.nameFor(next.date) && !closures.nameFor(addDays(next.date, getNights(sel, pricing))) && next.date >= manilaToday() && next.time >= "09:00" && next.time <= "18:00" &&
-      toDate(next.date, next.time).getTime() > Date.now() && (availableOn(sel, next.date) ?? 0) > 0);
+      toDate(next.date, next.time).getTime() > now &&(availableOn(sel, next.date) ?? 0) > 0);
     onSelectionsChange(petSelections.map((p) => {
       if (p.pet.id !== sel.pet.id) return p;
       if (!okay) return { ...p, boardingScheduledDate: null, boardingDropOffAt: null, boardingPickUpAt: null, kennelId: null };
@@ -241,7 +241,7 @@ export default function BoardingAvailabilitySchedule({
   </div>;
 
   return <section className="mx-auto max-w-4xl space-y-5">
-    <div className="text-center"><h2 className="text-2xl font-bold text-brand-pink">Boarding Availability & Schedule</h2><p className="mt-2 text-sm text-zinc-600">Choose an available kennel for each pet's <strong>entire stay</strong>, not just the arrival date.</p></div>
+    <div className="text-center"><h2 className="text-2xl font-bold text-brand-pink">Boarding Availability & Schedule</h2><p className="mt-2 text-sm text-zinc-600">Choose an available kennel for each pet&apos;s <strong>entire stay</strong>, not just the arrival date.</p></div>
     <div className="rounded-xl border border-pink-100 bg-pink-50 px-4 py-3 text-xs leading-5 text-zinc-700">Small and Big Kennels have separate availability. Each boarding pet reserves one kennel. <strong>Both check-in and pickup must fall on an open day.</strong> Red <strong>Full / Closed / Pickup Closed</strong> dates cannot be booked. Check-in and pickup: 9:00 AM–6:00 PM (Philippine time). Pickup is calculated automatically.</div>
     {closures.error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">Shop calendar unavailable: {closures.error}</p>}
     <div className="space-y-5">{petSelections.map((sel) => {

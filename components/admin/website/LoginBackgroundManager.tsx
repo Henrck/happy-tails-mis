@@ -126,7 +126,7 @@ export default function LoginBackgroundManager() {
     }
   }
 
-  async function useDefault(key: LoginKey) {
+  async function restoreDefault(key: LoginKey) {
     setUploading(key);
     setMessage(null);
     setError(null);
@@ -187,7 +187,7 @@ export default function LoginBackgroundManager() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => void useDefault(config.key)}
+                    onClick={() => void restoreDefault(config.key)}
                     disabled={uploading !== null || !value?.image_url}
                     className="rounded-full border border-pink-300 px-5 py-2.5 text-sm font-bold text-brand-pink disabled:opacity-40"
                   >
