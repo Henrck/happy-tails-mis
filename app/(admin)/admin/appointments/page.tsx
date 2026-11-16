@@ -46,13 +46,26 @@ export default function AdminAppointmentsPage() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const load = useCallback(async () => {
     const r = await fetchAppointments();
-    if (r.error) { setLoadError(r.error); return; }
+    if (r.error) { setLoadError(r.error); return [] as AppointmentRow[]; }
     setLoadError(null);
     setAppointments(r.rows);
     setSelected(x => x ? r.rows.find(y => y.id === x.id) ?? x : null);
+    return r.rows;
   }, []);
   // Auto-cancel overdue no-shows first so staff never see them as still open.
-  useEffect(() => { setLoading(true); void processOverdueNoShows().then(load).finally(() => setLoading(false)); }, [load]);
+  useEffect(() => {
+    setLoading(true);
+    void processOverdueNoShows().then(load).then(rows => {
+      // Deep link from Notifications: /admin/appointments?appointment=<id> opens its details.
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("appointment");
+      if (!id) return;
+      const match = rows.find(r => r.id === id);
+      if (match) setSelected(match);
+      params.delete("appointment");
+      window.history.replaceState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}`);
+    }).finally(() => setLoading(false));
+  }, [load]);
   useEffect(() => {
     const off = subscribeToAppointments(() => {
       void load();
@@ -93,7 +106,7 @@ export default function AdminAppointmentsPage() {
     {loadError && <FeedbackDialog title="Appointments Could Not Load" message={loadError} onClose={() => setLoadError(null)} actionLabel="Retry Loading" onAction={() => { setLoadError(null); void load(); }}/>} 
     <div className="mt-4">{loading ? <p className="py-10 text-center text-zinc-400">Loading appointments…</p> : <AppointmentsTable rows={visible} onView={setSelected} onReschedule={setRescheduling}/>}</div>
     <div className="mt-4"><Pagination page={safePage} pageSize={PAGE_SIZE} totalItems={filtered.length} onPageChange={setPage}/></div>
-    {selected && <AppointmentDetailModal appointment={selected} onClose={() => setSelected(null)} onUpdateStatus={status} onRefresh={load}/>} 
+    {selected && <AppointmentDetailModal appointment={selected} onClose={() => setSelected(null)} onUpdateStatus={status} onRefresh={async () => { await load(); }}/>} 
     {rescheduling && <AdminRescheduleModal appointment={rescheduling} onClose={() => setRescheduling(null)} onSaved={async () => { await load(); setRefreshKey(x => x + 1); }}/>} 
   </div>;
 }

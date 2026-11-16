@@ -6,6 +6,7 @@ import Image from "next/image";
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/appointments", label: "Appointment", icon: "calendar" },
+  { href: "/admin/notifications", label: "Notifications", icon: "bell" },
   { href: "/admin/pet-services", label: "Pet Services", icon: "paw" },
   { href: "/admin/pos", label: "Point of Sale", icon: "cart" },
   { href: "/admin/inventory", label: "Inventory", icon: "box" },
@@ -30,6 +31,7 @@ function NavIcon({ name }: { name: string }) {
     chart: "M4 20V10M11 20V4M18 20v-7",
     users: "M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21c0-4 3-6 6-6s6 2 6 6M17 11a3 3 0 1 0 0-6M15 21c0-2.5 1.2-4.3 3-5.2 2 .8 4 2.6 4 5.2",
     user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4.5 3.5-7 8-7s8 2.5 8 7",
+    bell: "M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0",
   };
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,11 +45,14 @@ export default function AdminSidebar({
   onToggle,
   onLogout,
   role,
+  unreadNotifications = 0,
 }: {
   open: boolean;
   onToggle: () => void;
   onLogout: () => void;
   role?: string;
+  /** Unread staff notifications, shown as a badge on the Notifications item. */
+  unreadNotifications?: number;
 }) {
   const pathname = usePathname();
   const isStaff = role === "admin";
@@ -79,17 +84,22 @@ export default function AdminSidebar({
         <nav className="flex-1 overflow-y-auto py-2">
           {visibleItems.map((item) => {
             const isActive = pathname === item.href;
+            const badge = item.icon === "bell" && unreadNotifications > 0 ? (unreadNotifications > 99 ? "99+" : String(unreadNotifications)) : null;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                title={open ? undefined : item.label}
-                className={`flex items-center gap-2.5 py-2 text-[13px] font-medium transition-colors ${open ? "px-5" : "px-0 justify-center"} ${
+                title={open ? undefined : badge ? `${item.label} (${badge} unread)` : item.label}
+                aria-label={badge ? `${item.label}, ${badge} unread` : undefined}
+                className={`relative flex items-center gap-2.5 py-2 text-[13px] font-medium transition-colors ${open ? "px-5" : "px-0 justify-center"} ${
                   isActive ? "bg-white/15 border-l-4 border-white" : "border-l-4 border-transparent hover:bg-white/10"
                 }`}
               >
                 <NavIcon name={item.icon} />
                 {open && item.label}
+                {badge && (open
+                  ? <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-brand-pink">{badge}</span>
+                  : <span className="absolute right-2.5 top-1 min-w-4 rounded-full bg-white px-1 text-center text-[10px] font-bold leading-4 text-brand-pink">{badge}</span>)}
               </Link>
             );
           })}
