@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { fetchPetsByCustomer, subscribeToCustomerPets } from "@/lib/supabase/appointments";
 import { listArchivedCustomerPets, setCustomerPetArchived, type ArchivedPet } from "@/lib/supabase/customer-pet-archive";
 import { insertCustomerPet } from "@/lib/utils/pet-size-guide";
+import { uploadPetPhoto, type PetPhotoDraft } from "@/lib/utils/pet-photo-upload";
+import PetPhotoPicker from "@/components/shared/PetPhotoPicker";
 import { normalizePetAge } from "@/lib/utils/pet-age";
 import type { Pet } from "@/lib/types/appointments";
 import Link from "next/link";
@@ -15,31 +17,55 @@ import { CustomerPetFields, useCustomerPetForm, blankCustomerPet } from "@/compo
 const PETS_PER_PAGE = 9;
 function NewPetForm({ customerId, onClose, onSaved }: { customerId: string; onClose: () => void; onSaved: () => void }) {
   const state = useCustomerPetForm();
+  const [photo, setPhoto] = useState<PetPhotoDraft | null>(null);
+  // Set when the pet was created but its photo upload failed.
+  const [savedPet, setSavedPet] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  async function attachPhotoAndFinish(pet: { id: string; name: string }) {
+    if (photo) {
+      try { await uploadPetPhoto(pet.id, photo.blob); }
+      catch (caught) {
+        setSavedPet(pet);
+        setError(`${pet.name} was added, but the photo could not be uploaded: ${caught instanceof Error ? caught.message : "Unknown error"}`);
+        return;
+      }
+    }
+    state.setForm(blankCustomerPet);
+    setPhoto(null);
+    onSaved();
+  }
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (saving || !state.validate()) return;
+    if (saving || savedPet || !state.validate()) return;
     setSaving(true); setError("");
     try {
       const { form, size } = state;
       const normalizedAge = normalizePetAge(form.age);
       if (!normalizedAge) throw new Error("Enter a valid age such as 3 weeks, 6 months or 2 years.");
-      const { error: saveError } = await insertCustomerPet({ customer_id: customerId, name: form.name.trim(), species: form.species,
+      const { data, error: saveError } = await insertCustomerPet({ customer_id: customerId, name: form.name.trim(), species: form.species,
         breed: form.breed.trim(), size_label: size?.label ?? "Unclassified", weight_kg: form.weight.trim() ? Number(form.weight) : null, pet_size_id: size?.id ?? null,
         ...normalizedAge, sex: form.sex || null, vaccination_status: form.vaccination_status });
-      if (saveError) throw new Error(saveError.message);
-      state.setForm(blankCustomerPet);
-      onSaved();
+      if (saveError || !data) throw new Error(saveError?.message ?? "Unable to add pet.");
+      await attachPhotoAndFinish(data as Pet);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to add pet."); }
     finally { setSaving(false); }
   }
-  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget && !saving) onClose(); }}>
+  async function retryPhoto() {
+    if (!savedPet || saving) return;
+    setSaving(true); setError("");
+    try { await attachPhotoAndFinish(savedPet); } finally { setSaving(false); }
+  }
+  // Once the pet exists, closing must still refresh the list.
+  const close = () => { if (savedPet) onSaved(); else onClose(); };
+  return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget && !saving) close(); }}>
     <form noValidate onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="add-pet-title" className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
-      <div className="mb-5 flex items-center justify-between"><h2 id="add-pet-title" className="text-xl font-bold">Add New Pet</h2><button type="button" disabled={saving} onClick={onClose} aria-label="Close">✕</button></div>
-      <CustomerPetFields state={state}/>
+      <div className="mb-5 flex items-center justify-between"><h2 id="add-pet-title" className="text-xl font-bold">Add New Pet</h2><button type="button" disabled={saving} onClick={close} aria-label="Close">✕</button></div>
+      {!savedPet && <div className="space-y-5"><PetPhotoPicker value={photo} onChange={setPhoto} petName={state.form.name} disabled={saving}/><CustomerPetFields state={state}/></div>}
       {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</p>}
-      <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={saving} onClick={onClose} className="rounded-xl border px-5 py-3 text-sm">Cancel</button><button type="submit" disabled={saving || (!!state.form.weight.trim() ? false : state.loadingGuide || !!state.guideError)} className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Add Pet"}</button></div>
+      {savedPet
+        ? <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={saving} onClick={onSaved} className="rounded-xl border px-5 py-3 text-sm">Skip Photo</button><button type="button" disabled={saving} onClick={() => void retryPhoto()} className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Uploading…" : "Retry Upload"}</button></div>
+        : <div className="mt-6 flex justify-end gap-3"><button type="button" disabled={saving} onClick={onClose} className="rounded-xl border px-5 py-3 text-sm">Cancel</button><button type="submit" disabled={saving || (!!state.form.weight.trim() ? false : state.loadingGuide || !!state.guideError)} className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Add Pet"}</button></div>}
     </form>
   </div>;
 }

@@ -3,9 +3,12 @@ import { useState } from "react";
 import YoungPetGroomingNotice from "@/components/shared/YoungPetGroomingNotice";
 import { COMMON_BREEDS } from "@/lib/data/breed-suggestions";
 import { normalizePetAge } from "@/lib/utils/pet-age";
+import PetPhotoPicker from "@/components/shared/PetPhotoPicker";
+import type { PetPhotoDraft } from "@/lib/utils/pet-photo-upload";
 
-export type NewPetEntry = { name: string; species: "Dog" | "Cat"; breed: string; sizeKg: string; age: string; sex: "Male" | "Female" | "" };
-const emptyPet = (): NewPetEntry => ({ name: "", species: "Dog", breed: "", sizeKg: "", age: "", sex: "" });
+// uid is a stable React key so photo previews stay with the right pet when one is removed.
+export type NewPetEntry = { uid: string; name: string; species: "Dog" | "Cat"; breed: string; sizeKg: string; age: string; sex: "Male" | "Female" | ""; photo: PetPhotoDraft | null };
+const emptyPet = (): NewPetEntry => ({ uid: crypto.randomUUID(), name: "", species: "Dog", breed: "", sizeKg: "", age: "", sex: "", photo: null });
 const phoneError = (value: string) => !value ? "Contact number is required." : !/^\d+$/.test(value) ? "Use numbers only for the contact number." : value.length !== 11 ? "Enter exactly 11 digits (09XXXXXXXXX)." : !/^09\d{9}$/.test(value) ? "Mobile number must start with 09." : null;
 function petError(pet: NewPetEntry, index: number): string | null {
   const label = `Pet ${index + 1}`;
@@ -24,7 +27,7 @@ export default function NewCustomerPetForm({ onBack, onNext }: {
   const [ownerName, setOwnerName] = useState("");
   const [ownerContact, setOwnerContact] = useState("");
   const [ownerAddress, setOwnerAddress] = useState("");
-  const [pets, setPets] = useState<NewPetEntry[]>([emptyPet()]);
+  const [pets, setPets] = useState<NewPetEntry[]>(() => [emptyPet()]);
   const [error, setError] = useState<string | null>(null);
   const [phoneTouched, setPhoneTouched] = useState(false);
   const [groomingNotice, setGroomingNotice] = useState<"initial" | "another" | null>("initial");
@@ -49,9 +52,10 @@ export default function NewCustomerPetForm({ onBack, onNext }: {
         <label className="text-sm font-semibold">Contact Number *<input className={controlClass} type="tel" inputMode="numeric" maxLength={11} placeholder="09XXXXXXXXX" value={ownerContact} onBlur={()=>setPhoneTouched(true)} onChange={e=>{setOwnerContact(e.target.value.replace(/\D/g,"").slice(0,11));setError(null);}}/>{contactError&&<span role="alert" className="block text-xs text-red-600">{contactError}</span>}</label>
         <label className="text-sm font-semibold sm:col-span-2">Address<input className={controlClass} maxLength={300} value={ownerAddress} onChange={e=>{setOwnerAddress(e.target.value);setError(null);}}/></label>
       </div></section>
-      {pets.map((pet,i)=><section className="relative rounded-2xl border border-pink-100 bg-white p-5" key={i}>
+      {pets.map((pet,i)=><section className="relative rounded-2xl border border-pink-100 bg-white p-5" key={pet.uid}>
         <div className="mb-3 flex items-center justify-between"><h3 className="font-bold">Pet {i+1} Information</h3>{pets.length>1&&<button type="button" onClick={()=>setPets(prev=>prev.length>1?prev.filter((_,j)=>j!==i):prev)} className="text-xs font-semibold text-red-500">Remove</button>}</div>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2"><PetPhotoPicker value={pet.photo} onChange={photo=>updatePet(i,{photo})} petName={pet.name}/></div>
           <label className="text-sm font-semibold">Pet Name *<input className={controlClass} maxLength={100} value={pet.name} onChange={e=>updatePet(i,{name:e.target.value})}/></label>
           <label className="text-sm font-semibold">Species<select className={controlClass} value={pet.species} onChange={e=>updatePet(i,{species:e.target.value as NewPetEntry["species"]})}><option value="Dog">Dog</option><option value="Cat">Cat</option></select></label>
           <label className="text-sm font-semibold">Breed *<input className={controlClass} value={pet.breed} list={`breed-options-${i}`} maxLength={100} placeholder="Type or select a breed" onChange={e=>updatePet(i,{breed:e.target.value})}/><datalist id={`breed-options-${i}`}>{COMMON_BREEDS.map(b=><option value={b} key={b}/>)}</datalist></label>

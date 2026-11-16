@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import BookingPetInformationStep from "@/components/dashboard/booking/BookingPetInformationStep";
 import { addPet, fetchPetsByCustomer, weightKgToSizeTier } from "@/lib/supabase/appointments";
 import { normalizePetAge } from "@/lib/utils/pet-age";
+import { uploadPetPhoto } from "@/lib/utils/pet-photo-upload";
 import type { Pet } from "@/lib/types/appointments";
 import type { Customer } from "@/lib/types/users";
 import NewCustomerPetForm, { type NewPetEntry } from "./NewCustomerPetForm";
@@ -16,6 +17,8 @@ export default function PetInformationStep({ customer, onBack, onNext }: {
   const [loading, setLoading] = useState(Boolean(customer));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Pets were saved but some photos failed; staff confirm before continuing.
+  const [photoIssue, setPhotoIssue] = useState<{ pets: Pet[]; owner: { name: string; contact: string; address: string }; failed: string[] } | null>(null);
   const loadPets = useCallback(async () => {
     if (!customer) return;
     setLoading(true);setError(null);
@@ -32,6 +35,7 @@ export default function PetInformationStep({ customer, onBack, onNext }: {
     if(saving)return;
     setSaving(true);setError(null);
     const savedPets:Pet[]=[];
+    const failedPhotos:string[]=[];
     try {
       for(const entry of entries){
         const weight=Number(entry.sizeKg);
@@ -43,12 +47,24 @@ export default function PetInformationStep({ customer, onBack, onNext }: {
           ...age,sex:entry.sex||null,
         });
         if(petError||!data){setError(`Saved ${savedPets.length} of ${entries.length} pets, then failed: ${petError?.message??"No pet record returned"}`);return;}
-        savedPets.push(data as Pet);
+        let pet=data as Pet;
+        if(entry.photo){
+          try{pet={...pet,photo_url:await uploadPetPhoto(pet.id,entry.photo.blob)};}
+          catch(photoError){failedPhotos.push(`${entry.name} (${photoError instanceof Error?photoError.message:"upload failed"})`);}
+        }
+        savedPets.push(pet);
       }
+      if(failedPhotos.length){setPhotoIssue({pets:savedPets,owner,failed:failedPhotos});return;}
       onNext(savedPets,owner);
     }catch(e){setError(e instanceof Error?e.message:"Unable to register the new pets.");}
     finally{setSaving(false);}
   }
+  if(!customer&&photoIssue)return <div className="mx-auto max-w-xl rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900" role="alert">
+    <p className="font-bold">All pets were registered, but some photos could not be uploaded:</p>
+    <ul className="mt-2 list-disc space-y-1 pl-5">{photoIssue.failed.map(item=><li key={item}>{item}</li>)}</ul>
+    <p className="mt-2">You can add these photos later from Pet Records.</p>
+    <button type="button" onClick={()=>onNext(photoIssue.pets,photoIssue.owner)} className="mt-4 w-full rounded-full bg-brand-pink py-2.5 font-semibold text-white">Continue</button>
+  </div>;
   if(!customer)return <div className="mx-auto max-w-3xl">{error&&<p role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}{saving&&<p role="status" className="mb-3 text-center text-sm text-zinc-500">Saving pet records…</p>}<NewCustomerPetForm onBack={onBack} onNext={handleNewCustomerSubmit}/></div>;
   if(loading)return <p role="status" className="py-16 text-center text-sm text-zinc-500">Loading registered pets…</p>;
   return <div className="mx-auto w-full max-w-4xl">{error&&<div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" onClick={()=>void loadPets()} className="font-semibold underline">Retry</button></div>}
