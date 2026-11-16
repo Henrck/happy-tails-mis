@@ -4,18 +4,24 @@
 // one component wired to lib/utils/report-export.ts so all four tabs
 // actually export real files instead of four copies of a dead dropdown.
 import { useState, useRef, useEffect } from "react";
-import { exportReportCSV, exportReportExcel, exportReportPDF, printReport, type ExportColumn } from "@/lib/utils/report-export";
+import { exportReportCSV, exportReportExcel, exportReportPDF, printReport, type ExportColumn, type ReportPeriod, type ReportSummaryItem } from "@/lib/utils/report-export";
 
 export default function ExportMenu<T>({
   title,
   columns,
   rows,
   filename,
+  period,
+  summary,
 }: {
   title: string;
   columns: ExportColumn<T>[];
   rows: T[];
   filename: string;
+  /** Report period (From/To) or snapshot date shown in the file header. */
+  period?: ReportPeriod;
+  /** Totals listed under the table. */
+  summary?: (rows: T[]) => ReportSummaryItem[];
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,7 +41,7 @@ export default function ExportMenu<T>({
     if (rows.length === 0) return;
     setBusy(true);
     try {
-      const opts = { title, columns, rows, filename };
+      const opts = { title, columns, rows, filename, period, summary };
       if (format === "PDF") await exportReportPDF(opts);
       else if (format === "Excel") await exportReportExcel(opts);
       else if (format === "CSV") exportReportCSV(opts);

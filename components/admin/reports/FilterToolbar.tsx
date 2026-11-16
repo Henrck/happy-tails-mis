@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { ReportStatus, ServiceCategory, AppointmentSource, ServiceReport } from "@/lib/types/reports";
 import ExportMenu from "@/components/admin/reports/ExportMenu";
-import type { ExportColumn } from "@/lib/utils/report-export";
+import { dateBounds, formatAmount, type ExportColumn, type ReportSummaryItem } from "@/lib/utils/report-export";
 
 export type FilterState = {
   search: string;
@@ -14,17 +14,29 @@ export type FilterState = {
 };
 
 const exportColumns: ExportColumn<ServiceReport>[] = [
-  { header: "Service ID", accessor: (r) => r.id },
+  { header: "Service ID", accessor: (r) => r.id, nowrap: true },
   { header: "Appointment ID", accessor: (r) => r.appointmentId },
   { header: "Pet", accessor: (r) => r.pet },
   { header: "Owner", accessor: (r) => r.owner },
   { header: "Category", accessor: (r) => r.category },
   { header: "Service", accessor: (r) => r.service },
   { header: "Source", accessor: (r) => r.source },
-  { header: "Service Charge (PHP)", accessor: (r) => r.amount },
-  { header: "Date", accessor: (r) => r.displayDate },
+  // Cancelled services are listed but excluded from the total charge.
+  { header: "Service Charge (PHP)", accessor: (r) => r.amount, format: "currency", total: (rows) => rows.filter(r => r.status !== "Cancelled").reduce((sum, r) => sum + r.amount, 0) },
+  { header: "Date", accessor: (r) => r.displayDate, nowrap: true },
   { header: "Status", accessor: (r) => r.status },
 ];
+
+const countBy = (rows: ServiceReport[], status: ServiceReport["status"]) => rows.filter(r => r.status === status).length;
+function serviceSummary(rows: ServiceReport[]): ReportSummaryItem[] {
+  return [
+    { label: "Total services", value: String(rows.length) },
+    { label: "Completed", value: String(countBy(rows, "Completed")) },
+    { label: "Ongoing / Scheduled", value: String(countBy(rows, "Ongoing") + countBy(rows, "Scheduled")) },
+    { label: "Cancelled", value: String(countBy(rows, "Cancelled")) },
+    { label: "Total service charge (excl. cancelled)", value: `PHP ${formatAmount(rows.filter(r => r.status !== "Cancelled").reduce((sum, r) => sum + r.amount, 0))}` },
+  ];
+}
 
 export default function FilterToolbar({
   filters, onApply, onReset, rows,
@@ -68,7 +80,9 @@ export default function FilterToolbar({
       </select>
       <button type="button" onClick={() => onApply(draft)} className="bg-[#FF5F9E] hover:bg-[#e0538c] text-white font-semibold text-sm px-5 py-2 rounded-lg">Apply</button>
       <button type="button" onClick={onReset} className="border border-[#E8E8E8] text-zinc-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-zinc-50">Reset</button>
-      <ExportMenu title="Service Reports" columns={exportColumns} rows={rows} filename="service-reports" />
+      <ExportMenu title="Service Reports" columns={exportColumns} rows={rows} filename="service-reports"
+        period={{ kind: "range", from: filters.fromDate || dateBounds(rows, r => r.date).from, to: filters.toDate || dateBounds(rows, r => r.date).to }}
+        summary={serviceSummary} />
     </div>
   );
 }

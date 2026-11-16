@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { SalesReportRow } from "@/lib/types/reports";
 import ExportMenu from "@/components/admin/reports/ExportMenu";
-import type { ExportColumn } from "@/lib/utils/report-export";
+import { dateBounds, formatAmount, type ExportColumn, type ReportSummaryItem } from "@/lib/utils/report-export";
 
 export type SalesFilterState = {
   search: string;
@@ -14,15 +14,23 @@ export type SalesFilterState = {
 const categories = ["All Categories", "Food", "Treats", "Grooming", "Accessories", "Hygiene"];
 
 const exportColumns: ExportColumn<SalesReportRow>[] = [
-  { header: "Invoice #", accessor: (r) => r.invoiceNumber },
+  { header: "Invoice #", accessor: (r) => r.invoiceNumber, nowrap: true },
   { header: "Products", accessor: (r) => r.itemName },
-  { header: "Total Units", accessor: (r) => r.quantity },
-  { header: "Total Sale (PHP)", accessor: (r) => r.totalPrice },
-  { header: "Cash Received (PHP)", accessor: (r) => r.cashReceived ?? "" },
-  { header: "Change Given (PHP)", accessor: (r) => r.changeGiven ?? "" },
-  { header: "Payment Method", accessor: (r) => r.paymentMethod },
-  { header: "Date", accessor: (r) => r.displayDate },
+  { header: "Total Units", accessor: (r) => r.quantity, format: "number", total: (rows) => rows.reduce((sum, r) => sum + r.quantity, 0) },
+  { header: "Total Sale (PHP)", accessor: (r) => r.totalPrice, format: "currency", total: (rows) => rows.reduce((sum, r) => sum + r.totalPrice, 0) },
+  { header: "Cash Received (PHP)", accessor: (r) => r.cashReceived ?? "", format: "currency" },
+  { header: "Change Given (PHP)", accessor: (r) => r.changeGiven ?? "", format: "currency" },
+  { header: "Payment Method", accessor: (r) => r.paymentMethod, nowrap: true },
+  { header: "Date", accessor: (r) => r.displayDate, nowrap: true },
 ];
+
+function salesSummary(rows: SalesReportRow[]): ReportSummaryItem[] {
+  return [
+    { label: "Total invoices", value: String(rows.length) },
+    { label: "Total units sold", value: rows.reduce((sum, r) => sum + r.quantity, 0).toLocaleString("en-US") },
+    { label: "Total sales", value: `PHP ${formatAmount(rows.reduce((sum, r) => sum + r.totalPrice, 0))}` },
+  ];
+}
 
 export default function SalesFilterToolbar({
   filters, onApply, onReset, rows,
@@ -50,7 +58,9 @@ export default function SalesFilterToolbar({
       </select>
       <button type="button" onClick={() => onApply(draft)} className="bg-[#FF5F9E] hover:bg-[#e0538c] text-white font-semibold text-sm px-5 py-2 rounded-lg">Apply</button>
       <button type="button" onClick={onReset} className="border border-[#E8E8E8] text-zinc-600 font-medium text-sm px-4 py-2 rounded-lg hover:bg-zinc-50">Reset</button>
-      <ExportMenu title="Sales Reports (One Row Per Invoice)" columns={exportColumns} rows={rows} filename="sales-invoice-reports" />
+      <ExportMenu title="Sales Reports (One Row Per Invoice)" columns={exportColumns} rows={rows} filename="sales-invoice-reports"
+        period={{ kind: "range", from: filters.fromDate || dateBounds(rows, r => r.date).from, to: filters.toDate || dateBounds(rows, r => r.date).to }}
+        summary={salesSummary} />
     </div>
   );
 }
