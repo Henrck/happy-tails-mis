@@ -14,6 +14,8 @@ import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg } from "@/lib/types/booking-leg";
 import { findDuplicatePetAddon } from "@/lib/booking/unique-pet-addons";
+import { useActiveBoarding } from "@/lib/booking/use-active-boarding";
+import { boardingUntilLabel } from "@/lib/supabase/active-boarding";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
 import CustomerServiceChoiceStep from "@/components/dashboard/booking/CustomerServiceChoiceStep";
 import BookingPetInformationStep from "@/components/dashboard/booking/BookingPetInformationStep";
@@ -88,7 +90,11 @@ export default function BookAppointmentPage() {
   // Boarding add-ons always come from their own fetch; derive instead of copying in an effect.
   const addonsByService = useMemo(() => ({ ...fetchedAddons, boarding: boardingAddons }), [fetchedAddons, boardingAddons]);
 
+  // Pets with an unfinished boarding booking cannot be booked for boarding again.
+  const activeBoarding = useActiveBoarding(pets.map((p) => p.id));
   const selectedPets = pets.filter((p) => selectedPetIds.includes(p.id));
+  const boardingBlocked = selectedPets.filter((p) => activeBoarding.byPet[p.id])
+    .map((p) => ({ id: p.id, name: p.name, until: boardingUntilLabel(activeBoarding.byPet[p.id]) }));
   const selectedSpecies = selectedPets.map((p) => p.species);
   const uniqueSelectedSpecies = Array.from(new Set(selectedSpecies));
 
@@ -99,6 +105,7 @@ export default function BookAppointmentPage() {
     } else setStep("service");
   }
   function handlePetInfoNext() {
+    activeBoarding.refresh();
     if (uniqueSelectedSpecies.length === 2) startNextLeg(autoQueuedGroomingLegs(selectedPets));
     else setStep("service");
   }
@@ -106,8 +113,10 @@ export default function BookAppointmentPage() {
     const eligiblePetIds = selectedPets.filter((p) => {
       if (choice === "dog_grooming") return p.species === "Dog";
       if (choice === "cat_grooming") return p.species === "Cat";
+      if (choice === "boarding") return !activeBoarding.byPet[p.id];
       return true;
     }).map((p) => p.id);
+    if (!eligiblePetIds.length) return;
     const leg = emptyLeg(choice, eligiblePetIds);
     setWaiverBackStep(step === "add-more" ? "add-more" : "service");
     setCurrentLeg(leg); loadLookupsForChoice(choice); setStep("waiver");
@@ -145,7 +154,7 @@ export default function BookAppointmentPage() {
   const hasGroomingLeg = completedLegs.some((leg) =>
     leg.serviceChoice === "grooming" || leg.serviceChoice === "dog_grooming" || leg.serviceChoice === "cat_grooming"
   );
-  const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs)
+  const eligibleForMore = eligibleServicesFor(pets, selectedPetIds, completedLegs, new Set(Object.keys(activeBoarding.byPet)))
     .filter((choice) => !hasGroomingLeg || !["grooming", "dog_grooming", "cat_grooming"].includes(choice));
   if (loading || !customer) return <p className="py-10 text-center text-sm text-zinc-400 sm:py-16">Loading…</p>;
   if (!hasValidCustomerPhone(customer.phone_number)) return (
@@ -167,10 +176,11 @@ export default function BookAppointmentPage() {
       <div className="ht-booking-panel">
         {step === "pet-info" && <div className="ht-booking-pets"><BookingPetInformationStep customer={customer} pets={pets} onPetsChange={setPets}
           selectedIds={selectedPetIds} onSelectionChange={setSelectedPetIds}
-          onBack={() => router.push("/account")} onNext={handlePetInfoNext} /></div>}
+          onBack={() => router.push("/account")} onNext={handlePetInfoNext} boardingBooked={activeBoarding.byPet} /></div>}
         {step === "service" && <div className="ht-booking-services"><CustomerServiceChoiceStep choice={currentLeg?.serviceChoice ?? null}
           onChange={handleServiceChosen} onBack={() => setStep("pet-info")}
-          onNext={() => setStep("waiver")} petSpecies={selectedSpecies} /></div>}
+          onNext={() => setStep("waiver")} petSpecies={selectedSpecies}
+          boardingBlocked={boardingBlocked} boardingChecking={activeBoarding.loading} /></div>}
         {step === "waiver" && currentLeg && <CustomerWaiverStep serviceType={currentLeg.serviceChoice} onBack={handleWaiverDeclined} onAgree={() => setStep("selection")} />}
         {step === "selection" && currentLeg?.serviceChoice === "boarding" && <BoardingDetailsAndSchedule
           pets={legPets} selections={currentLeg.petSelections} kennels={kennels}

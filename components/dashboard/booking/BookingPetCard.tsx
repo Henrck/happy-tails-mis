@@ -1,10 +1,15 @@
 "use client";
 import type { Pet } from "@/lib/types/appointments";
 import PetAvatar from "@/components/dashboard/PetAvatar";
+import { House } from "lucide-react";
+import { boardingUntilLabel, type ActiveBoarding } from "@/lib/supabase/active-boarding";
 
-export default function BookingPetCard({ pet, selected, onToggleSelect, onViewProfile }: {
+export default function BookingPetCard({ pet, selected, onToggleSelect, onViewProfile, boardingBooked }: {
   pet: Pet; selected: boolean; onToggleSelect: () => void; onViewProfile: () => void;
+  /** Set when the pet already has an unfinished boarding booking. */
+  boardingBooked?: ActiveBoarding;
 }) {
+  const until = boardingBooked ? boardingUntilLabel(boardingBooked) : null;
   return (
     <article className={`flex h-full flex-col rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md ${selected ? "border-brand-pink ring-2 ring-brand-pink/20" : "border-pink-100"}`}>
       <div className="flex items-start gap-4">
@@ -13,6 +18,9 @@ export default function BookingPetCard({ pet, selected, onToggleSelect, onViewPr
           <h3 className="truncate text-lg font-bold text-slate-800">{pet.name}</h3>
           <p className="mt-1 truncate text-sm text-slate-500">{pet.breed || "Breed not specified"}{pet.size_label ? ` · ${pet.size_label}` : ""}</p>
           {pet.age != null && <p className="mt-1 text-xs text-slate-500">{pet.age} {pet.age === 1 ? "year" : "years"} old</p>}
+          {boardingBooked && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">
+            <House size={12} aria-hidden="true"/> Boarding booked{until ? ` · until ${until}` : ""}
+          </p>}
         </div>
         <button type="button" onClick={onToggleSelect} aria-label={`${selected ? "Deselect" : "Select"} ${pet.name}`} aria-pressed={selected} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${selected ? "border-brand-pink bg-brand-pink text-white" : "border-zinc-200 bg-white"}`}>
           {selected && <span aria-hidden="true">✓</span>}

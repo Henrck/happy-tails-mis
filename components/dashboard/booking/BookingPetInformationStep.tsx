@@ -7,10 +7,13 @@ import BookingPetCard from "./BookingPetCard";
 import AddPetModal from "./AddPetModal";
 import WalkInPetProfileModal from "@/components/admin/pos/walk-in/WalkInPetProfileModal";
 import PetSizeEstimateModal, { needsPetSizeEstimate } from "./PetSizeEstimateModal";
+import type { ActiveBoarding } from "@/lib/supabase/active-boarding";
 
-export default function BookingPetInformationStep({ customer, pets, onPetsChange, selectedIds, onSelectionChange, onBack, onNext }: {
+export default function BookingPetInformationStep({ customer, pets, onPetsChange, selectedIds, onSelectionChange, onBack, onNext, boardingBooked = {} }: {
   customer: Customer; pets: Pet[]; onPetsChange: (pets: Pet[]) => void; selectedIds: string[];
   onSelectionChange: (ids: string[]) => void; onBack: () => void; onNext: () => void;
+  /** Pets that already have an unfinished boarding booking (shown as a badge). */
+  boardingBooked?: Record<string, ActiveBoarding>;
 }) {
   const [profilePet, setProfilePet] = useState<Pet | null>(null);
   const [addingPet, setAddingPet] = useState(false);
@@ -72,7 +75,7 @@ export default function BookingPetInformationStep({ customer, pets, onPetsChange
       </div>
     </div>}
     <div className="mt-3 rounded-2xl border border-pink-100 bg-pink-50/20 p-3">
-      {activePets.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{shownPets.map(pet => <BookingPetCard key={pet.id} pet={pet} selected={selectedActiveIds.includes(pet.id)} onToggleSelect={() => toggle(pet.id)} onViewProfile={() => setProfilePet(pet)}/>)}</div>
+      {activePets.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{shownPets.map(pet => <BookingPetCard key={pet.id} pet={pet} selected={selectedActiveIds.includes(pet.id)} onToggleSelect={() => toggle(pet.id)} onViewProfile={() => setProfilePet(pet)} boardingBooked={boardingBooked[pet.id]}/>)}</div>
       : <div className="py-12 text-center text-sm text-slate-500">No active pets available. Add a new pet or restore one in My Pets.</div>}
     </div>
     {activePets.length > pageSize && <nav aria-label="Pet pages" className="mt-3 flex flex-wrap items-center justify-center gap-2">

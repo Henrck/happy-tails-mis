@@ -32,7 +32,9 @@ export function emptyLeg(serviceChoice: WalkInServiceChoice, petIds: string[]): 
 export function eligibleServicesFor(
   allPets: Pet[],
   selectedPetIds: string[],
-  completedLegs: BookingLeg[]
+  completedLegs: BookingLeg[],
+  /** Pets that already have an unfinished boarding booking elsewhere. */
+  boardingBlockedIds: ReadonlySet<string> = new Set()
 ): WalkInServiceChoice[] {
   const selected = allPets.filter((p) => selectedPetIds.includes(p.id));
   const results: WalkInServiceChoice[] = [];
@@ -47,7 +49,8 @@ export function eligibleServicesFor(
   // do not offer it again in "Other Services", even for an unselected pet.
   // This avoids a second Boarding leg accidentally competing for the same
   // two Big kennels and splitting pets that were meant to share.
-  if (selected.length > 0 && !completedLegs.some((l) => l.serviceChoice === "boarding")) {
+  // A pet with an unfinished boarding booking cannot be boarded again.
+  if (selected.some((p) => !boardingBlockedIds.has(p.id)) && !completedLegs.some((l) => l.serviceChoice === "boarding")) {
     results.push("boarding");
   }
 

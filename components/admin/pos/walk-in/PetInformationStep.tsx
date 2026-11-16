@@ -4,6 +4,7 @@ import BookingPetInformationStep from "@/components/dashboard/booking/BookingPet
 import { addPet, fetchPetsByCustomer, weightKgToSizeTier } from "@/lib/supabase/appointments";
 import { normalizePetAge } from "@/lib/utils/pet-age";
 import { uploadPetPhoto } from "@/lib/utils/pet-photo-upload";
+import { useActiveBoarding } from "@/lib/booking/use-active-boarding";
 import type { Pet } from "@/lib/types/appointments";
 import type { Customer } from "@/lib/types/users";
 import NewCustomerPetForm, { type NewPetEntry } from "./NewCustomerPetForm";
@@ -17,6 +18,7 @@ export default function PetInformationStep({ customer, onBack, onNext }: {
   const [loading, setLoading] = useState(Boolean(customer));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const activeBoarding = useActiveBoarding(pets.map(p=>p.id));
   // Pets were saved but some photos failed; staff confirm before continuing.
   const [photoIssue, setPhotoIssue] = useState<{ pets: Pet[]; owner: { name: string; contact: string; address: string }; failed: string[] } | null>(null);
   const loadPets = useCallback(async () => {
@@ -68,6 +70,6 @@ export default function PetInformationStep({ customer, onBack, onNext }: {
   if(!customer)return <div className="mx-auto max-w-3xl">{error&&<p role="alert" className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}{saving&&<p role="status" className="mb-3 text-center text-sm text-zinc-500">Saving pet records…</p>}<NewCustomerPetForm onBack={onBack} onNext={handleNewCustomerSubmit}/></div>;
   if(loading)return <p role="status" className="py-16 text-center text-sm text-zinc-500">Loading registered pets…</p>;
   return <div className="mx-auto w-full max-w-4xl">{error&&<div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"><span>{error}</span><button type="button" onClick={()=>void loadPets()} className="font-semibold underline">Retry</button></div>}
-    <BookingPetInformationStep customer={customer} pets={pets} onPetsChange={setPets} selectedIds={selectedIds} onSelectionChange={setSelectedIds} onBack={onBack} onNext={()=>{const chosen=pets.filter(p=>selectedIds.includes(p.id));if(chosen.length)onNext(chosen);}}/>
+    <BookingPetInformationStep customer={customer} pets={pets} onPetsChange={setPets} selectedIds={selectedIds} onSelectionChange={setSelectedIds} onBack={onBack} onNext={()=>{const chosen=pets.filter(p=>selectedIds.includes(p.id));if(chosen.length)onNext(chosen);}} boardingBooked={activeBoarding.byPet}/>
   </div>;
 }
