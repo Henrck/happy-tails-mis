@@ -54,6 +54,10 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
       setError("Your account access could not be verified. Please retry or contact support.");
     } else if (params.get("verified") === "1") {
       setError(null);
+    } else if (params.get("reason") === "idle") {
+      setError("You were signed out after 10 minutes of inactivity. Please sign in again.");
+    } else if (params.get("reason") === "replaced") {
+      setError("Your account was signed in on another device, so you were signed out here. If this wasn't you, sign in and change your password.");
     } else if (params.get("google_error") === "oauth") {
       setError("Google sign-in could not be completed. Please try again.");
     } else if (params.get("google_error") === "setup") {

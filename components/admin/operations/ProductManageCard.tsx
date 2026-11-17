@@ -1,3 +1,4 @@
+import { formatPeso } from "@/lib/utils/currency";
 import type { Product } from "@/lib/types/products";
 import ProductImage from "@/components/admin/pos/ProductImage";
 
@@ -16,7 +17,7 @@ export default function ProductManageCard({
       <ProductImage src={product.image_url} alt={product.name} />
       <p className="mt-2 text-xs font-semibold text-zinc-800 uppercase truncate w-full">{product.name}</p>
       <p className="text-xs text-zinc-500">{product.package_size ?? product.unit}</p>
-      <p className="text-sm font-bold text-brand-pink">₱{product.price}</p>
+      <p className="text-sm font-bold text-brand-pink">{formatPeso(product.price)}</p>
 
       <div className="mt-2 flex items-center gap-3">
         <button

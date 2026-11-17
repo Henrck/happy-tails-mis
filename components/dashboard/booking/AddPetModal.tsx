@@ -8,10 +8,10 @@ import { uploadPetPhoto, type PetPhotoDraft } from "@/lib/utils/pet-photo-upload
 import { createClient } from "@/lib/supabase/client";
 import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Pet } from "@/lib/types/appointments";
-import { CustomerPetFields, useCustomerPetForm } from "@/components/dashboard/CustomerPetFields";
+import { CustomerPetFields, useCustomerPetForm, blankCustomerPet } from "@/components/dashboard/CustomerPetFields";
 export default function AddPetModal({ customerId, onClose, onAdded }: { customerId: string; onClose: () => void; onAdded: (pet: Pet) => void }) {
   const [showGroomingNotice, setShowGroomingNotice] = useState(true);
-  const state = useCustomerPetForm();
+  const state = useCustomerPetForm(blankCustomerPet, { requireAge: true });
   const [photo, setPhoto] = useState<PetPhotoDraft | null>(null);
   // Set when the pet was created but its photo upload failed.
   const [savedPet, setSavedPet] = useState<Pet | null>(null);

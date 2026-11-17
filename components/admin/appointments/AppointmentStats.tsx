@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 import { useState, useEffect } from "react";
 import StatCard from "@/components/admin/StatCard";
 import { fetchTodaysAppointmentCount, fetchTodaysTransactionTotal } from "@/lib/supabase/appointment-management";
@@ -40,7 +41,7 @@ export default function AppointmentStats({ refreshKey }: { refreshKey: number })
         }
       />
       <StatCard
-        value={`₱${todaysTotal.toLocaleString()}`}
+        value={`${formatPeso(todaysTotal)}`}
         label="Total Transaction Today"
         icon={
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="1.8">

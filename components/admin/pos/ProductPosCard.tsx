@@ -1,3 +1,4 @@
+import { formatPeso } from "@/lib/utils/currency";
 import type { Product } from "@/lib/types/products";
 import ProductImage from "./ProductImage";
 
@@ -35,7 +36,7 @@ export default function ProductPosCard({
         {product.name}
       </p>
       <p className="text-xs text-zinc-500">{product.package_size ?? product.unit}</p>
-      <p className={`text-sm font-bold ${outOfStock ? "text-zinc-400" : "text-brand-pink"}`}>₱{product.price}</p>
+      <p className={`text-sm font-bold ${outOfStock ? "text-zinc-400" : "text-brand-pink"}`}>{formatPeso(product.price)}</p>
 
       {outOfStock ? (
         <p className="mt-2 text-[10px] font-semibold text-red-500">Out of stock — unavailable for sale</p>

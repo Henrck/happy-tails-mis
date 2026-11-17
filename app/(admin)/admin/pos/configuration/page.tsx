@@ -1,4 +1,5 @@
 "use client";
+import ProductImageOptimizer from "@/components/admin/operations/ProductImageOptimizer";
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -57,11 +58,12 @@ export default function PosManagementPage() {
       const current = products.find(p => p.id === id);
       if (!current) throw new Error("This item is no longer in the loaded catalog. Refresh and try again.");
       const { data: updated, error: updateError } = await createClient().from("products")
-        .update(payload).eq("id", id).select("id");
+        .update(payload).eq("id", id).select("id,product_code");
       if (updateError) throw new Error(updateError.message);
       if (!updated?.length) throw new Error("The item was not updated. Check your database permissions.");
       setNotice(`Updated ${payload.name}.`);
-      return { id, product_code: current.product_code };
+      // A category change gives the item a new code (database trigger); use the saved one.
+      return { id, product_code: updated[0].product_code ?? current.product_code };
     }
     const result = await addProduct(payload);
     if (result.error) throw new Error(result.error.message);
@@ -97,6 +99,7 @@ export default function PosManagementPage() {
     <div className="mt-3 flex flex-wrap gap-2">{categories.map(c => <button type="button" key={c.value} onClick={() => setCategory(c.value)} className={`rounded-full border px-4 py-2 text-sm font-medium ${category === c.value ? "border-brand-pink bg-brand-pink text-white" : "border-brand-pink bg-white text-zinc-700"}`}>{c.label}</button>)}</div>
     {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
     {notice && <p role="status" className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{notice}</p>}
+    {!loading && <ProductImageOptimizer products={products} onDone={() => { void loadProducts(); }} />}
     <div className="mt-4 grid max-h-[60vh] grid-cols-2 gap-4 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">
       {loading ? <p className="col-span-full py-10 text-center text-zinc-500">Loading products…</p> : filtered.length === 0 ? <p className="col-span-full py-10 text-center text-zinc-500">{showArchived ? "No archived products match these filters." : "No active products match these filters."}</p> : filtered.map(product => <ProductManageCard key={product.id} product={product} onEdit={() => { setNotice(null); setFormModal({ mode: "edit", product }); }} onArchiveToggle={() => setArchiveTarget(product)} />)}
     </div>

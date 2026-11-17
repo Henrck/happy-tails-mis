@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -154,7 +155,7 @@ export default function SummaryStep({
                 </>
               )}
               {petAddons.length > 0 && <p className="text-sm text-zinc-600">Add-ons: {petAddons.join(", ")}</p>}
-              <p className="mt-1 text-sm font-semibold text-zinc-800">Line total: ₱{sel.lineAmount.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-semibold text-zinc-800">Line total: {formatPeso(sel.lineAmount)}</p>
             </div>
           );
         })}
@@ -175,7 +176,7 @@ export default function SummaryStep({
           )}
         </div>
 
-        <div className="pt-3"><p className="text-lg font-bold text-brand-pink">Total Amount: ₱{totalAmount.toLocaleString()}</p></div>
+        <div className="pt-3"><p className="text-lg font-bold text-brand-pink">Total Amount: {formatPeso(totalAmount)}</p></div>
         {draft.specialRequests && (
           <div className="mt-3 rounded-lg border border-pink-100 px-3 py-2">
             <p className="text-xs font-semibold text-zinc-500">Special Requests / Medical Conditions / Allergies / Feeding Instruction</p>

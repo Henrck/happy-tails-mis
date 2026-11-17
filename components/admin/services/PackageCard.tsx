@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import type { Package, PackageInclusion, PackagePricing } from "@/lib/types/services";
 import { Archive, Pencil } from "lucide-react";
@@ -16,7 +17,7 @@ export default function PackageCard({ pkg, inclusions, pricing, onEdit, onToggle
         {inclusions.length > 0 && <ul className="mb-4 space-y-2">{inclusions.map(i => <li key={i.id} className="flex gap-2 text-sm text-zinc-700"><span className="font-bold text-brand-pink">✓</span><span>{i.label}</span></li>)}</ul>}
         {inclusions.length === 0 && <p className="mb-4 text-xs text-zinc-500">{pkg.service_type === "boarding" ? "Select a duration from the rates below." : "No inclusions configured."}</p>}
         <div className="mt-auto rounded-2xl bg-brand-tint p-4"><p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-pink">Pricing</p>
-          {sorted.length ? sorted.map(p => <div key={p.id} className="flex justify-between gap-3 py-1 text-sm"><span className="text-zinc-600">{p.size_detail || p.size_label}</span><span className="shrink-0 font-bold text-zinc-800">₱{p.price.toLocaleString()}{p.is_per_night ? "/night" : ""}</span></div>) : <p className="text-sm text-zinc-500">No rates configured</p>}
+          {sorted.length ? sorted.map(p => <div key={p.id} className="flex justify-between gap-3 py-1 text-sm"><span className="text-zinc-600">{p.size_detail || p.size_label}</span><span className="shrink-0 font-bold text-zinc-800">{formatPeso(p.price)}{p.is_per_night ? "/night" : ""}</span></div>) : <p className="text-sm text-zinc-500">No rates configured</p>}
         </div>
         <div className="mt-5 flex items-center justify-between gap-2"><div className="flex gap-2">
           <button type="button" onClick={onEdit} aria-label={`Edit ${pkg.name}`} className="rounded-full border-2 border-brand-pink p-2 text-brand-pink hover:bg-pink-50"><Pencil size={16}/></button>

@@ -38,7 +38,7 @@ export default function BoardingDetailsAndSchedule(props: Props) {
   ).sort().join("|");
   const hasDetails = props.selections.some(s => Boolean(s.packageId || s.packagePricingId || s.boardingKennelSize || s.addonIds.length));
 
-  return <div className="mx-auto max-w-4xl space-y-5">
+  return <div className={`mx-auto space-y-5 ${stage === "dates" ? "max-w-6xl" : "max-w-4xl"}`}>
     <nav aria-label="Boarding booking steps" className="grid grid-cols-2 gap-2 rounded-2xl border border-pink-100 bg-white p-3 sm:p-4">
       <div aria-current={stage === "details" ? "step" : undefined} className={`rounded-xl px-3 py-3 text-center text-sm font-bold ${stage === "details" ? "bg-brand-pink text-white" : "bg-emerald-50 text-emerald-800"}`}>
         1. Boarding Details

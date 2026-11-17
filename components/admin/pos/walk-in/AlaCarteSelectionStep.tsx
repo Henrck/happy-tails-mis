@@ -1,8 +1,10 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { fetchAddonsByCategory } from "@/lib/supabase/services";
 import { normalizeAddonName, chosenAddonNamesByPet } from "@/lib/booking/unique-pet-addons";
+import { coveredAddonsByPet, groomingPackageIds, useInclusionCoverage } from "@/lib/booking/package-inclusions";
 import type { BookingLeg } from "@/lib/types/booking-leg";
 import type { Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
@@ -61,13 +63,18 @@ export default function AlaCarteSelectionStep({ pets, selections, completedLegs 
 
   const takenByPet = useMemo(() => chosenAddonNamesByPet(completedLegs, serviceAddons), [completedLegs, serviceAddons]);
   const selectionFor = (pet: Pet) => selections.find(s => s.pet.id === pet.id);
-  const isTaken = (pet: Pet, addon: Addon) => takenByPet[pet.id]?.has(normalizeAddonName(addon.name)) ?? false;
+  // Items already part of this pet's grooming package in the same booking.
+  const { coverage } = useInclusionCoverage(groomingPackageIds(completedLegs));
+  const includedByPet = useMemo(() => coveredAddonsByPet(completedLegs, coverage), [completedLegs, coverage]);
+  const includedIn = (pet: Pet, addon: Addon) => includedByPet[pet.id]?.get(addon.id) ?? null;
+  const isTaken = (pet: Pet, addon: Addon) => !!includedIn(pet, addon) || (takenByPet[pet.id]?.has(normalizeAddonName(addon.name)) ?? false);
 
   function toggleAddon(pet: Pet, addonId: string) {
     const addon = addons.find(item => item.id === addonId);
     if (!addon) return;
     if (isTaken(pet, addon)) {
-      setNotice(`${addon.name} is unavailable for ${pet.name} because it is already selected in another service.`);
+      const pkg = includedIn(pet, addon);
+      setNotice(pkg ? `${addon.name} is already included in ${pet.name}'s ${pkg} grooming package.` : `${addon.name} is unavailable for ${pet.name} because it is already selected in another service.`);
       return;
     }
     setNotice(null);
@@ -100,18 +107,19 @@ export default function AlaCarteSelectionStep({ pets, selections, completedLegs 
         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">{addons.map(addon => {
           const price = priceForPet(prices, addon.id, pet.size_label);
           const taken = isTaken(pet, addon);
+          const pkg = includedIn(pet, addon);
           const active = !taken && (selected?.addonIds.includes(addon.id) ?? false);
           const unavailable = taken || price === null;
           return <button type="button" key={addon.id} disabled={unavailable} aria-disabled={unavailable}
-            title={taken ? `Already selected for ${pet.name} in Grooming or Boarding` : price === null ? "Price unavailable for this size" : undefined}
+            title={pkg ? `Included in ${pet.name}'s ${pkg} grooming package` : taken ? `Already selected for ${pet.name} in Grooming or Boarding` : price === null ? "Price unavailable for this size" : undefined}
             onClick={() => toggleAddon(pet, addon.id)}
             className={`rounded-xl border-2 px-3 py-2.5 text-left text-xs ${unavailable ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-500" : active ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700 hover:border-pink-200"}`}>
             <span className="block font-semibold">{addon.name}</span>
-            <span className={`mt-1 block ${active ? "text-white/80" : "text-zinc-500"}`}>{taken ? "Unavailable · already selected for this pet" : price === null ? "Price unavailable for this size" : `₱${price.toLocaleString("en-PH")}`}</span>
+            <span className={`mt-1 block ${active ? "text-white/80" : "text-zinc-500"}`}>{pkg ? `Included in ${pkg} grooming` : taken ? "Unavailable · already selected for this pet" : price === null ? "Price unavailable for this size" : `${formatPeso(price)}`}</span>
             {addon.price_note && <span className="mt-1 block italic opacity-75">{addon.price_note}</span>}
           </button>;
         })}</div>
-        {selected && selected.addonIds.length > 0 && <p className="mt-2 text-right text-sm font-bold text-brand-pink">Subtotal: ₱{selected.lineAmount.toLocaleString("en-PH")}</p>}
+        {selected && selected.addonIds.length > 0 && <p className="mt-2 text-right text-sm font-bold text-brand-pink">Subtotal: {formatPeso(selected.lineAmount)}</p>}
       </div>;
     })}
     <div className="mt-8 flex gap-3">

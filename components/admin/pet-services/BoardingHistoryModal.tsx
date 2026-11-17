@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 import type { BoardingHistoryItem } from "@/lib/supabase/boarding-operations";
 export default function BoardingHistoryModal({ history, onClose, error }: {
   history: BoardingHistoryItem[];
@@ -12,7 +13,7 @@ export default function BoardingHistoryModal({ history, onClose, error }: {
         {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         {!error && !history.length && <p className="py-8 text-center text-sm text-zinc-500">No completed boarding pets were found.</p>}
         {history.map((item) => <article key={item.appointmentPetId} className="rounded-xl border border-pink-100 bg-pink-50 p-3">
-          <div className="flex flex-wrap justify-between gap-2"><b className="text-sm text-zinc-800">{item.petName} · {item.ownerName}</b><span className="text-sm font-bold text-brand-pink">₱{item.amount.toLocaleString()}</span></div>
+          <div className="flex flex-wrap justify-between gap-2"><b className="text-sm text-zinc-800">{item.petName} · {item.ownerName}</b><span className="text-sm font-bold text-brand-pink">{formatPeso(item.amount)}</span></div>
           <p className="mt-1 text-xs text-zinc-600">{item.kennelLabel}</p><p className="mt-1 text-xs text-zinc-600">{item.dropOffAt ? new Date(item.dropOffAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : "—"} to {item.pickUpAt ? new Date(item.pickUpAt).toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : "—"}</p>
         </article>)}
       </div>

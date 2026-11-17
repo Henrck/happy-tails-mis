@@ -1,8 +1,10 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
-import { useBookingClosures, manilaToday } from "@/lib/booking/use-booking-closures";
+import BoardingStayCalendar, { type BoardingDayStatus } from "@/components/shared/BoardingStayCalendar";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Clock, Info, Sparkles } from "lucide-react";
+import { useBookingClosures, manilaToday, boardingClosures as withoutClosureBlocks } from "@/lib/booking/use-booking-closures";
 import { checkBoardingGroup, fetchBoardingGroupMonth, type BoardingGroupPet, type BoardingGroupDay, fetchBoardingKennelCounts, type BoardingKennelCounts } from "@/lib/supabase/boarding-group-availability";
 import { hasValidBoardingDuration, isExtendedBoardingRate, parseExtendedBoardingNights } from "@/lib/booking/boarding-duration";
 import type { DraftPetSelection } from "@/lib/types/appointments";
@@ -13,6 +15,9 @@ import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 import BookingStepConfirmation from "@/components/shared/BookingStepConfirmation";
 
 const BELONGINGS = ["Pet Bed", "Toys", "Cat Litter", "Leash/Collar", "Others"];
+/** Drop-off window: 9:00 AM to 6:00 PM, in 15-minute steps (6:00 PM is the last slot). */
+const DROP_OFF_HOURS = ["09", "10", "11", "12", "13", "14", "15", "16", "17", "18"];
+const DROP_OFF_MINUTES = ["00", "15", "30", "45"];
 const DAY_MS = 86_400_000;
 
 function nightsFor(sel: DraftPetSelection, rates: PackagePricing[]): number | null {
@@ -78,14 +83,11 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
   const [review, setReview] = useState(false);
   const [confirmBack, setConfirmBack] = useState(false);
   const [verified, setVerified] = useState<DraftPetSelection[]>([]);
+  const [showRules, setShowRules] = useState(false);
 
-  // Exceptional closures prevent boarding; regular holidays can be handled by caretakers.
-  // Honor the holiday-open override recorded in Calendar Management.
-  const boardingClosures = useMemo(() => ({
-    ...closures,
-    nameFor: (day: string | null | undefined) => day ? closures.dates.find((d) =>
-      d.date === day && d.category === "exceptional_closure" && !d.is_open_override)?.name ?? null : null,
-  }), [closures]);
+  // Boarding is allowed on holidays and shop closures (a caretaker is on duty),
+  // so closures never block; they are only shown as an informational note.
+  const boardingClosures = useMemo(() => withoutClosureBlocks(closures), [closures]);
 
   const requirements = useMemo((): BoardingGroupPet[] => petSelections.map((sel) => ({
     pet_id: sel.pet.id,
@@ -197,68 +199,201 @@ export default function BoardingGroupSchedule({ petSelections, pricing, kennels,
       <div className="mt-4 space-y-2">
         {shareGroups(verified as ShareSelection[]).map(group => <div key={group[0].boardingShareGroupId} className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
           <b>One shared Big kennel</b> · {group.map(s => s.pet.name).join(" + ")}
-          <p className="mt-1 font-semibold text-emerald-900">Combined charge: ₱{group.reduce((sum,s) => sum + s.lineAmount,0).toLocaleString()}</p>
+          <p className="mt-1 font-semibold text-emerald-900">Combined charge: {formatPeso(group.reduce((sum,s) => sum + s.lineAmount,0))}</p>
           <p className="mt-1 text-xs text-emerald-800">One kennel base rate; per-pet add-ons remain retained.</p>
         </div>)}
         {verified.map((s) => <div key={s.pet.id} className="mt-2 rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm">
-          <b>{s.pet.name}</b> · {s.boardingKennelSize === "big" ? "Big" : "Small"} Kennel · ₱{s.lineAmount.toLocaleString()}
+          <b>{s.pet.name}</b> · {s.boardingKennelSize === "big" ? "Big" : "Small"} Kennel · {formatPeso(s.lineAmount)}
           <p className="mt-1 text-xs text-zinc-600">{display(s.boardingDropOffAt!)} → {display(s.boardingPickUpAt!)}</p>
         </div>)}
       </div>
-      <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Availability is not reserved until final booking submission. On official holidays, caretakers supervise pets and can assist with pickup during the 9 AM–6 PM window. Exceptional closures remain unavailable.</p>
+      <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">Availability is not reserved until final booking submission. On holidays and shop closures, a caretaker on duty supervises boarded pets and handles drop-off and pickup during the 9 AM–6 PM window.</p>
       <div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setReview(false)} className="rounded-full border border-pink-200 py-3 text-sm font-semibold text-brand-pink">Review dates</button><button onClick={() => { setReview(false); onConfirmed(verified); }} className="rounded-full bg-brand-pink py-3 text-sm font-semibold text-white">Confirm & Proceed</button></div>
     </div>
   </div>;
 
-  return <div className="mx-auto max-w-4xl space-y-5">
+  // ---- Display helpers (layout only; availability logic above is unchanged) ----
+  const nightsByPet = petSelections.map((s) => ({ sel: s, nights: nightsFor(s, pricing) }));
+  const uniformNights = new Set(nightsByPet.map((p) => p.nights)).size === 1 ? longestStay : null;
+  const stayLabel = uniformNights ? `${uniformNights}-night stay` : `Up to ${longestStay}-night stay`;
+  const pickupDays = date ? Array.from(new Set(nightsByPet.filter((p) => p.nights).map((p) => addNights(date, p.nights!)))) : [];
+  const stayEnd = date && longestStay ? addNights(date, longestStay) : "";
+  const activeSmall = kennels.filter((k) => k.size === "small" && k.is_active !== false).length;
+  const activeBig = kennels.filter((k) => k.size === "big" && k.is_active !== false).length;
+  const calendarBusy = loading || checking || !validDetails || closures.loading;
+  // Customer-chosen drop-off time: any quarter hour from 9:00 AM to 6:00 PM.
+  const [timeHour, timeMinute] = time.split(":");
+  const minuteOptions = Array.from(new Set([...DROP_OFF_MINUTES, ...(DROP_OFF_MINUTES.includes(timeMinute) ? [] : [timeMinute])])).sort();
+  const setTimeParts = (hour: string, minute: string) => {
+    const next = `${hour}:${hour === "18" ? "00" : minute}`;
+    if (next !== time) changeTime(next);
+  };
+  const statusFor = (day: string): BoardingDayStatus => {
+    if (day < today) return { kind: "past" };
+    const reason = boardingClosures.nameFor(day) ?? unavailable[day];
+    if (reason) return { kind: "blocked", reason };
+    if (calendarBusy || availability[day] === undefined) return { kind: "checking" };
+    const note = boardingClosures.noteFor(day);
+    return note ? { kind: "available", note } : { kind: "available" };
+  };
+  const card = "rounded-2xl border border-pink-100 bg-white p-4 shadow-sm sm:p-5";
+
+  return <div className="mx-auto max-w-6xl">
     {confirmBack && <BookingStepConfirmation
       title="Return to boarding details?"
       description="You can review or change the kennel and duration. Changing those details may clear the selected boarding schedule and require another availability check."
       confirmLabel="Go Back" danger
       onCancel={() => setConfirmBack(false)}
       onConfirm={() => { setConfirmBack(false); onBack(); }} />}
-    <div className="rounded-2xl border border-pink-100 bg-pink-50 p-4">
-      <h2 className="text-lg font-bold text-brand-pink">Boarding Dates — Live Group Availability</h2><p className="mt-1 text-xs font-semibold text-zinc-500">Step 2 of 2 · Choose your drop-off day and review each pickup date</p>
-      <p className="mt-1 text-sm text-zinc-700">The calendar checks all selected pets together. The current active capacity is {kennels.filter((k) => k.size === "small" && k.is_active !== false).length} Small and {kennels.filter((k) => k.size === "big" && k.is_active !== false).length} Big.</p>
-      <p className="mt-2 text-xs text-zinc-600"><b>Sharing rules:</b> One shared Big kennel holds two Small pets, Small + Medium, Medium + Medium, or three Small pets, only when the Share One Big Kennel option was selected in Details. A Large or larger pet uses one Big kennel alone. A Small kennel holds one Small or Medium pet.</p>
-    </div>
-    <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">The calendar checks the <strong>entire stay</strong>, not just the arrival date. For example, arriving November 3 for six nights overlaps Big kennels reserved from November 5, so the date is unavailable. A stay that checks out before those reservations begin may still be available.</p>
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_230px]">
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 space-y-5">
-        <BookingDayCalendar title="Group check-in" value={date} closures={boardingClosures}
-          availability={availability} unavailable={unavailable} groupMode onBlocked={setError}
-          capacityLoading={loading || checking || !validDetails} capacityError={loadError}
-          onMonthChange={onMonthChange} onChange={(day) => { void choose(day); }}/>
-        <div><p className="text-sm font-semibold text-zinc-800">Pet belongings (optional)</p><div className="mt-2 flex flex-wrap gap-2">{BELONGINGS.map((item) => <button key={item} type="button" onClick={() => onBelongingsChange(petBelongings.includes(item) ? petBelongings.filter((v) => v !== item) : [...petBelongings,item])} className={`rounded-full border px-3 py-2 text-xs font-semibold ${petBelongings.includes(item) ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200 bg-white text-zinc-700"}`}>{item}</button>)}</div></div>
-        <label className="block text-sm font-semibold text-zinc-800">Care instructions / special requests<textarea value={specialRequests} rows={3} onChange={(e) => onRequestsChange(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 bg-white p-3 text-sm"/></label>
+        <header className={card}>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-brand-pink">Step 2 of 2 · Boarding Dates</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">{longestStay ? stayLabel : "Stay length not set"}</span>
+          </div>
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">Select Boarding Dates</h2>
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-600 sm:text-sm">Choose your drop-off day. Dates are available only when kennels are open for {petSelections.length > 1 ? "every selected pet's" : "your"} <strong className="font-semibold text-slate-800">entire stay</strong>.</p>
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <button type="button" onClick={() => setShowRules((v) => !v)} aria-expanded={showRules}
+              className="flex w-full items-center justify-between py-1 text-left text-xs font-semibold text-slate-700 hover:text-brand-pink">
+              <span className="flex items-center gap-1.5"><Info size={16} className="shrink-0 text-brand-pink"/>Kennel rules &amp; capacity ({activeSmall} Small, {activeBig} Big active)</span>
+              {showRules ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+            </button>
+            {showRules && <div className="mt-2.5 space-y-2 rounded-xl border border-pink-100 bg-[#FFF8FB] p-3.5 text-xs leading-relaxed text-slate-600">
+              <p><strong className="text-slate-800">Entire-stay check:</strong> The calendar checks every night of the stay, not just the arrival date. For example, arriving on the 3rd for six nights overlaps Big kennels reserved from the 5th, so that date is unavailable; a stay that checks out before those reservations begin may still be available.</p>
+              <p><strong className="text-slate-800">Kennel sizing &amp; sharing:</strong> A Small kennel holds one Small or Medium pet. One shared Big kennel holds two Small pets, Small + Medium, Medium + Medium, or three Small pets, only when Share One Big Kennel was selected in Details. A Large or larger pet uses one Big kennel alone.</p>
+              <p><strong className="text-slate-800">Holidays &amp; closures:</strong> Boarding continues on holidays and shop closures. A caretaker is on duty for boarded pets, so drop-off, the stay and pickup (9 AM to 6 PM) can fall on those dates. They&apos;re marked in amber on the calendar.</p>
+            </div>}
+          </div>
+        </header>
+
+        <BoardingStayCalendar value={date} today={today} statusFor={statusFor} stayEnd={stayEnd} pickupDays={pickupDays}
+          stayLabel={uniformNights ? `${uniformNights}-night stay` : "Stay"} busy={checking || closures.loading || loading}
+          busyLabel={checking ? "Checking the whole stay…" : closures.loading ? "Checking shop calendar…" : "Checking kennel space…"}
+          errorText={closures.error ? `Unable to load closures: ${closures.error}` : !validDetails ? "Complete valid Boarding Details first." : null}
+          onMonthChange={onMonthChange} onSelect={(day) => { void choose(day); }}/>
+
+        <section className={card}>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-slate-900">Drop-off time{petSelections.length > 1 ? " (all pets)" : ""}</h3>
+            <span className="rounded-md border border-pink-100 bg-[#FFF5F9] px-2 py-0.5 text-[11px] font-medium text-brand-pink">Same pickup time</span>
+          </div>
+          <p className="mb-3.5 text-xs text-slate-500">Choose any time within shop hours (9:00 AM–6:00 PM). Pickup is at the same time of day after each pet&apos;s stay. Changing the time clears the selected date so the stay can be re-checked.</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-0">
+              <span className="mb-1 block text-[11px] font-semibold text-slate-500">Hour</span>
+              <select value={timeHour} onChange={(e) => setTimeParts(e.target.value, timeMinute)} aria-label="Drop-off hour"
+                className="w-32 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-brand-pink focus:outline-none focus:ring-2 focus:ring-pink-100">
+                {DROP_OFF_HOURS.map((h) => <option key={h} value={h}>{clockLabel(`${h}:00`).replace(":00", "")}</option>)}
+              </select>
+            </label>
+            <span className="pb-2.5 text-lg font-bold text-slate-400" aria-hidden="true">:</span>
+            <label className="min-w-0">
+              <span className="mb-1 block text-[11px] font-semibold text-slate-500">Minute</span>
+              <select value={timeMinute} onChange={(e) => setTimeParts(timeHour, e.target.value)} aria-label="Drop-off minute" disabled={timeHour === "18"}
+                className="w-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-brand-pink focus:outline-none focus:ring-2 focus:ring-pink-100 disabled:bg-slate-50 disabled:text-slate-400">
+                {minuteOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>
+            <p className="flex items-center gap-1.5 rounded-xl bg-pink-50 px-3.5 py-2.5 text-sm font-bold text-brand-pink" aria-live="polite">
+              <Clock size={16} aria-hidden="true"/>Drop-off at {clockLabel(time)}
+            </p>
+          </div>
+          {timeHour === "18" && <p className="mt-2 text-[11px] text-slate-500">6:00 PM is the latest drop-off time.</p>}
+        </section>
+
+        <section className={`${card} space-y-4`}>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Pet belongings <span className="font-normal text-slate-400">(optional)</span></h3>
+            <div className="mt-2.5 flex flex-wrap gap-2">{BELONGINGS.map((item) => {
+              const checked = petBelongings.includes(item);
+              return <button key={item} type="button" aria-pressed={checked}
+                onClick={() => onBelongingsChange(checked ? petBelongings.filter((v) => v !== item) : [...petBelongings, item])}
+                className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all ${checked ? "border-brand-pink bg-pink-100 text-[#B81D6B]" : "border-slate-200 bg-white text-slate-600 hover:border-pink-300"}`}>
+                {checked && <Check size={14} className="text-brand-pink"/>}{item}
+              </button>;
+            })}</div>
+          </div>
+          <label className="block">
+            <span className="mb-2 block text-sm font-bold text-slate-900">Care instructions / special requests</span>
+            <textarea value={specialRequests} rows={3} maxLength={1000} onChange={(e) => onRequestsChange(e.target.value)}
+              placeholder={`Feeding schedule, medication notes or special care for ${petSelections.map((s) => s.pet.name).join(", ") || "your pet"}…`}
+              className="w-full rounded-xl border border-slate-200 bg-[#FFFBFD] px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-pink focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-100"/>
+          </label>
+        </section>
       </div>
-      <div className="self-start space-y-3 rounded-2xl border border-pink-100 bg-white p-4">
-        <label className="block text-sm font-semibold text-zinc-800">Drop-off time (all pets)
-          <input type="time" min="09:00" max="18:00" step={60} value={time} onChange={(e) => changeTime(e.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 p-3 text-sm"/>
-        </label>
-        <p className="text-xs leading-5 text-zinc-600">Pickup is calculated separately for each pet using the selected duration and the same arrival time.</p>
-        <div className="rounded-xl border border-pink-200 bg-pink-50 p-3" aria-live="polite">
-          <p className="text-sm font-bold text-zinc-800">Kennels available for your dates</p>
-          <p className="mt-1 text-[11px] leading-4 text-zinc-600">{date ? `${date} · ${longestStay} night${longestStay === 1 ? "" : "s"} from ${time} (entire longest selected stay)` : "Choose an available date to see live counts."}</p>
-          {date && (countsLoading ? <p className="mt-3 text-xs text-zinc-500">Checking active kennels…</p> : counts ?
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-white p-3 text-center"><span className="block text-xs text-zinc-600">Small kennels</span><strong className="text-xl text-brand-pink">{counts.small}</strong><span className="block text-[10px] text-zinc-500">of {counts.totalSmall} active</span></div>
-              <div className="rounded-lg bg-white p-3 text-center"><span className="block text-xs text-zinc-600">Big kennels</span><strong className="text-xl text-brand-pink">{counts.big}</strong><span className="block text-[10px] text-zinc-500">of {counts.totalBig} active</span></div>
-            </div> : <p className="mt-2 text-xs text-amber-800">{countsError ?? "Select a date to view available kennels."}</p>)}
-          <p className="mt-2 text-[11px] leading-4 text-zinc-500">Counts reflect existing reservations, before adding this booking. Final group allocation is checked again when saving.</p>
+
+      <aside className={`${card} xl:sticky xl:top-4`} aria-label="Booking summary">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <h3 className="text-base font-bold text-slate-900">Booking Summary</h3>
+          <span className="inline-flex items-center gap-1 rounded-full bg-pink-100/70 px-2.5 py-0.5 text-[11px] font-bold text-brand-pink"><Sparkles size={12}/>Live counts</span>
         </div>
-        {petSelections.map((s) => {
-          const n = nightsFor(s, pricing);
-          return <div key={s.pet.id} className="rounded-xl bg-slate-50 p-3 text-xs text-zinc-700">
-            <b>{s.pet.name}</b><p>{s.boardingKennelSize === "big" ? "Big" : "Small"} · {n ?? "—"} nights</p>
-            <p>{date && n ? `${date} → ${addNights(date,n)}` : "Choose an available arrival date"}</p>
-          </div>;
-        })}
-        <p className="text-xs text-amber-800">Official holiday care is available. Exceptional shop closures are still blocked for drop-off/pickup.</p>
-      </div>
+
+        <div className="space-y-3 border-b border-slate-100 py-4">
+          <SummaryDate label="Drop-off" date={date} time={time}/>
+          <SummaryDate label={uniformNights ? `Pickup (${uniformNights} night${uniformNights === 1 ? "" : "s"})` : "Last pickup"} date={stayEnd} time={time} muted/>
+        </div>
+
+        <div className="border-b border-slate-100 py-4" aria-live="polite">
+          <div className="rounded-xl border border-pink-200/80 bg-[#FFF5F9] p-3.5">
+            <p className="text-xs font-bold text-slate-900">Kennels available for your dates</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{date ? `${date} · ${longestStay} night${longestStay === 1 ? "" : "s"} from ${clockLabel(time).toLowerCase()}` : "Choose an available date to see live counts."}</p>
+            {date && (countsLoading ? <p className="mt-3 text-xs text-slate-500">Checking active kennels…</p> : counts ?
+              <div className="my-3 grid grid-cols-2 gap-2.5">
+                <div className="rounded-xl border border-pink-100 bg-white p-2.5 text-center"><p className="text-[11px] font-semibold text-slate-600">Small kennels</p><p className="my-0.5 text-xl font-extrabold text-brand-pink">{counts.small}</p><p className="text-[10px] text-slate-400">of {counts.totalSmall} active</p></div>
+                <div className="rounded-xl border border-pink-100 bg-white p-2.5 text-center"><p className="text-[11px] font-semibold text-slate-600">Big kennels</p><p className="my-0.5 text-xl font-extrabold text-brand-pink">{counts.big}</p><p className="text-[10px] text-slate-400">of {counts.totalBig} active</p></div>
+              </div> : <p className="mt-2 text-xs text-amber-800">{countsError ?? "Select a date to view available kennels."}</p>)}
+            <p className="mt-2 text-[10px] leading-relaxed text-slate-500">Counts reflect existing reservations before adding this booking. Final group allocation is checked again when saving.</p>
+          </div>
+        </div>
+
+        <div className="space-y-2 border-b border-slate-100 py-4">
+          {nightsByPet.map(({ sel, nights }) => <div key={sel.pet.id} className="rounded-xl border border-slate-200/70 bg-slate-50 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-xs font-bold text-slate-900">{sel.pet.name}</p>
+              <span className="shrink-0 rounded-full bg-pink-100/70 px-2 py-0.5 text-[11px] font-semibold text-brand-pink">{sel.boardingKennelSize === "big" ? "Big" : "Small"} · {nights ?? "—"} night{nights === 1 ? "" : "s"}</span>
+            </div>
+            <p className="mt-1.5 font-mono text-xs font-semibold text-slate-600">{date && nights ? `${date} → ${addNights(date, nights)}` : "Choose an available arrival date"}</p>
+          </div>)}
+        </div>
+
+        {(petBelongings.length > 0 || specialRequests.trim()) && <div className="space-y-1.5 border-b border-slate-100 py-3 text-xs">
+          {petBelongings.length > 0 && <p className="text-slate-600"><span className="font-semibold text-slate-800">Belongings:</span> {petBelongings.join(", ")}</p>}
+          {specialRequests.trim() && <p className="truncate italic text-slate-600"><span className="font-semibold not-italic text-slate-800">Note:</span> &ldquo;{specialRequests.trim()}&rdquo;</p>}
+        </div>}
+
+        <div className="space-y-2.5 pt-4">
+          <button type="button" disabled={!valid} onClick={() => { void confirm(); }}
+            className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-pink px-4 py-3 text-sm font-bold text-white shadow-sm transition-all hover:bg-brand-pink-dark disabled:opacity-50">
+            {checking ? "Checking…" : <>Review Schedule <ArrowRight size={16}/></>}
+          </button>
+          <button type="button" onClick={() => setConfirmBack(true)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-full border border-pink-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-pink hover:bg-[#FFF5F9]">
+            <ArrowLeft size={16}/>Back
+          </button>
+        </div>
+      </aside>
     </div>
     {error && <FeedbackDialog title="Boarding Date Unavailable" tone="warning" message={error} onClose={() => setError(null)} />}
     {loadError && <FeedbackDialog title="Could Not Check Boarding Calendar" message={loadError} onClose={() => setLoadError(null)} />}
-    <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setConfirmBack(true)} className="rounded-full border border-pink-200 py-3 font-semibold text-brand-pink">Back</button><button type="button" disabled={!valid} onClick={() => { void confirm(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">{checking ? "Checking…" : "Review Schedule"}</button></div>
+  </div>;
+}
+
+function clockLabel(time: string) {
+  const [h, m] = time.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
+function SummaryDate({ label, date, time, muted = false }: { label: string; date: string; time: string; muted?: boolean }) {
+  const friendly = date ? new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
+    .format(new Date(`${date}T00:00:00Z`)) : "Select a date";
+  return <div className="flex items-start justify-between gap-2">
+    <div className="min-w-0">
+      <p className="text-[11px] font-medium text-slate-400">{label}</p>
+      <p className="text-sm font-bold text-slate-900">{friendly}</p>
+      {date && <p className={`text-xs ${muted ? "text-slate-500" : "font-semibold text-brand-pink"}`}>{clockLabel(time)}</p>}
+    </div>
+    {date && <span className="shrink-0 rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-slate-500">{date}</span>}
   </div>;
 }

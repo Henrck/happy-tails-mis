@@ -89,3 +89,19 @@ export function manilaTime(): string {
 export function ClosureNotice({ date, name }: { date: string; name: string }) {
   return <p role="alert" className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">{date}: Closed — {name}. Please select another date.</p>;
 }
+
+/** Boarding continues on holidays and shop closures: a caretaker is on duty for
+ * boarded pets, so drop-off, the stay and pickup may fall on any closed date.
+ * Returns closures that never block (nameFor -> null, verifyOpen -> null) and
+ * a `noteFor` describing the closure for an informational label. */
+export function boardingClosures(closures: ReturnType<typeof useBookingClosures>) {
+  return {
+    ...closures,
+    nameFor: (_day: string | null | undefined): string | null => null,
+    verifyOpen: async (_day: string): Promise<string | null> => null,
+    noteFor: (day: string): { name: string; label: "Holiday" | "Closed" } | null => {
+      const hit = closures.dates.find((d) => d.date === day && !d.is_open_override);
+      return hit ? { name: hit.name, label: hit.category === "exceptional_closure" ? "Closed" : "Holiday" } : null;
+    },
+  };
+}

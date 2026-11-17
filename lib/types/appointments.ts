@@ -15,6 +15,8 @@ export type Pet = {
   owner_contact: string | null;
   created_at: string;
   photo_url?: string | null;
+  /** Permanent sequential number from the database; shown as PET-0001. */
+  pet_number?: number | null;
 };
 export type AppointmentServiceType = "dog_grooming" | "cat_grooming" | "boarding" | "ala_carte";
 export type AppointmentStatus = "pending" | "confirmed" | "checked_in" | "completed" | "cancelled";

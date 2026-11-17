@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -107,15 +108,15 @@ export default function MultiServiceSummaryStep({ customer, legs, packagesByServ
               <><p>Package: {pkg?.name ?? (s.packageId ? "—" : "À La Carte")}</p>{size && <p>Size: {size.label}</p>}
                 {isGrooming(leg.serviceChoice) && <p>Start: {prettyTime(start)} · Groomer: {groomer?.name ?? "Assigned at booking"}</p>}
                 {leg.serviceChoice === "ala_carte" && <p>Start: {prettyTime((s as DraftPetSelection & { alaCarteScheduledTime?: string | null }).alaCarteScheduledTime)} · Groomer: {groomer?.name ?? "—"}</p>}</>}
-            {addonNames && <p>Add-ons: {addonNames}</p>}<p className="mt-1 font-semibold">₱{Number(s.lineAmount).toLocaleString()}</p>
+            {addonNames && <p>Add-ons: {addonNames}</p>}<p className="mt-1 font-semibold">{formatPeso(Number(s.lineAmount))}</p>
           </div>;
         })}
         {leg.serviceChoice !== "boarding" && <p className="mt-2 text-sm text-zinc-600">Date: {leg.scheduledDate ?? "—"}</p>}
         {!!leg.specialRequests && <p className="mt-2 text-sm text-zinc-600">Notes: {leg.specialRequests}</p>}
-        <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{amount.toLocaleString()}</p>
+        <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: {formatPeso(amount)}</p>
       </section>;
     })}</div>
-    <div className="mt-5 flex justify-between rounded-2xl bg-brand-tint px-5 py-4 font-bold"><span>{hasGrooming ? "Estimated Total" : "Grand Total"}</span><span className="text-xl text-brand-pink">₱{total.toLocaleString()}</span></div>
+    <div className="mt-5 flex justify-between rounded-2xl bg-brand-tint px-5 py-4 font-bold"><span>{hasGrooming ? "Estimated Total" : "Grand Total"}</span><span className="text-xl text-brand-pink">{formatPeso(total)}</span></div>
     {hasGrooming && <label className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-zinc-700">
       <input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} className="mt-1" />
       <span><strong>Grooming price policy:</strong> I understand that my pet will be weighed at the shop and the final rate may change after staff verification and my approval.</span>

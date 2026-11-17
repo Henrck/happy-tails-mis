@@ -14,6 +14,7 @@ import type { Groomer, Kennel } from "@/lib/types/pet-services";
 import type { Package, PetSize, Addon } from "@/lib/types/services";
 import { emptyLeg, eligibleServicesFor, autoQueuedGroomingLegs, type BookingLeg } from "@/lib/types/booking-leg";
 import { findDuplicatePetAddon } from "@/lib/booking/unique-pet-addons";
+import { findIncludedAddonConflict, groomingPackageIds, useInclusionCoverage } from "@/lib/booking/package-inclusions";
 import { useActiveBoarding } from "@/lib/booking/use-active-boarding";
 import { boardingUntilLabel } from "@/lib/supabase/active-boarding";
 import type { WalkInServiceChoice } from "@/components/admin/pos/walk-in/ServiceChoiceStep";
@@ -42,6 +43,8 @@ export default function BookAppointmentPage() {
   const [queuedLegs, setQueuedLegs] = useState<BookingLeg[]>([]);
   const [completedLegs, setCompletedLegs] = useState<BookingLeg[]>([]);
   const [currentLeg, setCurrentLeg] = useState<BookingLeg | null>(null);
+  // Package inclusions for every grooming package in this booking (incl. the leg being edited).
+  const { coverage: inclusionCoverage } = useInclusionCoverage(groomingPackageIds(currentLeg ? [...completedLegs, currentLeg] : completedLegs));
   const [groomers, setGroomers] = useState<Groomer[]>([]);
   const [kennels, setKennels] = useState<Kennel[]>([]);
   const [boardingAddons, setBoardingAddons] = useState<Addon[]>([]);
@@ -139,7 +142,8 @@ export default function BookAppointmentPage() {
     }
     const updated = { ...currentLeg, petSelections: selections };
     const proposed = [...completedLegs.filter(l => l.id !== currentLeg.id), updated];
-    const duplicate = findDuplicatePetAddon(proposed, addonsByService);
+    const addonName = (id: string) => Object.values(addonsByService).flat().find((a) => a.id === id)?.name;
+    const duplicate = findDuplicatePetAddon(proposed, addonsByService) ?? findIncludedAddonConflict(proposed, inclusionCoverage, addonName);
     if (duplicate) { setDuplicateWarning(duplicate); setStep("selection"); return; }
     setCompletedLegs(proposed); setCurrentLeg(null);
     if (queuedLegs.length > 0) startNextLeg(queuedLegs);

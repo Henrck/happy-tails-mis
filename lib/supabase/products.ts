@@ -1,6 +1,7 @@
 // Inventory and POS share batch-aware stock calculations. Mutations are handled
 // by Supabase; reductions use an auditable, transactional server-side RPC.
 import { createClient } from "./client";
+import { normalizeProductImage, NORMALIZED_IMAGE_MARKER } from "@/lib/utils/product-image";
 import { philippinesToday } from "@/lib/utils/inventory-expiration";
 import type { PetType, Product, ProductBatch, ProductCategory } from "@/lib/types/products";
 
@@ -84,11 +85,24 @@ export async function updateProduct(id: string, fields: ProductWriteFields) {
   return { error: error ?? (!data?.length ? { message: "No product was updated; check inventory permissions." } : null) };
 }
 
-export async function uploadProductImage(file: File, productCode: string) {
+/** Uploads a product photo after standardizing it (trimmed, centred on an
+ * 800x800 white square, WebP). Falls back to the original file if the browser
+ * can't process it. */
+export async function uploadProductImage(file: Blob, productCode: string) {
   const db = createClient();
-  const ext = file.name.split(".").pop();
-  const path = `products/${productCode}-${Date.now()}.${ext}`;
-  const { error: uploadError } = await db.storage.from("site-images").upload(path, file, { upsert: true });
+  let body: Blob = file;
+  let ext = file instanceof File ? (file.name.split(".").pop() || "jpg") : "jpg";
+  let marker = "-";
+  try {
+    const normalized = await normalizeProductImage(file);
+    body = normalized.blob; ext = normalized.extension; marker = NORMALIZED_IMAGE_MARKER;
+  } catch (error) {
+    console.warn("Product image could not be standardized; uploading the original.", error);
+  }
+  const path = `products/${productCode}${marker}${Date.now()}.${ext}`;
+  const { error: uploadError } = await db.storage.from("site-images").upload(path, body, {
+    upsert: true, contentType: body.type || undefined, cacheControl: "31536000",
+  });
   if (uploadError) return { error: uploadError.message, url: null };
   const { data } = db.storage.from("site-images").getPublicUrl(path);
   return { error: null, url: data.publicUrl };

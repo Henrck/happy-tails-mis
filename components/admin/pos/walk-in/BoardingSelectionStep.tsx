@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchPackagesFull, fetchAddonsByCategory } from "@/lib/supabase/services";
@@ -183,7 +184,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
         {size && !eligible && <p className="mt-2 text-xs text-red-600">Large and above pets must use a Big kennel.</p>}
         {size && <><p className="mt-4 text-sm font-semibold">Stay duration</p><div className="mt-2 flex flex-wrap gap-2">{rates.map((r) => <button type="button" key={r.id} onClick={() => chooseRate(pet, r)}
           className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold ${rate?.id === r.id ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"}`}>
-          {r.size_detail || r.size_label} — ₱{r.price.toLocaleString()}{isExtendedBoardingRate(r) ? "/night" : ""}
+          {r.size_detail || r.size_label} — {formatPeso(r.price)}{isExtendedBoardingRate(r) ? "/night" : ""}
         </button>)}</div></>}
         {extended && <label className="mt-4 block rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm font-semibold">Number of nights (7 Days & Up)
           <input type="number" min={MIN_EXTENDED_BOARDING_NIGHTS} max={MAX_BOARDING_NIGHTS} step="1" inputMode="numeric" value={raw}
@@ -200,10 +201,10 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
           const selected = s?.addonIds.includes(addon.id) ?? false;
           return <button key={addon.id} type="button" aria-disabled={!allowedAddons || !!blocked} title={blocked ?? undefined} onClick={() => { if (!allowedAddons) setBlocker("Choose a valid boarding duration before adding extra services."); else if (blocked) setBlocker(`${addon.name}: ${blocked}`); else toggle(pet, addon.id); }}
             className={`rounded-xl border-2 p-3 text-left text-xs ${!allowedAddons || blocked ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400" : selected ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"}`}>
-            <b>{addon.name}</b><span className="mt-1 block">{!allowedAddons ? "Enter duration" : blocked ? "Unavailable / Included" : `+₱${addonPrice(addon.id, pet).toLocaleString()}`}</span>
+            <b>{addon.name}</b><span className="mt-1 block">{!allowedAddons ? "Enter duration" : blocked ? "Unavailable / Included" : `+${formatPeso(addonPrice(addon.id, pet))}`}</span>
           </button>;
         })}</div></>}
-        {s && rate && allowedAddons && eligible && <p className="mt-4 text-right font-bold text-brand-pink">Subtotal ₱{s.lineAmount.toLocaleString()}{(s as ShareSelection).boardingShareGroupId && <span className="ml-2 text-xs font-normal text-emerald-700">Shared kennel</span>}</p>}
+        {s && rate && allowedAddons && eligible && <p className="mt-4 text-right font-bold text-brand-pink">Subtotal {formatPeso(s.lineAmount)}{(s as ShareSelection).boardingShareGroupId && <span className="ml-2 text-xs font-normal text-emerald-700">Shared kennel</span>}</p>}
       </div>;
     })}
     {pets.length > 1 && <section aria-label="Share one Big kennel" className="mt-6 rounded-2xl border-2 border-emerald-200 bg-emerald-50/60 p-4 sm:p-5">
@@ -227,7 +228,7 @@ export default function BoardingSelectionStep({ pets, selections, onChange, sche
       <button type="button" disabled={shareTargets.length < 2 || shareTargets.length > 3} onClick={createGroup} className="mt-4 rounded-full bg-emerald-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-40">Share Selected Pets</button>
       {shareNotice && <p role="status" className="mt-3 rounded-xl bg-white p-3 text-xs text-emerald-900">{shareNotice}</p>}
       {currentShareError && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{currentShareError}</p>}
-      {selectedGroups.length > 0 && <p className="mt-3 text-sm font-semibold text-emerald-900">Combined boarding subtotal: ₱{selections.reduce((total,s) => total+s.lineAmount,0).toLocaleString()}</p>}
+      {selectedGroups.length > 0 && <p className="mt-3 text-sm font-semibold text-emerald-900">Combined boarding subtotal: {formatPeso(selections.reduce((total,s) => total+s.lineAmount,0))}</p>}
     </section>}
     {combined ? <div className="mt-6 flex items-center justify-between gap-3"><button type="button" onClick={onBack} className="rounded-full border border-zinc-300 px-5 py-2.5 text-sm font-semibold">Back to waiver</button><p className="text-xs text-zinc-500">{valid ? "Pick an available group date below ↓" : "Complete each pet to see availability."}</p></div>
       : <div className="mt-6 grid grid-cols-2 gap-3"><button onClick={onBack} className="rounded-full border border-zinc-300 py-3">Back</button><button disabled={!valid} onClick={() => { onChange(withSharedKennelPrices(selections.map(recalculate) as ShareSelection[],pricing)); onNext(); }} className="rounded-full bg-brand-pink py-3 font-semibold text-white disabled:opacity-40">Next: Boarding Dates</button></div>}

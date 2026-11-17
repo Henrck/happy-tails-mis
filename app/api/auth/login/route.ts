@@ -184,6 +184,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // One active session per account: end every other session (other
+    // browsers/devices). Their next request or periodic check signs them out
+    // with "signed in on another device". Never block this login on failure.
+    const { error: othersError } = await supabase.auth.signOut({ scope: "others" });
+    if (othersError) console.error("Single-session: could not end other sessions", othersError.name);
+
     // The response body contains only a role-dependent route. No email,
     // tokens, or indication of whether an unknown username exists.
     if (isStaff) {

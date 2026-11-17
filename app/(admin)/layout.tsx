@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AdminShell from "@/components/admin/AdminShell";
 import AccountStatusWatcher from "@/components/AccountStatusWatcher";
+import SessionGuard from "@/components/SessionGuard";
 import ManagementStepConfirmation from "@/components/shared/ManagementStepConfirmation";
 
 export default async function AdminLayout({
@@ -13,6 +14,7 @@ export default async function AdminLayout({
 }) {
   const supabase = await createClient();
   const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError?.code === "session_not_found") redirect("/sign-in?reason=replaced");
   if (authError || !auth.user) redirect("/sign-in");
 
   const { data: profile, error: profileError } = await supabase
@@ -38,6 +40,7 @@ export default async function AdminLayout({
   return (
     <>
       <AccountStatusWatcher userId={auth.user.id} table="staff_profiles" />
+      <SessionGuard staff />
       <AdminShell role={profile.role}>
         <ManagementStepConfirmation>{children}</ManagementStepConfirmation>
       </AdminShell>

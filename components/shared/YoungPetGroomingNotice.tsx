@@ -3,7 +3,7 @@
 import { useEffect, useId } from "react";
 import { AlertCircle } from "lucide-react";
 
-/** Informational reminder only: pet registration is not an eligibility decision. */
+/** Shown before registering a pet: states the 3-month minimum and the vet reminder. */
 export default function YoungPetGroomingNotice({ onContinue, onCancel }: {
   onContinue: () => void;
   onCancel: () => void;
@@ -27,9 +27,9 @@ export default function YoungPetGroomingNotice({ onContinue, onCancel }: {
         </div>
         <h2 id={titleId} className="text-xl font-extrabold text-zinc-900">A quick note about young pets</h2>
         <div id={descriptionId} className="mt-3 space-y-3 text-sm leading-6 text-zinc-700">
-          <p><strong>About 8–16 weeks</strong> is a common age range for introducing pets to gentle grooming and handling. It is <strong>not a universal minimum age</strong> or a guarantee that professional grooming is appropriate.</p>
+          <p><strong>HappyTails accepts pets that are at least 3 months old (12 weeks)</strong> for grooming and boarding. You&apos;ll be asked for your pet&apos;s age when you register them.</p>
           <p>Before arranging a professional grooming session for a puppy or kitten, ask your veterinarian about the pet&apos;s health, vaccinations, and readiness. The groomer may need to assess the pet before providing the service.</p>
-          <p className="rounded-xl bg-pink-50 p-3 text-xs text-zinc-700">You can still register your pet at any age. This reminder does not block pet registration or approve a grooming booking.</p>
+          <p className="rounded-xl bg-pink-50 p-3 text-xs text-zinc-700">Pets younger than 3 months cannot be registered yet. Meeting the minimum age does not by itself approve a grooming booking.</p>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3">
           <button type="button" onClick={onCancel} autoFocus

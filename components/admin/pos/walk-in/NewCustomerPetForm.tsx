@@ -2,7 +2,7 @@
 import { useState } from "react";
 import YoungPetGroomingNotice from "@/components/shared/YoungPetGroomingNotice";
 import { COMMON_BREEDS } from "@/lib/data/breed-suggestions";
-import { normalizePetAge } from "@/lib/utils/pet-age";
+import { petAgeError, MIN_PET_AGE_LABEL } from "@/lib/utils/pet-age";
 import PetPhotoPicker from "@/components/shared/PetPhotoPicker";
 import type { PetPhotoDraft } from "@/lib/utils/pet-photo-upload";
 
@@ -17,7 +17,8 @@ function petError(pet: NewPetEntry, index: number): string | null {
   if (!pet.sizeKg.trim()) return `${label}: Enter the pet's weight in kilograms.`;
   const weight = Number(pet.sizeKg);
   if (!Number.isFinite(weight) || weight <= 0 || weight > 200) return `${label}: Weight must be greater than 0 and no more than 200 kg.`;
-  if (normalizePetAge(pet.age) === null) return `${label}: Enter an age such as 3 weeks, 6 months, or 2 years, or leave it blank.`;
+  const ageIssue = petAgeError(pet.age, true);
+  if (ageIssue) return `${label}: ${ageIssue}`;
   return null;
 }
 export default function NewCustomerPetForm({ onBack, onNext }: {
@@ -60,7 +61,7 @@ export default function NewCustomerPetForm({ onBack, onNext }: {
           <label className="text-sm font-semibold">Species<select className={controlClass} value={pet.species} onChange={e=>updatePet(i,{species:e.target.value as NewPetEntry["species"]})}><option value="Dog">Dog</option><option value="Cat">Cat</option></select></label>
           <label className="text-sm font-semibold">Breed *<input className={controlClass} value={pet.breed} list={`breed-options-${i}`} maxLength={100} placeholder="Type or select a breed" onChange={e=>updatePet(i,{breed:e.target.value})}/><datalist id={`breed-options-${i}`}>{COMMON_BREEDS.map(b=><option value={b} key={b}/>)}</datalist></label>
           <label className="text-sm font-semibold">Weight (kg) *<input className={controlClass} type="text" inputMode="decimal" value={pet.sizeKg} placeholder="e.g. 5.5" onChange={e=>updatePet(i,{sizeKg:e.target.value.replace(/[^\d.]/g,"").replace(/(\..*)\./g,"$1").slice(0,8)})}/></label>
-          <label className="text-sm font-semibold">Age <span className="font-normal text-zinc-400">(Optional)</span><input className={controlClass} type="text" maxLength={20} placeholder="e.g. 3 weeks, 6 months, 2 years" value={pet.age} onChange={e=>updatePet(i,{age:e.target.value})}/></label>
+          <label className="text-sm font-semibold">Age * <span className="font-normal text-zinc-400">(min. {MIN_PET_AGE_LABEL})</span><input className={controlClass} type="text" maxLength={20} placeholder="e.g. 12 weeks, 6 months, 2 years" value={pet.age} onChange={e=>updatePet(i,{age:e.target.value})}/></label>
           <label className="text-sm font-semibold">Sex <span className="font-normal text-zinc-400">(Optional)</span><select className={controlClass} value={pet.sex} onChange={e=>updatePet(i,{sex:e.target.value as NewPetEntry["sex"]})}><option value="">—</option><option value="Male">Male</option><option value="Female">Female</option></select></label>
         </div>
       </section>)}

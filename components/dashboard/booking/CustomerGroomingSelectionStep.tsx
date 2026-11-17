@@ -1,10 +1,13 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useEffect, useState } from "react";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
 import { groomingAddonPrice } from "@/lib/booking/boarding-promotions";
 import { catGroomingSizeGuide, CAT_SMALL_MAX_KG } from "@/lib/utils/pet-size-guide";
 import BookingStepConfirmation from "@/components/shared/BookingStepConfirmation";
+import { fetchInclusionLinks, type InclusionLink } from "@/lib/supabase/inclusion-links";
+import { coveredAddons } from "@/lib/booking/package-inclusions";
 import type { ServiceType, Package, PackageInclusion, PackagePricing, PetSize, Addon, AddonPrice } from "@/lib/types/services";
 import type { Pet, DraftPetSelection } from "@/lib/types/appointments";
 
@@ -37,6 +40,13 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
   const [error, setError] = useState<string | null>(null);
   const [activePetIdx, setActivePetIdx] = useState(0);
   const [prompt, setPrompt] = useState<"back" | "proceed" | null>(null);
+  // Add-ons that are the same service as a package inclusion (Service Management links).
+  const [links, setLinks] = useState<InclusionLink[]>([]);
+  useEffect(() => {
+    let active = true;
+    void fetchInclusionLinks().then(({ links: rows }) => { if (active) setLinks(rows); });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     let valid = true;
     setLoading(true); setError(null);
@@ -58,6 +68,8 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
   const data = lookups[pet?.species === "Cat" ? "cat_grooming" : "dog_grooming"];
   const selected = selections.find(s => s.pet.id === pet?.id);
   const minimum = pet ? minimumSizeIndex(pet, data.sizes) : -1;
+  const packageName = data.packages.find(p => p.id === selected?.packageId)?.name ?? "this package";
+  const covered = coveredAddons(selected?.packageId, { links, inclusions: data.inclusions });
   function rateFor(packageId: string, size: PetSize, lookup = data) {
     const rows = lookup.pricing.filter(row => row.package_id === packageId);
     return rows.find(row => row.size_id === size.id || normalize(row.size_label) === normalize(size.label)) ?? rows.find(row => row.size_id === null);
@@ -87,7 +99,8 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
     const idx = lookup.sizes.findIndex(size => size.id === s?.sizeId);
     return !!s?.packageId && idx >= 0 && min !== -2 && idx >= min &&
       !!lookup.pricing.find(rate => rate.id === s.packagePricingId && rate.package_id === s.packageId) &&
-      (s.addonIds ?? []).every(id => !!groomingAddonPrice(lookup.addonPrices.filter(a => a.addon_id === id), lookup.sizes[idx]?.label));
+      (s.addonIds ?? []).every(id => !!groomingAddonPrice(lookup.addonPrices.filter(a => a.addon_id === id), lookup.sizes[idx]?.label)) &&
+      !(s.addonIds ?? []).some(id => coveredAddons(s.packageId, { links, inclusions: lookup.inclusions }).has(id));
   }
   const ready = pets.length > 0 && pets.every(configured);
   function next() {
@@ -123,7 +136,7 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
           return <button type="button" key={size.id} disabled={blocked}
             onClick={() => update({ sizeId: size.id, packagePricingId: price?.id ?? null })}
             className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold ${blocked ? "border-zinc-200 bg-zinc-100 text-zinc-400" : selected.sizeId === size.id ? "border-brand-pink bg-brand-pink text-white" : "border-pink-200"}`}>
-            {size.label} {size.weight_range && <span className="font-normal">({size.weight_range})</span>} {price && `₱${price.price}`}
+            {size.label} {size.weight_range && <span className="font-normal">({size.weight_range})</span>} {price && `${formatPeso(price.price)}`}
           </button>;
         })}</div>
         <p className="mt-6 rounded-xl bg-pink-50 p-3 text-xs text-zinc-600">Groomers are selected in the Schedule step, where the system can hide groomers already booked at your chosen start time.</p>
@@ -132,10 +145,15 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
             const size = data.sizes.find(s => s.id === selected.sizeId);
             const rate = addonRate(addon.id, size?.label);
             const selectedAddon = selected.addonIds.includes(addon.id);
+            const includedAs = covered.get(addon.id);
+            if (includedAs) return <div key={addon.id} aria-disabled="true" title={`Already part of ${packageName} (${includedAs})`}
+              className="rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/60 px-3 py-2 text-left text-xs text-emerald-800">
+              <span className="block font-semibold">{addon.name}</span><span>Included in {packageName}</span>
+            </div>;
             return <button type="button" key={addon.id} disabled={!selected.sizeId || (!rate && !selectedAddon)}
               onClick={() => update({ addonIds: selectedAddon ? selected.addonIds.filter(id => id !== addon.id) : [...selected.addonIds, addon.id] })}
               className={`rounded-xl border-2 px-3 py-2 text-left text-xs ${selectedAddon ? "border-brand-pink bg-brand-pink text-white" : "border-pink-100 text-zinc-700"} disabled:opacity-40`}>
-              <span className="block font-semibold">{addon.name}</span>{rate && <span>₱{rate.price}</span>}
+              <span className="block font-semibold">{addon.name}</span>{rate && <span>{formatPeso(rate.price)}</span>}
             </button>;
           })}</div></>}
       </>}

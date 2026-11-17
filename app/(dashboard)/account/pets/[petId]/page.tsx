@@ -1,4 +1,5 @@
 "use client";
+import { formatPetId } from "@/lib/utils/pet-id";
 import { useEffect, useState, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -89,7 +90,7 @@ export default function PetDetailPage() {
   if(!pet)return <p className="py-16 text-center text-zinc-500">{message||"Pet not found."}</p>;
   return <div className="mx-auto max-w-4xl space-y-6 pb-8">
     <button type="button" onClick={()=>router.push("/account/pets")} className="text-sm font-semibold text-brand-pink">← Back to My Pets</button>
-    <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-brand-pink p-6 text-white"><img src={pet.photo_url || resolvePetAvatar(settings,pet.species,pet.sex)} alt={`${pet.species} avatar`} className="h-20 w-20 shrink-0 rounded-full border-4 border-white/60 bg-white object-cover"/><div><p className="text-sm text-white/80">Pet Profile</p><h1 className="text-2xl font-bold">{pet.name}</h1></div><button type="button" disabled={saving||archiving} onClick={()=>setPhotoEditing(true)} className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-sm font-semibold text-white">{pet.photo_url?"Change Photo":"Add Photo"}</button></div>
+    <div className="flex flex-wrap items-center gap-4 rounded-3xl bg-brand-pink p-6 text-white"><img src={pet.photo_url || resolvePetAvatar(settings,pet.species,pet.sex)} alt={`${pet.species} avatar`} className="h-20 w-20 shrink-0 rounded-full border-4 border-white/60 bg-white object-cover"/><div><p className="text-sm text-white/80">Pet Profile</p><h1 className="text-2xl font-bold">{pet.name}</h1>{formatPetId(pet.pet_number)&&<p className="mt-1 inline-block rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-bold tracking-wide">Pet ID: {formatPetId(pet.pet_number)}</p>}</div><button type="button" disabled={saving||archiving} onClick={()=>setPhotoEditing(true)} className="rounded-full border border-white/70 bg-white/10 px-4 py-2 text-sm font-semibold text-white">{pet.photo_url?"Change Photo":"Add Photo"}</button></div>
     <form noValidate onSubmit={save} className="space-y-5 rounded-3xl border border-pink-100 bg-white p-6 md:p-8"><CustomerPetFields state={state}/>
       {pet.weight_kg==null&&<p className="text-xs text-amber-700">No weight is recorded. You can add it to update the estimated size. Without a weight, the existing size is kept if species is unchanged.</p>}
       {message&&<p role="status" className={`text-sm ${isSuccess?"text-green-600":"text-red-600"}`}>{message}</p>}

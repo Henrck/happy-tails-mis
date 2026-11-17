@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useState } from "react";
 import {
@@ -43,11 +44,14 @@ export default function ProductDetailModal({
   batches,
   onClose,
   onChanged,
+  canRemoveAndDiscontinue = false,
 }: {
   product: Product;
   batches: ProductBatch[];
   onClose: () => void;
   onChanged: () => void;
+  /** Super Admin only: remove stock, discontinue and reactivate. */
+  canRemoveAndDiscontinue?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("view");
   const [saving, setSaving] = useState(false);
@@ -353,7 +357,7 @@ export default function ProductDetailModal({
                   { title: "Sellable Stock", val: stock },
                   { title: "Physical Stock", val: physical },
                   { title: "Min Stock", val: product.min_stock },
-                  { title: "Unit Price", val: `₱${Number(product.price).toLocaleString()}` },
+                  { title: "Unit Price", val: `${formatPeso(Number(product.price))}` },
                 ].map((x) => (
                   <div key={x.title} className="rounded-xl bg-pink-50 p-3">
                     <p className="text-[11px] text-zinc-600">{x.title}</p>
@@ -449,7 +453,7 @@ export default function ProductDetailModal({
               </p>
 
               {product.status === "active" ? (
-                <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className={`mt-5 grid grid-cols-2 gap-2 ${canRemoveAndDiscontinue ? "sm:grid-cols-4" : ""}`}>
                   <button
                     type="button"
                     onClick={() => switchMode("edit")}
@@ -464,6 +468,7 @@ export default function ProductDetailModal({
                   >
                     Receive Batch
                   </button>
+                  {canRemoveAndDiscontinue && <>
                   <button
                     type="button"
                     onClick={() => switchMode("adjust")}
@@ -478,17 +483,18 @@ export default function ProductDetailModal({
                   >
                     Discontinue
                   </button>
+                  </>}
                 </div>
               ) : (
                 <div className="mt-5 rounded-xl bg-zinc-50 p-4 text-center">
                   <p className="text-sm text-zinc-600">Discontinued — hidden from POS.</p>
-                  <button
+                  {canRemoveAndDiscontinue ? <button
                     type="button"
                     onClick={() => switchMode("confirmReactivate")}
                     className="mt-3 rounded-full border border-emerald-500 px-5 py-2 text-xs font-bold text-emerald-700"
                   >
                     Reactivate Product
-                  </button>
+                  </button> : <p className="mt-2 text-xs text-zinc-500">Only a Super Admin can reactivate this product.</p>}
                 </div>
               )}
             </>

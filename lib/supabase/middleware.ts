@@ -41,6 +41,12 @@ export async function updateSession(request: NextRequest) {
   if (!isAdminRoute && !isAccountRoute) return response;
 
   const { data: auth, error: authError } = await supabase.auth.getUser();
+  // The session was ended server-side, normally because the account signed in
+  // on another device (single-session rule). Clear this browser's cookies too.
+  if (authError?.code === "session_not_found") {
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    return redirectTo("/sign-in?reason=replaced");
+  }
   if (authError || !auth.user) return redirectTo("/sign-in");
 
   // Never assume missing profiles or unreadable account rows are active.

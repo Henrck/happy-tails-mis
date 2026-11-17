@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
-import { useBookingClosures } from "@/lib/booking/use-booking-closures";
+import { useBookingClosures, boardingClosures } from "@/lib/booking/use-booking-closures";
 import { createClient } from "@/lib/supabase/client";
 import type { AppointmentRow } from "@/lib/supabase/appointment-management";
 
@@ -108,7 +108,9 @@ export default function AdminRescheduleModal({ appointment, onClose, onSaved }: 
     return () => { active = false; };
   }, [grooming, date]);
   const maxTime = grooming ? "17:00" : "18:00";
-  const closure = closures.nameFor(date);
+  // Boarding ignores shop closures (caretaker on duty); grooming still respects them.
+  const effectiveClosures = appointment.service_type === "boarding" ? boardingClosures(closures) : closures;
+  const closure = effectiveClosures.nameFor(date);
   const availableStart = !grooming || (slotAvailability !== null && (slotAvailability[time] ?? 0) > 0)
     || (date === appointment.scheduled_date && time === previousTime);
   const calendarReady = !closures.loading && !closures.error && (!grooming || !monthError);
@@ -157,7 +159,7 @@ export default function AdminRescheduleModal({ appointment, onClose, onSaved }: 
           </div>
           <BookingDayCalendar
             value={date} onChange={next => { setDate(next); setTime(""); setError(null); }}
-            closures={closures} unavailable={grooming ? blockedDates : {}}
+            closures={effectiveClosures} unavailable={grooming ? blockedDates : {}}
             onMonthChange={setMonth} title="Reschedule"
           />
           {monthError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-700">Cannot verify the grooming calendar: {monthError}</p>}

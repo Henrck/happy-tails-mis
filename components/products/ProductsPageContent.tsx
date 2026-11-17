@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
@@ -18,13 +19,6 @@ const categories: { label: string; value: ProductCategory | "all" }[] = [
   { label: "Hygiene", value: "Hygiene" },
 ];
 
-function formatPeso(value: number) {
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
-}
 
 export default function ProductsPageContent({ products }: { products: Product[] }) {
   const [petType, setPetType] = useState<PetType | "all">("all");
@@ -215,7 +209,7 @@ export default function ProductsPageContent({ products }: { products: Product[] 
             <div className="relative flex min-h-64 items-center justify-center bg-[#F9FAFB] p-8 sm:min-h-[390px]">
               {selected.image_url ? (
                 <div className="relative h-56 w-full">
-                  <Image src={selected.image_url} alt={selected.name} fill className="object-contain" sizes="(max-width: 640px) 90vw, 360px" unoptimized />
+                  <Image src={selected.image_url} alt={selected.name} fill className="object-contain mix-blend-multiply" sizes="(max-width: 640px) 90vw, 360px" />
                 </div>
               ) : (
                 <div className="flex h-40 w-40 items-center justify-center rounded-full bg-pink-50 text-5xl">🐾</div>

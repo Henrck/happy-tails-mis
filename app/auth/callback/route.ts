@@ -71,6 +71,9 @@ export async function GET(request: NextRequest) {
       setRedirect("/sign-in?deactivated=1");
       return response;
     }
+    // One active session per account: end every other session.
+    const { error: othersError } = await supabase.auth.signOut({ scope: "others" });
+    if (othersError) console.error("Single-session: could not end other sessions", othersError.name);
     setRedirect(isStaff ? "/admin" : "/account");
     return response;
   } catch (error) {

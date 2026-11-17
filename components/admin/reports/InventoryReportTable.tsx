@@ -1,3 +1,4 @@
+import { formatPeso } from "@/lib/utils/currency";
 import type { InventoryReportRow, InventoryReportStatus } from "@/lib/types/reports";
 import SortableHeader, { type SortDirection } from "./SortableHeader";
 
@@ -49,7 +50,7 @@ export default function InventoryReportTable({
                 <td className="px-5 py-3.5 text-zinc-700 truncate">{r.category}</td>
                 <td className="px-5 py-3.5 text-zinc-700 truncate">{r.stock}</td>
                 <td className="px-5 py-3.5 text-zinc-500 truncate">{r.unit}</td>
-                <td className="px-5 py-3.5 text-zinc-700 truncate">₱{r.price.toLocaleString()}</td>
+                <td className="px-5 py-3.5 text-zinc-700 truncate">{formatPeso(r.price)}</td>
                 <td className="px-5 py-3.5"><span className={`inline-block max-w-full truncate text-xs font-semibold px-3 py-1 rounded-full ${statusStyles[r.status]}`}>{r.status}</span></td>
               </tr>
             ))

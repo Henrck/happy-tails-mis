@@ -4,13 +4,16 @@ import { COMMON_BREEDS } from "@/lib/data/breed-suggestions";
 import type { Species, Sex } from "@/lib/types/appointments";
 import type { PetSize } from "@/lib/types/services";
 import { getActiveSizeGuide, matchPetSize, validatePetInput } from "@/lib/utils/pet-size-guide";
-import { normalizePetAge } from "@/lib/utils/pet-age";
+import { petAgeError, MIN_PET_AGE_LABEL } from "@/lib/utils/pet-age";
 import type { VaccinationStatus } from "@/lib/utils/pet-vaccination";
 
 export type CustomerPetForm = { name: string; species: Species; breed: string; weight: string; age: string; sex: Sex | ""; vaccination_status: VaccinationStatus };
 export const blankCustomerPet: CustomerPetForm = { name: "", species: "Dog", breed: "", weight: "", age: "", sex: "", vaccination_status: "not_sure" };
 
-export function useCustomerPetForm(initial: CustomerPetForm = blankCustomerPet) {
+/** requireAge: true when registering a new pet (age is required and must be at
+ * least 3 months). When editing, age may stay blank but must meet the minimum if entered. */
+export function useCustomerPetForm(initial: CustomerPetForm = blankCustomerPet, options: { requireAge?: boolean } = {}) {
+  const requireAge = options.requireAge ?? false;
   const [form, setForm] = useState<CustomerPetForm>(initial);
   const [sizes, setSizes] = useState<PetSize[]>([]);
   const [guideError, setGuideError] = useState("");
@@ -36,11 +39,12 @@ export function useCustomerPetForm(initial: CustomerPetForm = blankCustomerPet) 
     // The shared old validator expects whole-year numeric ages. Validate
     // the new text age independently and preserve its existing other checks.
     const e = validatePetInput({ ...form, age: "" }, size);
-    if (normalizePetAge(form.age) === null) e.age = "Use an age such as 3 weeks, 6 months, or 2 years (or leave it blank).";
+    const ageIssue = petAgeError(form.age, requireAge);
+    if (ageIssue) e.age = ageIssue;
     setErrors(e);
     return Object.keys(e).length === 0 && (!form.weight.trim() || (!guideError && !loadingGuide));
   }
-  return { form, setForm, setField, size, loadingGuide, guideError, errors, setErrors, validate };
+  return { form, setForm, setField, size, loadingGuide, guideError, errors, setErrors, validate, requireAge };
 }
 
 const CAT_BREEDS = ["Persian", "Siamese", "Sphynx", "British Shorthair", "Puspin", "Maine Coon", "Ragdoll", "Bengal", "Scottish Fold", "Russian Blue", "American Shorthair", "Exotic Shorthair", "Mixed Breed"];
@@ -49,7 +53,7 @@ const DOG_BREEDS = [...COMMON_BREEDS.filter(b => !CAT_SET.has(b)), "Aspin", "Cor
 const sortedBreeds = (items: string[]) => Array.from(new Set(items)).sort((a,b) => a.localeCompare(b));
 
 export function CustomerPetFields({ state }: { state: ReturnType<typeof useCustomerPetForm> }) {
-  const { form, setField, size, guideError, loadingGuide, errors } = state;
+  const { form, setField, size, guideError, loadingGuide, errors, requireAge } = state;
   const [otherBreed, setOtherBreed] = useState(false);
   const breedOptions = useMemo(() => sortedBreeds(form.species === "Cat" ? CAT_BREEDS : DOG_BREEDS), [form.species]);
   const customBreed = otherBreed || (!!form.breed && !breedOptions.includes(form.breed));
@@ -66,9 +70,9 @@ export function CustomerPetFields({ state }: { state: ReturnType<typeof useCusto
       </select>{customBreed && <label className="mt-3 block text-sm font-medium">Enter breed name<input className={cls} value={form.breed} onChange={e=>setField("breed",e.target.value)} maxLength={100}/></label>}{feedback("breed")}
     </div>
     <label>{title("Weight (KG)",false)}<input className={cls} type="number" min="0.01" step="0.01" placeholder="e.g. 7.5" value={form.weight} onChange={e=>setField("weight",e.target.value)} aria-invalid={!!errors.weight}/>{feedback("weight")}</label>
-    <label>{title("Age",false)}<input className={cls} type="text" maxLength={20} placeholder="e.g. 3 weeks, 6 months, 2 years" value={form.age} onChange={e=>setField("age",e.target.value)} aria-invalid={!!errors.age}/><p className="mt-1 text-xs text-zinc-500">Enter a number with weeks, months, or years. A number alone means years.</p>{feedback("age")}</label>
+    <label>{title("Age",requireAge)}<input className={cls} type="text" maxLength={20} placeholder="e.g. 12 weeks, 6 months, 2 years" value={form.age} onChange={e=>setField("age",e.target.value)} aria-invalid={!!errors.age}/><p className="mt-1 text-xs text-zinc-500">Pets must be at least {MIN_PET_AGE_LABEL} old. Enter a number with weeks, months, or years; a number alone means years.</p>{feedback("age")}</label>
     <div className="sm:col-span-2"><label htmlFor="customer-pet-vaccination" className="block text-sm font-semibold text-zinc-700">Vaccination status <span className="text-red-500">*</span></label><select id="customer-pet-vaccination" value={form.vaccination_status} onChange={e=>setField("vaccination_status",e.target.value as VaccinationStatus)} className={cls}><option value="vaccinated">Vaccinated</option><option value="not_vaccinated">Not Vaccinated</option><option value="not_sure">Not Sure</option></select><p className="mt-1 text-xs text-zinc-500">Customer-reported status only. You can edit this later.</p></div>
     <div className="sm:col-span-2 rounded-xl border border-pink-100 bg-pink-50 p-3 text-sm"><span className="font-semibold text-zinc-700">Size Identifier: </span><span className="font-bold text-brand-pink">{!form.weight.trim()?"To be measured at the shop":loadingGuide?"Loading guide…":size?size.label:"Not determined"}</span>{size&&<p className="mt-1 text-xs text-zinc-500">Weight bracket: {size.weight_range} · {form.species==="Cat"?"HappyTails cat size policy":"Linked to Service Management"}</p>}{form.weight.trim()&&guideError&&<p className="mt-1 text-xs text-red-600">{guideError}</p>}</div>
-    <p className="sm:col-span-2 text-xs text-zinc-500"><span className="text-red-500">*</span> Required fields. Weight and age may be entered or updated during your visit.</p>
+    <p className="sm:col-span-2 text-xs text-zinc-500"><span className="text-red-500">*</span> Required fields. {requireAge ? "Weight may be entered or updated during your visit." : "Weight and age may be entered or updated during your visit."}</p>
   </div>;
 }

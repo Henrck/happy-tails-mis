@@ -1,4 +1,5 @@
 "use client";
+import { useStaffRole } from "@/lib/hooks/useStaffRole";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchProducts, fetchAllBatches, computeStatus } from "@/lib/supabase/products";
@@ -25,6 +26,7 @@ const logFilters = [
 ] as const;
 
 export default function InventoryPage() {
+  const role = useStaffRole();
   const [products,setProducts] = useState<Product[]>([]);
   const [batches,setBatches] = useState<ProductBatch[]>([]);
   const [loading,setLoading] = useState(true);
@@ -156,7 +158,7 @@ export default function InventoryPage() {
         <div className="mt-4"><Pagination page={batchPageSafe} pageSize={PAGE_SIZE} totalItems={allBatches.length} onPageChange={setBatchPage}/></div>
       </div>
     </div>}
-    {selected&&<ProductDetailModal product={selected} batches={batches} onClose={()=>setSelected(null)} onChanged={()=>{void loadData();setLogsVersion(v=>v+1);}}/>}
+    {selected&&<ProductDetailModal canRemoveAndDiscontinue={role==="superadmin"} product={products.find(p=>p.id===selected.id)??selected} batches={batches} onClose={()=>setSelected(null)} onChanged={()=>{void loadData();setLogsVersion(v=>v+1);}}/>}
     {addProductOpen&&<AddProductModal onClose={()=>setAddProductOpen(false)} onAdded={()=>{setAddProductOpen(false);void loadData();setLogsVersion(v=>v+1);}}/>}
   </main>;
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { CustomerPetFields, useCustomerPetForm, blankCustomerPet, type CustomerPetForm } from "@/components/dashboard/CustomerPetFields";
 import type { Pet } from "@/lib/types/appointments";
 import PetAvatar from "@/components/dashboard/PetAvatar";
+import { formatPetId } from "@/lib/utils/pet-id";
 import PetPhotoEditor from "@/components/shared/PetPhotoEditor";
 import { normalizePetAge, petAgeLabel } from "@/lib/utils/pet-age";
 import PetServiceHistory from "@/components/shared/PetServiceHistory";
@@ -92,7 +93,7 @@ export default function PetDetailModal({ pet, ownerName, ownerContact, ownerAddr
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-pink-100 bg-white px-5 py-4 sm:px-7">
         <div className="flex items-center gap-3">
           <PetAvatar pet={displayPet} size="md" />
-          <div><h3 className="text-xl font-bold text-zinc-900">{displayPet.name}</h3><p className="text-xs text-zinc-500">{displayPet.breed} · {displayPet.sex ?? "—"}</p></div>
+          <div><h3 className="text-xl font-bold text-zinc-900">{displayPet.name}</h3><p className="text-xs text-zinc-500">{formatPetId(displayPet.pet_number) && <span className="mr-1.5 font-bold tracking-wide text-brand-pink">{formatPetId(displayPet.pet_number)}</span>}{displayPet.breed} · {displayPet.sex ?? "—"}</p></div>
         </div>
         <button type="button" disabled={saving} onClick={onClose} aria-label="Close pet profile" className="rounded-full p-2 text-zinc-500 hover:bg-pink-50 hover:text-brand-pink">✕</button>
       </div>

@@ -16,7 +16,7 @@ import { CustomerPetFields, useCustomerPetForm, blankCustomerPet } from "@/compo
 
 const PETS_PER_PAGE = 9;
 function NewPetForm({ customerId, onClose, onSaved }: { customerId: string; onClose: () => void; onSaved: () => void }) {
-  const state = useCustomerPetForm();
+  const state = useCustomerPetForm(blankCustomerPet, { requireAge: true });
   const [photo, setPhoto] = useState<PetPhotoDraft | null>(null);
   // Set when the pet was created but its photo upload failed.
   const [savedPet, setSavedPet] = useState<{ id: string; name: string } | null>(null);

@@ -13,10 +13,13 @@ import AddGroomerModal from "@/components/admin/pet-services/AddGroomerModal";
 import SessionDetailsModal from "@/components/admin/pet-services/SessionDetailsModal";
 import SessionCompletedModal from "@/components/admin/pet-services/SessionCompletedModal";
 import GroomerAvailabilitySettings from "@/components/admin/pet-services/GroomerAvailabilitySettings";
+import { useStaffRole } from "@/lib/hooks/useStaffRole";
 import ActionConfirmModal from "@/components/admin/operations/ActionConfirmModal";
 import FeedbackDialog from "@/components/admin/operations/FeedbackDialog";
 
 export default function GroomingManagementPage() {
+  // Groomer availability and service durations are Super Admin settings.
+  const role = useStaffRole();
   const router = useRouter();
   const [groomers, setGroomers] = useState<Groomer[]>([]);
   const [sessions, setSessions] = useState<GroomingSessionRow[]>([]);
@@ -146,7 +149,7 @@ export default function GroomingManagementPage() {
         </section>;
       })}
     </div>}
-    <GroomerAvailabilitySettings refreshKey={groomerRefreshKey} />
+    {role === "superadmin" && <GroomerAvailabilitySettings refreshKey={groomerRefreshKey} />}
     {history && <HistoryModal completedSessions={[]} onClose={() => setHistory(false)} />}
     {add && <AddGroomerModal groomers={groomers} onClose={() => setAdd(false)} onAdd={addG} onArchiveToggle={requestGroomerStatus} />}
     {viewing && <SessionDetailsModal appointmentId={viewing.appointmentId} appointmentPetId={viewing.appointmentPetId} onClose={() => setViewing(null)} />}

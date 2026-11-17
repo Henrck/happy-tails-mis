@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardNavbar from "@/components/dashboard/DashboardNavbar";
 import AccountStatusWatcher from "@/components/AccountStatusWatcher";
+import SessionGuard from "@/components/SessionGuard";
 
 export default async function DashboardLayout({
   children,
@@ -11,6 +12,7 @@ export default async function DashboardLayout({
 }) {
   const supabase = await createClient();
   const { data: auth, error: authError } = await supabase.auth.getUser();
+  if (authError?.code === "session_not_found") redirect("/sign-in?reason=replaced");
   if (authError || !auth.user) redirect("/sign-in");
 
   const { data: profile, error: profileError } = await supabase
@@ -34,6 +36,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen overflow-x-hidden bg-brand-tint">
       <AccountStatusWatcher userId={auth.user.id} table="customers" />
+      <SessionGuard />
       <DashboardNavbar customer={customer} />
       <main className="mx-auto w-full max-w-6xl px-3 py-3 sm:px-4 sm:py-5 md:px-6 md:py-6">
         {children}

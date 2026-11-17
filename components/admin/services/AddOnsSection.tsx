@@ -1,3 +1,4 @@
+import { formatPeso } from "@/lib/utils/currency";
 import { Archive, Pencil } from "lucide-react";
 import type { Addon, AddonPrice } from "@/lib/types/services";
 export default function AddOnsSection({ title, addons, prices, onEdit, onToggleActive, onArchive }: {
@@ -5,7 +6,7 @@ export default function AddOnsSection({ title, addons, prices, onEdit, onToggleA
 }) {
   return <section><div className="flex items-center justify-between"><h3 className="text-lg font-bold text-zinc-800">{title}</h3><span className="text-xs text-zinc-500">{addons.filter(a=>a.is_active).length} active</span></div>
     <div className="mt-4 grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">{addons.length ? addons.map(addon => <article key={addon.id} className={`flex h-full min-h-44 flex-col rounded-2xl border bg-white p-4 ${addon.is_active ? "border-pink-100" : "border-zinc-200 opacity-75"}`}>
-      <h4 className="font-bold text-zinc-800">{addon.name}</h4><div className="mt-2 flex-1">{addon.price_note && <p className="text-xs italic text-zinc-500">{addon.price_note}</p>}{prices.filter(p=>p.addon_id===addon.id).map(p=><div key={p.id} className="flex justify-between gap-3 py-1 text-xs"><span className="text-zinc-600">{p.size_label}</span><span className="font-semibold text-brand-pink">₱{p.price.toLocaleString()}</span></div>)}</div>
+      <h4 className="font-bold text-zinc-800">{addon.name}</h4><div className="mt-2 flex-1">{addon.price_note && <p className="text-xs italic text-zinc-500">{addon.price_note}</p>}{prices.filter(p=>p.addon_id===addon.id).map(p=><div key={p.id} className="flex justify-between gap-3 py-1 text-xs"><span className="text-zinc-600">{p.size_label}</span><span className="font-semibold text-brand-pink">{formatPeso(p.price)}</span></div>)}</div>
       <div className="mt-4 flex items-center justify-between"><div className="flex gap-2"><button type="button" onClick={()=>onEdit(addon)} aria-label={`Edit ${addon.name}`} className="rounded-full border border-brand-pink p-2 text-brand-pink"><Pencil size={14}/></button><button type="button" onClick={()=>onArchive(addon)} disabled={!addon.is_active} aria-label={`Archive ${addon.name}`} className="rounded-full border border-rose-300 p-2 text-rose-500 disabled:opacity-30"><Archive size={14}/></button></div><button type="button" onClick={()=>onToggleActive(addon)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ${addon.is_active ? "bg-emerald-100 text-emerald-700" : "bg-zinc-200 text-zinc-600"}`}>{addon.is_active ? "Active" : "Inactive · Reactivate"}</button></div>
     </article>) : <p className="col-span-full rounded-2xl border border-dashed border-pink-200 p-6 text-center text-sm text-zinc-500">No add-ons configured.</p>}</div></section>;
 }

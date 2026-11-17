@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useEffect, useState } from "react";
 import { fetchPackagesFull, fetchPetSizes, fetchAddonsByCategory } from "@/lib/supabase/services";
@@ -84,7 +85,7 @@ export default function CustomerGroomingPackagesStep({ serviceType, pets, select
           const price=priceFor(current.packageId!,size.id,size.label);
           return <button type="button" key={size.id} aria-pressed={current.sizeId===size.id} onClick={()=>patch({sizeId:size.id})}
             className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold ${current.sizeId===size.id?"border-brand-pink bg-brand-pink text-white":"border-pink-100 bg-white text-slate-700 hover:border-brand-pink"}`}>
-            {size.label}{size.weight_range?` (${size.weight_range})`:""}{price?` · ₱${price.price.toLocaleString()}`:""}</button>;
+            {size.label}{size.weight_range?` (${size.weight_range})`:""}{price?` · ${formatPeso(price.price)}`:""}</button>;
         })}</div>
         <label className="mt-6 block text-sm font-bold text-slate-800">Select Groomer <span className="font-normal text-slate-400">(Optional)</span>
           <select value={current.groomerId??""} onChange={e=>patch({groomerId:e.target.value||null})} className="mt-2 block w-full rounded-xl border border-pink-100 bg-white px-3 py-2 text-sm sm:w-72">
@@ -97,7 +98,7 @@ export default function CustomerGroomingPackagesStep({ serviceType, pets, select
             const price=data.addonPrices.find(p=>p.addon_id===addon.id && p.size_label===size?.label)??data.addonPrices.find(p=>p.addon_id===addon.id);
             return <button type="button" key={addon.id} aria-pressed={checked} onClick={()=>patch({addonIds:checked?current.addonIds.filter(id=>id!==addon.id):[...current.addonIds,addon.id]})}
               className={`rounded-xl border-2 p-3 text-left text-xs ${checked?"border-brand-pink bg-pink-50":"border-pink-100 hover:border-brand-pink"}`}>
-              <span className="font-semibold text-slate-800">{addon.name}</span>{price&&<span className="ml-2 text-slate-500">₱{price.price.toLocaleString()}</span>}
+              <span className="font-semibold text-slate-800">{addon.name}</span>{price&&<span className="ml-2 text-slate-500">{formatPeso(price.price)}</span>}
             </button>;
           })}</div></>}
       </>}

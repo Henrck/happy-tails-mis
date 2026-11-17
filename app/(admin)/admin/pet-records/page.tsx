@@ -1,4 +1,5 @@
 "use client";
+import { matchesPetId } from "@/lib/utils/pet-id";
 
 import { useState, useEffect, useCallback } from "react";
 import { fetchPetsWithAccounts, fetchPetsWithoutAccounts } from "@/lib/supabase/appointments";
@@ -56,7 +57,7 @@ export default function PetRecordsPage() {
     const q = filters.search.trim().toLowerCase();
     let result = pets.filter((pet) => {
       const owner = ownerNameFor(pet);
-      const matchesSearch = !q || pet.name.toLowerCase().includes(q) || (owner?.toLowerCase().includes(q) ?? false);
+      const matchesSearch = !q || pet.name.toLowerCase().includes(q) || (owner?.toLowerCase().includes(q) ?? false) || matchesPetId(pet.pet_number, q);
       const matchesSpecies = filters.species === "all" || pet.species === filters.species;
       const matchesBreed = !filters.breed.trim() || pet.breed.toLowerCase().includes(filters.breed.trim().toLowerCase());
       const matchesOwner = tab === "walk-in" || ownerFilter === "all" || pet.customer_id === ownerFilter;

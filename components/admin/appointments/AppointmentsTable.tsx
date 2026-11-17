@@ -1,3 +1,4 @@
+import { formatPeso } from "@/lib/utils/currency";
 import type { AppointmentRow } from "@/lib/supabase/appointment-management";
 import { CalendarClock, Eye } from "lucide-react";
 
@@ -34,7 +35,7 @@ export default function AppointmentsTable({ rows, onView, onReschedule }: {
           <dt className="text-zinc-500">Pet(s)</dt><dd className="min-w-0 break-words font-medium text-zinc-800">{a.pets.map(p => p.name).join(", ") || "—"}</dd>
           <dt className="text-zinc-500">Service</dt><dd className="min-w-0 break-words text-zinc-800">{serviceLabels[a.service_type] ?? a.service_type}</dd>
           <dt className="text-zinc-500">Schedule</dt><dd className="min-w-0 break-words text-zinc-800">{a.scheduled_date}{a.scheduled_time ? ` · ${a.scheduled_time}` : ""}{isToday(a.scheduled_date) && <span className="ml-1 text-xs font-bold text-brand-pink">TODAY</span>}</dd>
-          <dt className="text-zinc-500">Amount</dt><dd className="font-bold text-zinc-900">₱{a.total_amount.toLocaleString()}</dd>
+          <dt className="text-zinc-500">Amount</dt><dd className="font-bold text-zinc-900">{formatPeso(a.total_amount)}</dd>
         </dl>
         {rescheduleReason(a) && <p className="mx-4 mb-3 break-words rounded-lg bg-amber-50 p-2 text-xs leading-relaxed text-amber-800"><strong>Rescheduled:</strong> {rescheduleReason(a)}</p>}
         <div className="flex flex-wrap gap-2 border-t border-pink-50 px-4 py-3">
@@ -56,7 +57,7 @@ export default function AppointmentsTable({ rows, onView, onReschedule }: {
             <td className="px-3 py-3.5 text-zinc-600"><div className="truncate">{a.scheduled_date}{a.scheduled_time ? ` · ${a.scheduled_time}` : ""}{isToday(a.scheduled_date) && <span className="ml-1 text-[10px] font-bold text-brand-pink">TODAY</span>}</div>
               {rescheduleReason(a) && <div className="mt-1 break-words rounded-md bg-amber-50 px-2 py-1 text-[11px] leading-4 text-amber-800" title={rescheduleReason(a) ?? ""}><span className="font-bold">Rescheduled:</span> {rescheduleReason(a)}</div>}
             </td>
-            <td className="truncate px-3 py-3.5 font-semibold text-zinc-800">₱{a.total_amount.toLocaleString()}</td>
+            <td className="truncate px-3 py-3.5 font-semibold text-zinc-800">{formatPeso(a.total_amount)}</td>
             <td className="px-3 py-3.5"><span className={`inline-block max-w-full truncate rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[a.status]}`}>{a.status.replace(/_/g, " ")}</span></td>
             <td className="px-3 py-3.5"><div className="flex items-center gap-1.5">
               <button type="button" aria-label={`View ${a.owner_name}'s appointment`} title="View" onClick={() => onView(a)} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-brand-pink text-brand-pink hover:bg-brand-pink hover:text-white"><Eye size={17}/></button>

@@ -11,7 +11,7 @@ export type PublicPricingCatalog = {
   loaded: boolean;
 };
 
-const money = new Intl.NumberFormat("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const money = new Intl.NumberFormat("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export function pesos(value: number): string {
   return `₱${money.format(value)}`;
 }

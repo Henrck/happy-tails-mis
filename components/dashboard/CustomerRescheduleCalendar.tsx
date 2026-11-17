@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, Clock3, RefreshCw } from "lucide-react";
 import BookingDayCalendar from "@/components/shared/BookingDayCalendar";
-import { manilaToday, manilaTime, useBookingClosures } from "@/lib/booking/use-booking-closures";
+import { manilaToday, manilaTime, useBookingClosures, boardingClosures } from "@/lib/booking/use-booking-closures";
 import { createClient } from "@/lib/supabase/client";
 import type { AppointmentRow } from "@/lib/supabase/appointment-management";
 
@@ -37,7 +37,9 @@ export default function CustomerRescheduleCalendar({ appointment, date, time, on
   const [clock, setClock] = useState(0);
   const today = manilaToday();
   const nowTime = manilaTime();
-  const closed = closures.nameFor(date);
+  // Boarding ignores shop closures (caretaker on duty); other services still respect them.
+  const effectiveClosures = isBoarding ? boardingClosures(closures) : closures;
+  const closed = effectiveClosures.nameFor(date);
   const originalTime = isBoarding && appointment.drop_off_at
     ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(appointment.drop_off_at))
     : (appointment.scheduled_time?.slice(0, 5) ?? "");
@@ -89,7 +91,7 @@ export default function CustomerRescheduleCalendar({ appointment, date, time, on
       <CalendarClock size={21} className="mt-0.5 shrink-0 text-brand-pink" />
       <span>Select a new date and {isBoarding ? "drop-off" : "appointment"} time. Your pet services and prices stay the same. Only Pending appointments can be rescheduled.</span>
     </div>
-    <BookingDayCalendar value={date || null} onChange={next => { onDateChange(next); onTimeChange(""); }} closures={closures} title="Reschedule" />
+    <BookingDayCalendar value={date || null} onChange={next => { onDateChange(next); onTimeChange(""); }} closures={effectiveClosures} title="Reschedule" />
     <div className="flex flex-wrap items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-bold text-zinc-800"><Clock3 size={17} className="text-brand-pink" />Choose {isBoarding ? "drop-off" : "start"} time</h3>
       {isGrooming && <button type="button" onClick={() => setRefresh(n => n + 1)} disabled={!date || loadingSlots}

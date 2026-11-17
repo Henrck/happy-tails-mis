@@ -1,4 +1,5 @@
 "use client";
+import { formatPeso } from "@/lib/utils/currency";
 
 import { useRef, useState } from "react";
 import { createAppointmentsAtomic, type CreateAppointmentInput } from "@/lib/supabase/appointments";
@@ -117,7 +118,7 @@ export default function WalkInMultiServiceSummary({
   if (saved) return <section className="mx-auto max-w-xl py-10 text-center">
     <h2 className="text-2xl font-bold text-emerald-700">Appointment Created</h2>
     <p className="mt-2 text-zinc-600">All appointments were recorded together. Each pet has an individual groomer reservation and start time.</p>
-    <p className="mt-3 font-semibold text-brand-pink">Total recorded: ₱{total.toLocaleString()}</p>
+    <p className="mt-3 font-semibold text-brand-pink">Total recorded: {formatPeso(total)}</p>
     <button type="button" onClick={onDone} className="mt-5 rounded-full bg-brand-pink px-6 py-3 font-semibold text-white">Return to Appointments</button>
   </section>;
 
@@ -140,15 +141,15 @@ export default function WalkInMultiServiceSummary({
           {isGrooming(leg.serviceChoice) && <p>Groomer: {groomer?.name ?? "Assigned"} · Start: {prettyTime((s as ScheduledGroomingSelection).groomingScheduledTime)}</p>}
           {leg.serviceChoice === "ala_carte" && <p>Groomer: {groomer?.name ?? "—"} · Start: {prettyTime(alaTime)}</p>}
           {leg.serviceChoice === "boarding" && <><p>Kennel: {s.boardingKennelSize}</p><p>Drop-off: {s.boardingDropOffAt ?? "—"}</p><p>Pick-up: {s.boardingPickUpAt ?? "—"}</p></>}
-          {addons && <p>Add-ons: {addons}</p>}<p className="font-semibold">₱{Number(s.lineAmount).toLocaleString()}</p>
+          {addons && <p>Add-ons: {addons}</p>}<p className="font-semibold">{formatPeso(Number(s.lineAmount))}</p>
         </div>;
       })}
       {leg.serviceChoice !== "boarding" && <p className="mt-3 text-sm text-zinc-600">Date: {leg.scheduledDate ?? "—"}
         {leg.serviceChoice !== "ala_carte" ? ` · ${prettyTime(leg.scheduledTime)}` : ""}</p>}
       {leg.specialRequests && <p className="mt-2 text-sm text-zinc-600">Notes: {leg.specialRequests}</p>}
-      <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: ₱{leg.petSelections.reduce((n, s) => n + Number(s.lineAmount || 0), 0).toLocaleString()}</p>
+      <p className="mt-3 text-right font-bold text-brand-pink">Subtotal: {formatPeso(leg.petSelections.reduce((n, s) => n + Number(s.lineAmount || 0), 0))}</p>
     </section>)}</div>
-    <div className="mt-5 flex justify-between rounded-2xl bg-pink-100 px-5 py-4 font-bold"><span>{hasGrooming ? "Estimated Total" : "Grand Total"}</span><span className="text-brand-pink">₱{total.toLocaleString()}</span></div>
+    <div className="mt-5 flex justify-between rounded-2xl bg-pink-100 px-5 py-4 font-bold"><span>{hasGrooming ? "Estimated Total" : "Grand Total"}</span><span className="text-brand-pink">{formatPeso(total)}</span></div>
     {hasGrooming && <label className="mt-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
       <input type="checkbox" checked={approved} onChange={e => setApproved(e.target.checked)} className="mt-1" />
       <span>I have explained that grooming prices are estimates until verified against the actual pet weight, and the owner must approve any adjustment.</span>

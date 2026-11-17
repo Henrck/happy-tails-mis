@@ -1,6 +1,7 @@
 "use client";
 import type { Pet } from "@/lib/types/appointments";
 import PetAvatar from "@/components/dashboard/PetAvatar";
+import { formatPetId } from "@/lib/utils/pet-id";
 import { House } from "lucide-react";
 import { boardingUntilLabel, type ActiveBoarding } from "@/lib/supabase/active-boarding";
 
@@ -16,6 +17,7 @@ export default function BookingPetCard({ pet, selected, onToggleSelect, onViewPr
         <PetAvatar pet={pet} size="lg" />
         <div className="min-w-0 flex-1 pt-1">
           <h3 className="truncate text-lg font-bold text-slate-800">{pet.name}</h3>
+          {formatPetId(pet.pet_number) && <p className="text-[11px] font-bold tracking-wide text-brand-pink">{formatPetId(pet.pet_number)}</p>}
           <p className="mt-1 truncate text-sm text-slate-500">{pet.breed || "Breed not specified"}{pet.size_label ? ` · ${pet.size_label}` : ""}</p>
           {pet.age != null && <p className="mt-1 text-xs text-slate-500">{pet.age} {pet.age === 1 ? "year" : "years"} old</p>}
           {boardingBooked && <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">
