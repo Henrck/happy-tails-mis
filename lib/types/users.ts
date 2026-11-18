@@ -7,7 +7,7 @@ export type StaffMember = {
 };
 
 export type Customer = {
-  id: string; customer_id: string; full_name: string; first_name?: string | null; middle_name?: string | null; last_name?: string | null; email: string | null; phone_number: string | null;
+  id: string; customer_id: string; username?: string | null; full_name: string; first_name?: string | null; middle_name?: string | null; last_name?: string | null; email: string | null; phone_number: string | null;
   address: string | null; profile_picture_url: string | null; status: AccountStatus;
   registered_at: string; archived_at: string | null;
   penalty_count?: number; penalty_restricted_until?: string | null; manual_restricted?: boolean;

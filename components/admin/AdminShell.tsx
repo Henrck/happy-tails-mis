@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { announceLogout } from "@/lib/auth/session-signals";
 import AdminSidebar from "./AdminSidebar";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Link from "next/link";
@@ -46,6 +47,8 @@ export default function AdminShell({ children, role }: { children: React.ReactNo
     // Record before clearing the authenticated session. Do not prevent logout
     // if audit logging is temporarily unavailable.
     await supabase.rpc("happytails_staff_session_activity", { p_action: "Signed out" });
+    // Tell this browser's other tabs it was a normal Log Out (not a sign-in elsewhere).
+    announceLogout("manual");
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();

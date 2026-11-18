@@ -5,13 +5,15 @@ import "./pos-mobile-dock.css";
 
 export type CartLine = { product: Product; qty: number };
 
-export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, onClear, onProcessPayment }: {
+export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, onClear, onProcessPayment, onReturnItem }: {
   cart: CartLine[];
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
   onRemove: (id: string) => void;
   onClear: () => void;
   onProcessPayment: () => void;
+  /** Opens the return flow for a damaged or expired product (replacement only). */
+  onReturnItem: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const subtotal = cart.reduce((sum, line) => sum + line.product.price * line.qty, 0);
@@ -48,7 +50,10 @@ export default function CartPanel({ cart, onIncrement, onDecrement, onRemove, on
       </div>
       <div className="px-4 pb-4 pt-2 space-y-2 shrink-0">
         <button type="button" onClick={() => { if (cart.length) { setMobileOpen(false); onProcessPayment(); } }} disabled={cart.length === 0} className="w-full bg-white text-brand-pink font-bold py-3 rounded-full disabled:opacity-40 disabled:cursor-not-allowed hover:bg-pink-50 transition-colors">Process Payment</button>
-        <button type="button" onClick={onClear} disabled={cart.length === 0} className="w-full bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2.5 rounded-full transition-colors">Clear Cart</button>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={onClear} disabled={cart.length === 0} className="w-full bg-white/15 hover:bg-white/25 disabled:opacity-40 font-semibold text-sm py-2.5 rounded-full transition-colors">Clear Cart</button>
+          <button type="button" onClick={() => { setMobileOpen(false); onReturnItem(); }} className="w-full border border-white/40 hover:bg-white/15 font-semibold text-sm py-2.5 rounded-full transition-colors">↩ Return Item</button>
+        </div>
       </div>
     </>
   );

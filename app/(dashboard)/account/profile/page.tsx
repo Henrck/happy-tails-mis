@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { hasValidCustomerPhone, normalizeCustomerPhone } from "@/lib/utils/customer-phone";
 import type { Customer } from "@/lib/types/users";
+import SignInDetails from "@/components/dashboard/account/SignInDetails";
 
 export default function MyAccountPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -51,13 +52,15 @@ export default function MyAccountPage() {
   if (loading) return <p className="py-16 text-center text-zinc-400">Loading account…</p>;
   if (!customer) return <p className="py-16 text-center text-zinc-500">Unable to load your account.</p>;
   const missingPhone = !hasValidCustomerPhone(customer.phone_number);
+  const missingUsername = !customer.username?.trim();
   return <div className="space-y-6">
-    <div><h1 className="text-2xl font-bold text-zinc-800 md:text-3xl">My Account</h1><p className="mt-1 text-sm text-zinc-500">Manage the contact information connected to your Happy Tails account.</p></div>
+    <div><h1 className="text-2xl font-bold text-zinc-800 md:text-3xl">My Account</h1><p className="mt-1 text-sm text-zinc-500">Manage the contact information and sign-in details of your Happy Tails account.</p></div>
     {missingPhone && <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Complete your account:</strong> Add a mobile number so staff can contact you. Adding pets and booking appointments will be available after saving a valid number.</div>}
+    {missingUsername && <div role="note" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Choose a username:</strong> Your account doesn&apos;t have one yet. <a href="#account-username" className="font-semibold underline underline-offset-2">Set it under Sign-in details</a>.</div>}
     <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
       <section className="rounded-3xl border border-pink-100 bg-white p-6">
         <div className="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-brand-tint text-4xl">{customer.profile_picture_url ? <img src={customer.profile_picture_url} alt="" className="h-full w-full object-cover" /> : "🐾"}</div>
-        <div className="mt-4 text-center"><h2 className="font-bold text-zinc-800">{customer.full_name}</h2><p className="mt-1 text-xs text-zinc-500">{customer.email ?? "No email on file"}</p><span className="mt-3 inline-flex rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-brand-pink">Client ID: {customer.customer_id}</span></div>
+        <div className="mt-4 text-center"><h2 className="font-bold text-zinc-800">{customer.full_name}</h2><p className="mt-1 text-xs text-zinc-500">{customer.email ?? "No email on file"}</p>{customer.username && <p className="mt-1 text-xs font-semibold text-zinc-600">@{customer.username}</p>}<span className="mt-3 inline-flex rounded-full bg-pink-50 px-3 py-1 text-xs font-semibold text-brand-pink">Client ID: {customer.customer_id}</span></div>
       </section>
       <form onSubmit={saveProfile} className="rounded-3xl border border-pink-100 bg-white p-6 md:p-8">
         <h2 className="text-lg font-bold text-zinc-800">Personal Information</h2>
@@ -69,6 +72,9 @@ export default function MyAccountPage() {
         </div>
         <div className="mt-6 flex items-center justify-between gap-4"><p role="status" className={`text-sm ${message.includes("successfully")?"text-green-600":"text-red-600"}`}>{message}</p><button type="submit" disabled={saving} className="rounded-xl bg-brand-pink px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save Changes"}</button></div>
       </form>
+    </div>
+    <div className="lg:ml-[304px]">
+      <SignInDetails username={customer.username ?? null} onUsernameSaved={(username) => setCustomer((prev) => prev ? { ...prev, username } : prev)} />
     </div>
   </div>;
 }

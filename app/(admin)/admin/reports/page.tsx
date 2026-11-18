@@ -1,6 +1,7 @@
 "use client";
-// HappyTails Report Management: 3 clear reports.
-// Service = appointments + charges; Inventory = stock; Sales = invoice cash ledger.
+// HappyTails Report Management: 4 clear reports.
+// Service = appointments + charges; Inventory = stock; Sales = invoice cash ledger;
+// Returns = damaged/expired products replaced at the POS (no refunds).
 // Transaction Reports duplicate tab was merged into Service Reports.
 import { useState, useMemo, useEffect } from "react";
 import { Inter } from "next/font/google";
@@ -9,9 +10,11 @@ import { sortRows, nextSortState, type SortDirection } from "@/lib/utils/sort";
 import type { ServiceReport } from "@/lib/types/reports";
 import type { InventoryReportRow } from "@/lib/types/reports";
 import type { SalesReportRow } from "@/lib/types/reports";
+import type { ReturnReportRow } from "@/lib/types/reports";
 import { fetchServiceReports } from "@/lib/supabase/reports";
 import { fetchInventoryReportRows } from "@/lib/supabase/inventory-reports";
 import { fetchSalesReportRows } from "@/lib/supabase/sales";
+import { fetchReturnReportRows } from "@/lib/supabase/returns-report";
 
 import ReportsHeader from "@/components/admin/reports/ReportsHeader";
 import ReportTabs, { type ReportTab } from "@/components/admin/reports/ReportTabs";
@@ -25,6 +28,8 @@ import InventoryFilterToolbar, { type InventoryFilterState } from "@/components/
 import InventoryReportTable from "@/components/admin/reports/InventoryReportTable";
 import SalesFilterToolbar, { type SalesFilterState } from "@/components/admin/reports/SalesFilterToolbar";
 import SalesReportTable from "@/components/admin/reports/SalesReportTable";
+import ReturnsFilterToolbar, { type ReturnsFilterState } from "@/components/admin/reports/ReturnsFilterToolbar";
+import ReturnsReportTable, { ReturnsStats } from "@/components/admin/reports/ReturnsReportTable";
 
 const inter = Inter({ subsets: ["latin"] });
 const emptyServiceFilters: FilterState = {
@@ -36,6 +41,9 @@ const emptyInventoryFilters: InventoryFilterState = {
 const emptySalesFilters: SalesFilterState = {
   search: "", fromDate: "", toDate: "", category: "All Categories",
 };
+const emptyReturnsFilters: ReturnsFilterState = {
+  search: "", fromDate: "", toDate: "", reason: "all",
+};
 const PAGE_SIZE_DEFAULT = 10;
 
 export default function ReportManagementPage() {
@@ -43,6 +51,7 @@ export default function ReportManagementPage() {
   const [serviceReports, setServiceReports] = useState<ServiceReport[]>([]);
   const [inventoryReports, setInventoryReports] = useState<InventoryReportRow[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReportRow[]>([]);
+  const [returnReports, setReturnReports] = useState<ReturnReportRow[]>([]);
   const [reportsLoading, setReportsLoading] = useState(true);
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [nowMs] = useState(() => Date.now());
@@ -50,16 +59,18 @@ export default function ReportManagementPage() {
   useEffect(() => {
     let mounted = true;
     async function load() {
-      const [service, inventory, sales] = await Promise.all([
+      const [service, inventory, sales, returns] = await Promise.all([
         fetchServiceReports(),
         fetchInventoryReportRows(),
         fetchSalesReportRows(),
+        fetchReturnReportRows(),
       ]);
       if (!mounted) return;
       setServiceReports(service.rows);
       setInventoryReports(inventory.rows);
       setSalesReports(sales.rows);
-      setReportsError(service.error ?? inventory.error ?? sales.error ?? null);
+      setReturnReports(returns.rows);
+      setReportsError(service.error ?? inventory.error ?? sales.error ?? returns.error ?? null);
       setReportsLoading(false);
     }
     load().catch((error: unknown) => {
@@ -138,6 +149,25 @@ export default function ReportManagementPage() {
     return sortRows(matched, salesSortKey, salesSortDir);
   }, [salesFilters, salesSortKey, salesSortDir, salesReports]);
 
+  // Returns Reports: one row per return, newest first.
+  const [returnsFilters, setReturnsFilters] = useState(emptyReturnsFilters);
+  const [returnsPage, setReturnsPage] = useState(0);
+  const [returnsPageSize, setReturnsPageSize] = useState(PAGE_SIZE_DEFAULT);
+  const [returnsSortKey, setReturnsSortKey] = useState<string | null>(null);
+  const [returnsSortDir, setReturnsSortDir] = useState<SortDirection>(null);
+
+  const filteredReturns = useMemo(() => {
+    const q = returnsFilters.search.trim().toLowerCase();
+    const matched = returnReports.filter((r) => {
+      const matchesSearch = !q || [r.returnNumber, r.invoiceNumber, r.itemName, r.staff, r.note ?? ""].some((v) => v.toLowerCase().includes(q));
+      const matchesReason = returnsFilters.reason === "all" || r.reason === returnsFilters.reason;
+      const matchesFrom = !returnsFilters.fromDate || r.date >= returnsFilters.fromDate;
+      const matchesTo = !returnsFilters.toDate || r.date <= returnsFilters.toDate;
+      return matchesSearch && matchesReason && matchesFrom && matchesTo;
+    });
+    return sortRows(matched, returnsSortKey, returnsSortDir);
+  }, [returnsFilters, returnsSortKey, returnsSortDir, returnReports]);
+
   return (
     <div className={`${inter.className} -m-6 md:-m-8 p-6 md:p-8 min-h-full bg-[#F8F9FC]`}>
       <ReportsHeader />
@@ -172,6 +202,15 @@ export default function ReportManagementPage() {
           <div className="mt-5"><SalesFilterToolbar filters={salesFilters} onApply={(f) => { setSalesFilters(f); setSalesPage(0); }} onReset={() => { setSalesFilters(emptySalesFilters); setSalesPage(0); }} rows={filteredSales} /></div>
           <div className="mt-5"><SalesReportTable rows={filteredSales.slice(salesPage * salesPageSize, salesPage * salesPageSize + salesPageSize)} sortKey={salesSortKey} sortDirection={salesSortDir} onSort={(key) => { const n = nextSortState(salesSortKey, salesSortDir, key); setSalesSortKey(n.key); setSalesSortDir(n.direction); }} /></div>
           <div className="mt-5"><ReportFooter page={salesPage} pageSize={salesPageSize} totalItems={filteredSales.length} onPageChange={setSalesPage} onPageSizeChange={(s) => { setSalesPageSize(s); setSalesPage(0); }} /></div>
+        </>
+      )}
+      {tab === "returns" && (
+        <>
+          <div className="mt-5"><ReturnsFilterToolbar filters={returnsFilters} onApply={(f) => { setReturnsFilters(f); setReturnsPage(0); }} onReset={() => { setReturnsFilters(emptyReturnsFilters); setReturnsPage(0); }} rows={filteredReturns} /></div>
+          <div className="mt-5"><ReturnsStats rows={filteredReturns} /></div>
+          <div className="mt-5"><ReturnsReportTable rows={filteredReturns.slice(returnsPage * returnsPageSize, returnsPage * returnsPageSize + returnsPageSize)} sortKey={returnsSortKey} sortDirection={returnsSortDir} onSort={(key) => { const n = nextSortState(returnsSortKey, returnsSortDir, key); setReturnsSortKey(n.key); setReturnsSortDir(n.direction); }} /></div>
+          <div className="mt-5"><ReportFooter page={returnsPage} pageSize={returnsPageSize} totalItems={filteredReturns.length} onPageChange={setReturnsPage} onPageSizeChange={(s) => { setReturnsPageSize(s); setReturnsPage(0); }} /></div>
+          <p className="mt-3 text-xs text-zinc-400">Returns are settled by replacing the item with the same product; no cash is refunded, so sales totals are unchanged. Value is the units replaced at their original price.</p>
         </>
       )}
       {selectedService && <ReportDetailModal report={selectedService} onClose={() => setSelectedService(null)} />}

@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-export type ReportTab = "service" | "inventory" | "sales";
+export type ReportTab = "service" | "inventory" | "sales" | "returns";
 const tabs: { key: ReportTab; label: string }[] = [
   { key: "service", label: "Service Reports" },
   { key: "inventory", label: "Inventory Reports" },
   { key: "sales", label: "Sales Reports" },
+  { key: "returns", label: "Returns Reports" },
 ];
 export default function ReportTabs({ active, onChange }: { active: ReportTab; onChange: (tab: ReportTab) => void }) {
   return <div className="flex flex-wrap gap-6 sm:gap-8 border-b border-[#E8E8E8]">

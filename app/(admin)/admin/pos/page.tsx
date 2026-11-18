@@ -12,6 +12,7 @@ import ProductPosCard from "@/components/admin/pos/ProductPosCard";
 import CartPanel, { type CartLine } from "@/components/admin/pos/CartPanel";
 import ProcessPaymentModal, { type LowStockWarning } from "@/components/admin/pos/ProcessPaymentModal";
 import SaleCompleteModal, { type CompletedSale } from "@/components/admin/pos/SaleCompleteModal";
+import ReturnItemModal from "@/components/admin/pos/ReturnItemModal";
 
 export default function PointOfSalePage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function PointOfSalePage() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   async function loadProducts() {
     setLoading(true);
@@ -227,6 +229,7 @@ export default function PointOfSalePage() {
         onRemove={remove}
         onClear={clearCart}
         onProcessPayment={() => { setCheckoutError(null); setPaymentOpen(true); }}
+        onReturnItem={() => setReturnOpen(true)}
       />
 
       {paymentOpen && (
@@ -235,6 +238,11 @@ export default function PointOfSalePage() {
           lowStockWarnings={lowStockWarnings}
           onClose={() => { if (!processingRef.current) setPaymentOpen(false); }}
           onConfirm={handleConfirmPayment} />
+      )}
+
+      {returnOpen && (
+        // A replacement takes stock, so refresh the product list afterwards.
+        <ReturnItemModal onClose={() => setReturnOpen(false)} onCompleted={() => void loadProducts()} />
       )}
 
       {completedSale && (

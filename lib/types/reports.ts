@@ -54,3 +54,25 @@ export type InventoryReportRow = {
   status: InventoryReportStatus;
   expirationDate: string | null; // ISO, null = no expiration
 };
+
+/** POS returns: damaged/expired products replaced with the same item. */
+export type ReturnReasonLabel = "Damaged" | "Expired" | "Other";
+export type ReturnReportItem = { name: string; category: string; quantity: number; unitPrice: number };
+export type ReturnReportRow = {
+  id: string;
+  returnNumber: string;
+  invoiceNumber: string;
+  items: ReturnReportItem[];
+  itemName: string;
+  units: number;
+  /** Units x original unit price: the value of stock given out as replacements. */
+  value: number;
+  reason: ReturnReasonLabel;
+  note: string | null;
+  lateOverride: boolean;
+  staff: string;
+  purchaseDate: string;
+  date: string;
+  displayDate: string;
+  createdAt: string;
+};

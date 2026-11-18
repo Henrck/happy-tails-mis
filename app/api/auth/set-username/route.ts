@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { validateUsernameFormat } from "@/lib/supabase/customer-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,12 +99,9 @@ export async function POST(request: NextRequest) {
     }
 
     const username = input.username.trim();
-    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
-      return respond(
-        { error: "Username must be 3–30 characters and contain only letters, numbers, underscores, periods or hyphens" },
-        400
-      );
-    }
+    // Same rules as sign-up: 3–20 letters, numbers, underscores or periods.
+    const formatError = validateUsernameFormat(username);
+    if (formatError) return respond({ error: formatError }, 400);
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
@@ -119,7 +117,7 @@ export async function POST(request: NextRequest) {
     // authenticated customer's status explicitly BEFORE privileged mutation.
     const { data: customer, error: accountError } = await admin
       .from("customers")
-      .select("id, status")
+      .select("id, status, username")
       .eq("id", authenticatedUserId)
       .maybeSingle();
 
@@ -128,6 +126,18 @@ export async function POST(request: NextRequest) {
     }
     if (customer.status !== "active") {
       return respond({ error: "Customer account is not active" }, 403);
+    }
+
+    // Usernames are shared by customers and staff for sign-in, so check both
+    // (case-insensitive). Keeping your own name, or changing only its letter
+    // case, is always allowed.
+    if (String(customer.username ?? "").toLowerCase() !== username.toLowerCase()) {
+      const { data: taken, error: takenError } = await admin.rpc("is_username_taken", { check_username: username });
+      if (takenError || typeof taken !== "boolean") {
+        console.error("set-username: availability check failed", takenError?.code ?? "invalid result");
+        return respond({ error: "Unable to check that username right now. Please try again." }, 503);
+      }
+      if (taken) return respond({ error: "That username is already taken. Choose another one." }, 409);
     }
 
     const { data: updated, error: updateError } = await admin
@@ -140,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     if (updateError) {
       if (updateError.code === "23505") {
-        return respond({ error: "Username is already taken" }, 409);
+        return respond({ error: "That username is already taken. Choose another one." }, 409);
       }
       console.error("set-username: database update failed", updateError.code);
       return respond({ error: "Unable to update username" }, 500);

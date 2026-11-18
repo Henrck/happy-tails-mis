@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
+import { announceLogout } from "@/lib/auth/session-signals";
 import { fetchUnreadNotificationCount, subscribeToNotifications } from "@/lib/supabase/notifications";
 import type { Customer } from "@/lib/types/users";
 import { hasValidCustomerPhone } from "@/lib/utils/customer-phone";
@@ -87,6 +88,8 @@ export default function DashboardNavbar({ customer }: { customer: Customer }) {
     setSignOutError("");
     try {
       const supabase = createClient();
+      // Tell this browser's other tabs it was a normal Log Out (not a sign-in elsewhere).
+      announceLogout("manual");
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setLogoutOpen(false);

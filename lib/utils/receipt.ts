@@ -5,8 +5,6 @@
 // same layout should still look right if/when direct thermal printing
 // gets added later).
 //
-// The return/exchange policy line below is a PLACEHOLDER — Josh should
-// replace it with the shop's actual policy before this goes live.
 import { BUSINESS_NAME, BUSINESS_ADDRESS, BUSINESS_PHONE } from "@/lib/constants/business";
 
 export type ReceiptItem = {
@@ -106,10 +104,10 @@ export function printReceipt(data: ReceiptData) {
         <div class="divider"></div>
 
         <div class="policy">
-          <strong>Return &amp; Exchange Policy (sample text — replace with the shop's actual policy):</strong><br />
-          Items may be exchanged within 7 days of purchase with this receipt.
-          This invoice number is required for any return, exchange, or
-          warranty claim. No cash refunds — store credit or exchange only.
+          <strong>Return Policy:</strong><br />
+          Damaged or expired items may be returned within 7 days of purchase
+          and are replaced with the same item. Please keep this slip: the
+          invoice number is required for any return. No cash refunds.
         </div>
 
         <div class="center footer">Thank you for shopping with us!</div>
@@ -121,4 +119,65 @@ export function printReceipt(data: ReceiptData) {
     </html>
   `);
   receiptWindow.document.close();
+}
+
+// ---------------------------------------------------------------------------
+// Return slip: printed after a damaged/expired item is replaced.
+// ---------------------------------------------------------------------------
+export type ReturnSlipData = {
+  returnNumber: string;
+  invoiceNumber: string;
+  soldAt: string;
+  reason: string;
+  note: string | null;
+  items: { name: string; quantity: number }[];
+  createdAt: string;
+};
+
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+const REASON_LABEL: Record<string, string> = { damaged: "Damaged", expired: "Expired", other: "Other" };
+
+export function printReturnSlip(data: ReturnSlipData) {
+  const slip = window.open("", "_blank", "width=420,height=650");
+  if (!slip) return;
+  const manila = (value: string) => new Date(value).toLocaleString("en-PH", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" });
+  const rows = data.items.map((item) => `<div class="row"><span class="name">${escapeHtml(item.name)}</span><span>x${item.quantity}</span></div>`).join("");
+  slip.document.write(`<!DOCTYPE html>
+    <html><head><title>Return ${escapeHtml(data.returnNumber)}</title><meta charset="utf-8" />
+      <style>
+        @page { size: 80mm auto; margin: 4mm; }
+        * { box-sizing: border-box; }
+        body { font-family: "Courier New", monospace; font-size: 12px; color: #000; width: 72mm; margin: 0 auto; }
+        .center { text-align: center; }
+        .shop-name { font-size: 15px; font-weight: bold; }
+        .title { font-size: 14px; font-weight: bold; margin-top: 6px; }
+        .divider { border-top: 1px dashed #000; margin: 8px 0; }
+        .row { display: flex; justify-content: space-between; gap: 8px; }
+        .name { font-weight: bold; }
+        .small { font-size: 10.5px; line-height: 1.4; }
+        .sign { margin-top: 22px; border-top: 1px solid #000; padding-top: 2px; text-align: center; font-size: 10.5px; }
+      </style></head>
+      <body>
+        <div class="center">
+          <div class="shop-name">${BUSINESS_NAME}</div>
+          <div>${BUSINESS_ADDRESS}</div>
+          <div>${BUSINESS_PHONE}</div>
+          <div class="title">RETURN SLIP: REPLACEMENT</div>
+        </div>
+        <div class="divider"></div>
+        <div class="row"><span>Return #</span><span>${escapeHtml(data.returnNumber)}</span></div>
+        <div class="row"><span>Original invoice</span><span>${escapeHtml(data.invoiceNumber)}</span></div>
+        <div class="row"><span>Purchased</span><span>${manila(data.soldAt)}</span></div>
+        <div class="row"><span>Returned</span><span>${manila(data.createdAt)}</span></div>
+        <div class="row"><span>Reason</span><span>${REASON_LABEL[data.reason] ?? escapeHtml(data.reason)}</span></div>
+        ${data.note ? `<div class="small">Note: ${escapeHtml(data.note)}</div>` : ""}
+        <div class="divider"></div>
+        <div class="small"><strong>Replaced with the same item:</strong></div>
+        ${rows}
+        <div class="divider"></div>
+        <div class="small">The returned item(s) were exchanged for the same product. No cash was refunded.</div>
+        <div class="sign">Customer signature</div>
+        <script>window.onload = function () { window.print(); };</script>
+      </body></html>`);
+  slip.document.close();
 }

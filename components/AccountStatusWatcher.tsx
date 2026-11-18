@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { announceLogout, announceSessionReplaced, isEndedSessionError } from "@/lib/auth/session-signals";
 
 type BlockReason = "deactivated" | "unverified" | null;
 
@@ -23,10 +24,17 @@ export default function AccountStatusWatcher({
   const recheck = useCallback(async () => {
     setChecking(true);
     try {
-      const { data, error } = await supabase.from(table)
-        .select("status")
-        .eq("id", userId)
-        .maybeSingle();
+      const read = () => supabase.from(table).select("status").eq("id", userId).maybeSingle();
+      let { data, error } = await read();
+      if (error || !data) {
+        // If this sign-in was ended (the account signed in somewhere else),
+        // the session guard explains that instead of this generic message.
+        const { error: authError } = await supabase.auth.getUser();
+        if (isEndedSessionError(authError)) { setBlockReason(null); announceSessionReplaced(); return; }
+        // Otherwise retry once, in case it was a brief connection problem.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        ({ data, error } = await read());
+      }
       if (error || !data) setBlockReason("unverified");
       else if (data.status !== "active") setBlockReason("deactivated");
       else setBlockReason(null);
@@ -55,6 +63,7 @@ export default function AccountStatusWatcher({
   }, [supabase, userId, table, recheck]);
 
   async function handleSignOut() {
+    announceLogout("manual");
     await supabase.auth.signOut();
     router.replace(blockReason === "deactivated" ? "/sign-in?deactivated=1" : "/sign-in?access=unverified");
     router.refresh();
@@ -73,19 +82,19 @@ export default function AccountStatusWatcher({
             </svg>
           </div>
           <h3 className="mt-3 text-lg font-bold text-zinc-800">
-            {blockReason === "deactivated" ? "Your account is now deactivated" : "Account access could not be verified"}
+            {blockReason === "deactivated" ? "Your account is now deactivated" : "We couldn't check your account"}
           </h3>
           <p className="mt-1 text-sm text-zinc-500">
             {blockReason === "deactivated"
               ? "Your account is inactive or archived. Please contact support."
-              : "We couldn't confirm that your account is active. Retry or contact support."}
+              : "We couldn't reach the server to confirm your account is still active. This is usually a brief connection problem. Check your internet, then try again."}
           </p>
         </div>
         <div className="px-6 pb-6 space-y-2">
           {blockReason === "unverified" && (
             <button type="button" onClick={() => void recheck()} disabled={checking}
               className="w-full border-2 border-brand-pink text-brand-pink font-semibold py-2.5 rounded-full disabled:opacity-50">
-              {checking ? "Checking…" : "Retry verification"}
+              {checking ? "Checking…" : "Try again"}
             </button>
           )}
           <button onClick={handleSignOut}

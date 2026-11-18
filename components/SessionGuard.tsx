@@ -5,17 +5,20 @@
 //     Activity is shared across tabs of the same browser via localStorage.
 //  2. Single session: signing in elsewhere ends this session on the server
 //     (see app/api/auth/login and app/auth/callback). This page notices within
-//     ~30 seconds (or immediately on focus) and signs out with a message.
+//     ~30 seconds (or immediately on focus) and first shows a pop-up saying the
+//     account was signed in somewhere else; pressing OK signs out.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, MonitorSmartphone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  announceLogout, isEndedSessionError, LOGOUT_KEY, recentManualLogout, SESSION_REPLACED_EVENT,
+} from "@/lib/auth/session-signals";
 
 const IDLE_LIMIT_MS = 10 * 60 * 1000;
 const WARNING_MS = 60 * 1000;
 const SESSION_CHECK_MS = 30 * 1000;
 const ACTIVITY_WRITE_MS = 5 * 1000;
 const ACTIVITY_KEY = "happytails:last-activity";
-const LOGOUT_KEY = "happytails:signed-out";
 const ACTIVITY_EVENTS = ["mousemove", "mouseover", "pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
 
 type Reason = "idle" | "replaced";
@@ -49,6 +52,8 @@ function writeActivity(value: StoredActivity) {
 export default function SessionGuard({ staff = false }: { staff?: boolean }) {
   const [supabase] = useState(createClient);
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const [replaced, setReplaced] = useState(false);
+  const replacedRef = useRef(false);
   const lastActivity = useRef(0);
   const lastWrite = useRef(0);
   const sessionId = useRef<string | null>(null);
@@ -58,7 +63,7 @@ export default function SessionGuard({ staff = false }: { staff?: boolean }) {
     if (signingOut.current) return;
     signingOut.current = true;
     if (!fromOtherTab) {
-      try { localStorage.setItem(LOGOUT_KEY, `${reason}:${Date.now()}`); } catch { /* ignore */ }
+      announceLogout(reason);
       if (staff && reason === "idle") {
         // Best-effort staff audit entry; never block the sign-out.
         await Promise.resolve(supabase.rpc("happytails_staff_session_activity", { p_action: "Signed out" })).catch(() => undefined);
@@ -78,8 +83,18 @@ export default function SessionGuard({ staff = false }: { staff?: boolean }) {
     }
   }, []);
 
+  // This sign-in was ended by a sign-in elsewhere: explain it before signing out.
+  // (If this browser just pressed Log Out in another tab, simply follow it.)
+  const showReplaced = useCallback(() => {
+    if (signingOut.current || replacedRef.current) return;
+    if (recentManualLogout()) { signingOut.current = true; window.location.replace("/sign-in"); return; }
+    replacedRef.current = true;
+    setSecondsLeft(null);
+    setReplaced(true);
+  }, []);
+
   const tick = useCallback(() => {
-    if (!sessionId.current || signingOut.current) return;
+    if (!sessionId.current || signingOut.current || replacedRef.current) return;
     // Another tab may have been active more recently.
     const shared = readActivity();
     if (shared?.sid === sessionId.current && shared.at > lastActivity.current) lastActivity.current = shared.at;
@@ -89,10 +104,16 @@ export default function SessionGuard({ staff = false }: { staff?: boolean }) {
   }, [signOut]);
 
   const checkSession = useCallback(async () => {
-    if (signingOut.current) return;
+    if (signingOut.current || replacedRef.current) return;
     const { error } = await supabase.auth.getUser();
-    if (error?.code === "session_not_found") void signOut("replaced");
-  }, [signOut, supabase]);
+    if (isEndedSessionError(error)) showReplaced();
+  }, [showReplaced, supabase]);
+
+  // Other checks (e.g. the account status watcher) can report an ended session too.
+  useEffect(() => {
+    window.addEventListener(SESSION_REPLACED_EVENT, showReplaced);
+    return () => window.removeEventListener(SESSION_REPLACED_EVENT, showReplaced);
+  }, [showReplaced]);
 
   useEffect(() => {
     let active = true;
@@ -120,8 +141,10 @@ export default function SessionGuard({ staff = false }: { staff?: boolean }) {
 
       const onStorage = (event: StorageEvent) => {
         if (event.key === LOGOUT_KEY && event.newValue) {
-          const reason = event.newValue.split(":")[0] === "replaced" ? "replaced" : "idle";
-          void signOut(reason, true);
+          const reason = event.newValue.split(":")[0];
+          if (reason === "manual") { signingOut.current = true; window.location.replace("/sign-in"); }
+          else if (reason === "replaced") showReplaced();
+          else void signOut("idle", true);
         }
       };
       const onVisible = () => { if (document.visibilityState === "visible") { tick(); void checkSession(); } };
@@ -140,7 +163,21 @@ export default function SessionGuard({ staff = false }: { staff?: boolean }) {
     });
 
     return () => { active = false; cleanups.forEach(fn => fn()); };
-  }, [checkSession, markActive, signOut, supabase, tick]);
+  }, [checkSession, markActive, showReplaced, signOut, supabase, tick]);
+
+  if (replaced) {
+    return <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/55 p-4" role="presentation">
+      <section role="alertdialog" aria-modal="true" aria-labelledby="replaced-title" aria-describedby="replaced-description" className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-tint text-brand-pink"><MonitorSmartphone size={24} aria-hidden="true"/></span>
+        <h2 id="replaced-title" className="mt-3 text-lg font-bold text-zinc-900">Signed in on another device</h2>
+        <p id="replaced-description" className="mt-2 text-sm leading-6 text-zinc-600">
+          Your account was just signed in on another device or browser. An account can only be used in one place at a time, so you&apos;ve been signed out here.
+        </p>
+        <p className="mt-3 rounded-2xl bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">Wasn&apos;t you? Sign in again and change your password right away.</p>
+        <button type="button" autoFocus onClick={() => { replacedRef.current = false; void signOut("replaced"); }} className="mt-5 w-full rounded-full bg-brand-pink py-3 text-sm font-bold text-white hover:bg-brand-pink-dark">OK, go to sign in</button>
+      </section>
+    </div>;
+  }
 
   if (secondsLeft === null) return null;
   const label = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`;
