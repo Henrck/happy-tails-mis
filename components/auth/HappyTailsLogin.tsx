@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff, LockKeyhole, PawPrint, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, PawPrint, UserRound } from "lucide-react";
 
 type LoginProps = {
   landscapeUrl: string;
@@ -133,6 +133,7 @@ export default function HappyTailsLogin({ landscapeUrl, portraitUrl, customPortr
 
   return (
     <div className={`ht-login-page${customPortrait ? " ht-login-custom-portrait" : ""}`} style={backgroundVars}>
+      <Link href="/" className="ht-login-home"><ArrowLeft size={18} strokeWidth={2.6} aria-hidden="true" />Back to Home</Link>
       <div className="ht-login-portrait-top" aria-hidden="true" />
       <div className="ht-login-placement">
         <div className="ht-login-portrait-middle" aria-hidden="true" />

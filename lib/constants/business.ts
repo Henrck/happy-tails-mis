@@ -3,7 +3,8 @@
 export const BUSINESS_NAME = "Happy Tails Pet Grooming Cafe";
 export const BUSINESS_ADDRESS = "364 Ricardo Commercial Bldg. Salcedo, Noveleta, Cavite";
 export const BUSINESS_PHONE = "0955 008 5317";
-// Shop Facebook page shown when a customer reaches the daily cancellation limit.
-// TODO(owner): paste the real page URL; while empty, the phone number is shown instead.
-export const BUSINESS_FACEBOOK_URL = "";
+// HappyTails Noveleta Facebook page (same link as the Noveleta branch card).
+// Used for customer service: the homepage FAQ "Contact us" link and the
+// daily cancellation limit message.
+export const BUSINESS_FACEBOOK_URL = "https://facebook.com/happytailspetgroomingcafe";
 export const BUSINESS_LOGO_PATH = "/images/footer-logo.png";

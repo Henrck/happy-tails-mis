@@ -482,3 +482,29 @@
   .ht-login-placement { justify-content: center; padding: 35px 14px; }
   .ht-login-card { margin-top: 0; }
 }
+
+/* Back to the landing page: a pill pinned to the top-left corner. */
+.ht-login-home {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(79, 38, 60, 0.18);
+  backdrop-filter: blur(6px);
+  color: #e61c7b;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.ht-login-home:hover { background: #e61c7b; color: #fff; transform: translateX(-2px); }
+.ht-login-home:focus-visible { outline: 3px solid #ef9dcb; outline-offset: 3px; }
+@media (max-width: 480px) {
+  .ht-login-home { top: 12px; left: 12px; padding: 8px 14px 8px 11px; font-size: 13px; }
+}

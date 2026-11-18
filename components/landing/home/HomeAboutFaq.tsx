@@ -1,7 +1,8 @@
 // About Us (photo beside the story) followed by the FAQs (heading column + accordion).
 import Image from "next/image";
 import Link from "next/link";
-import { MessageCircle, Plus } from "lucide-react";
+import { ArrowUpRight, MessageCircle, Plus } from "lucide-react";
+import { BUSINESS_FACEBOOK_URL, BUSINESS_PHONE } from "@/lib/constants/business";
 import type { FAQItem } from "@/lib/website/faq";
 
 const PILLARS = [
@@ -50,7 +51,10 @@ export function HomeFaq({ items, heading, subheading }: { items: FAQItem[]; head
         <div className="mt-7 rounded-[22px] bg-brand-tint p-5">
           <p className="flex items-center gap-2 text-sm font-bold text-[#2A1626]"><MessageCircle size={17} className="text-brand-pink"/> Still have a question?</p>
           <p className="mt-1 text-sm text-zinc-600">Our team is happy to help.</p>
-          <Link href="#footer" className="mt-3 inline-block text-sm font-bold text-brand-pink hover:underline">Contact us</Link>
+          {BUSINESS_FACEBOOK_URL
+            ? <a href={BUSINESS_FACEBOOK_URL} target="_blank" rel="noopener noreferrer" aria-label="Message HappyTails Noveleta on Facebook (opens in a new tab)" className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-brand-pink hover:underline">Message us on Facebook <ArrowUpRight size={15}/></a>
+            : <Link href="#footer" className="mt-3 inline-block text-sm font-bold text-brand-pink hover:underline">Contact us</Link>}
+          <p className="mt-1 text-xs text-zinc-500">or call {BUSINESS_PHONE}</p>
         </div>
       </div>
       <div className="space-y-2.5">
