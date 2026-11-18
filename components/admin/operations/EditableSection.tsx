@@ -13,22 +13,29 @@
 // never reach the real <a>/<button> elements inside it. The Edit
 // button itself explicitly re-enables pointer-events so it still
 // works, since it sits inside the otherwise-disabled zone.
+//
+// `interactive` keeps a section's own controls usable (tabs, carousel arrows,
+// FAQ toggles) while still blocking every link, so nothing navigates away.
 export default function EditableSection({
   editMode,
   label,
   onEdit,
   children,
+  interactive = false,
 }: {
   editMode: boolean;
   label: string;
   onEdit: () => void;
   children: React.ReactNode;
+  interactive?: boolean;
 }) {
   return (
     <div className="relative">
-      <div className="pointer-events-none" aria-hidden="true">
-        {children}
-      </div>
+      {interactive
+        ? <div onClickCapture={(event) => { if ((event.target as Element).closest("a")) event.preventDefault(); }}>{children}</div>
+        : <div className="pointer-events-none" aria-hidden="true">
+            {children}
+          </div>}
       {editMode && (
         <button
           onClick={onEdit}

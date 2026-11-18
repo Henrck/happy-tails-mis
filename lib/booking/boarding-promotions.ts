@@ -20,7 +20,9 @@ export function blockingReason(name: string, nights: number | null | undefined, 
 export function groomingAddonPrice<T extends {size_label:string;price:number}>(rows: T[], sizeLabel?: string | null): T | undefined {
   const normalize = (s:string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
   const size = normalize(sizeLabel ?? "");
-  const tier = /^(?:2xl|xxl|extraextralarge|2extralarge|xl|extralarge|large|l)$/.test(size) ? "large" : "smallmedium";
+  // Every size from Large upward (Large, Extra Large, 2X Extra Large, XL, 2XL, XXL…)
+  // uses the Large add-on price; Small and Medium use Small-Medium.
+  const tier = size.includes("large") || /^\d*x*l$/.test(size) ? "large" : "smallmedium";
   const mapped = rows.find(row => { const s=normalize(row.size_label);return tier === "large" ? s === "large" || s === "largesize" : s === "smallmedium" || s === "small"; });
   if (tier === "large") return mapped;
   const matching = rows.find(row => normalize(row.size_label) === size);

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { fetchGroomers, fetchKennels } from "@/lib/supabase/pet-services";
-import { fetchGroomingSessions, fetchBoardingSessions } from "@/lib/supabase/service-sessions";
+import { fetchGroomingSessions } from "@/lib/supabase/service-sessions";
+import { fetchBoardingOccupancy } from "@/lib/supabase/boarding-operations";
 
 function PawIcon({ className = "w-7 h-7" }: { className?: string }) {
   return (
@@ -84,7 +85,7 @@ export default function PetServicesPage() {
         fetchGroomers(),
         fetchKennels(),
         fetchGroomingSessions(),
-        fetchBoardingSessions(),
+        fetchBoardingOccupancy(),
       ]);
 
     if (!groomerResult.error) {
@@ -102,7 +103,9 @@ export default function PetServicesPage() {
     }
 
     if (!boardingResult.error) {
-      setOccupiedKennels(boardingResult.sessions.length);
+      // Same rule as the Boarding page: count distinct kennels with checked-in
+      // pets, so pets sharing one Big kennel count as one occupied kennel.
+      setOccupiedKennels(new Set(boardingResult.sessions.map((s) => s.kennelId)).size);
     }
 
     setLoading(false);

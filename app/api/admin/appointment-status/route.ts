@@ -122,9 +122,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: lookupError?.message ?? "Appointment not found" }, { status: 404 });
     }
 
+    // Completing the last pet already completes the appointment (database
+    // trigger), so "complete" on a completed appointment is a no-op success.
+    if (action === "completed" && current.status === "completed") {
+      return NextResponse.json({ ok: true, alreadyCompleted: true });
+    }
+
     if (!allowed[action].includes(current.status)) {
+      const verb = action === "completed" ? "complete" : action === "confirmed" ? "confirm" : "cancel";
       return NextResponse.json(
-        { error: `Cannot ${action} an appointment in ${current.status} status` },
+        { error: `Cannot ${verb} an appointment that is ${String(current.status).replace("_", " ")}.` },
         { status: 409 }
       );
     }

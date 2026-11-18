@@ -5,7 +5,7 @@
 // Note: per design notes, card text is meant to be editable later via the
 // admin/MIS module.
 
-const benefits = [
+export const SPA_BENEFITS = [
   {
     title: "Natural Healing",
     description:
@@ -47,7 +47,7 @@ export default function SpaBenefits() {
         </h2>
 
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-          {benefits.map((benefit) => (
+          {SPA_BENEFITS.map((benefit) => (
             <div
               key={benefit.title}
               className="bg-white border-2 border-cyan-300 rounded-xl px-5 py-4"

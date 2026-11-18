@@ -1,3 +1,4 @@
+import { canonicalSizeLabel } from "@/lib/utils/size-label";
 import type { Package, PackageInclusion, PackagePricing, PetSize } from "@/lib/types/services";
 import type { PriceTier } from "@/components/landing/PricingCard";
 
@@ -41,10 +42,10 @@ export function groomingTiers(catalog: PublicPricingCatalog, packageId: string):
   const indexed = rows.flatMap(rate => {
     const size = catalog.sizes.find(s =>
       (rate.size_id != null && rate.size_id === s.id) ||
-      (rate.size_id == null && normalize(s.label) === normalize(rate.size_label)));
+      (rate.size_id == null && normalize(s.label) === normalize(canonicalSizeLabel(rate.size_label))));
     // Deactivated size rows are not advertised for new appointments.
     if (size && !size.is_active) return [];
-    const name = size?.label || rate.size_label;
+    const name = size?.label || canonicalSizeLabel(rate.size_label);
     const weight = size?.weight_range?.trim();
     return [{ rank: size?.sort_order ?? 999, label: weight ? `${name} (${weight})` : name,
       price: pesos(Number(rate.price)), id: rate.id }];

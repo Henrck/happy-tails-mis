@@ -11,6 +11,7 @@ import {
   activePackages, groomingTiers, packageInclusions,
   type PublicPricingCatalog,
 } from "@/lib/landing/public-pricing";
+import type { WebsitePackageMedia } from "@/lib/website/catalog";
 
 function DecorativePaw() {
   return <svg viewBox="0 0 64 64" className="h-16 w-16" fill="currentColor" aria-hidden="true">
@@ -56,27 +57,31 @@ function packageStyle(name: string, images: { basic?: string | null; diamond?: s
   };
 }
 
-export default function GroomingPricing({ basicImage, diamondImage, premiumImage, catalog }: {
+export default function GroomingPricing({ basicImage, diamondImage, premiumImage, catalog, media = [] }: {
   basicImage?: string | null;
   diamondImage?: string | null;
   premiumImage?: string | null;
   catalog: PublicPricingCatalog;
+  /** Photo, description and visibility set per package in Website Management. */
+  media?: WebsitePackageMedia[];
 }) {
-  const dogs = activePackages(catalog, "dog_grooming");
+  const mediaFor = (id: string) => media.find(m => m.package_id === id);
+  const dogs = activePackages(catalog, "dog_grooming").filter(pkg => mediaFor(pkg.id)?.published !== false);
   const images = { basic: basicImage, diamond: diamondImage, premium: premiumImage };
 
   const renderCards = (packages: typeof dogs) => (
     <div className="mt-5 grid grid-cols-1 items-stretch gap-5 md:mt-6 md:gap-6 lg:grid-cols-3">
       {packages.map(pkg => {
         const style = packageStyle(pkg.name, images);
+        const extra = mediaFor(pkg.id);
         const included: IncludeItem[] = packageInclusions(catalog, pkg.id)
           .map(label => ({ label, icon: iconForInclusion(label) }));
         const tiers = groomingTiers(catalog, pkg.id);
         return <PricingCard key={pkg.id}
           headerIcon={style.icon}
           label={pkg.name.toUpperCase()}
-          tagline={style.tagline}
-          imageSrc={style.image}
+          tagline={extra?.description?.trim() || style.tagline}
+          imageSrc={extra?.image_url || style.image}
           imageAlt={`${pkg.name} pet grooming service`}
           includes={included}
           tiers={tiers.length ? tiers : [{ label: "Rate details are being updated", price: "—" }]} />;

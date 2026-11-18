@@ -1,4 +1,5 @@
 "use client";
+import { canonicalSizeLabel } from "@/lib/utils/size-label";
 import { formatPeso } from "@/lib/utils/currency";
 
 import { useEffect, useState } from "react";
@@ -72,7 +73,7 @@ export default function CustomerGroomingSelectionStep({ serviceType, pets, selec
   const covered = coveredAddons(selected?.packageId, { links, inclusions: data.inclusions });
   function rateFor(packageId: string, size: PetSize, lookup = data) {
     const rows = lookup.pricing.filter(row => row.package_id === packageId);
-    return rows.find(row => row.size_id === size.id || normalize(row.size_label) === normalize(size.label)) ?? rows.find(row => row.size_id === null);
+    return rows.find(row => row.size_id === size.id || normalize(canonicalSizeLabel(row.size_label)) === normalize(size.label)) ?? rows.find(row => row.size_id === null);
   }
   function addonRate(addonId: string, sizeLabel?: string, lookup = data) {
     return groomingAddonPrice(lookup.addonPrices.filter(row => row.addon_id === addonId), sizeLabel);

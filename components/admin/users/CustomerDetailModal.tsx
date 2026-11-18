@@ -4,6 +4,7 @@ import { setCustomerStatus, logAudit } from "@/lib/supabase/users";
 import { useToast } from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import type { Customer } from "@/lib/types/users";
+import { useStaffRole } from "@/lib/hooks/useStaffRole";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return <div className="flex justify-between gap-4 py-1 text-sm"><span className="text-zinc-500">{label}</span><span className="text-right font-medium text-zinc-800">{value || "—"}</span></div>;
@@ -20,6 +21,11 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
   const [restrictionReason, setRestrictionReason] = useState("");
   const [restrictionSaving, setRestrictionSaving] = useState(false);
   const [restrictionError, setRestrictionError] = useState("");
+  const isSuperAdmin = useStaffRole() === "superadmin";
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetReason, setResetReason] = useState("");
+  const [resetSaving, setResetSaving] = useState(false);
+  const [resetError, setResetError] = useState("");
 
   async function handleStatusChange(status: "active" | "inactive" | "archived") {
     const { error } = await setCustomerStatus(customer.id, status);
@@ -47,6 +53,23 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
     } finally { setRestrictionSaving(false); }
   }
 
+  async function resetPenalties() {
+    if (resetReason.trim().length < 5 || resetReason.trim().length > 500 || resetSaving) return;
+    setResetSaving(true); setResetError("");
+    try {
+      const response = await fetch("/api/admin/customer-penalty-reset", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: customer.id, reason: resetReason.trim() }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Unable to reset penalty points.");
+      showToast("Penalty points reset to 0/3.");
+      setResetOpen(false); setResetReason(""); await onChanged(); onClose();
+    } catch (error) {
+      setResetError(error instanceof Error ? error.message : "Unable to reset penalty points.");
+    } finally { setResetSaving(false); }
+  }
+
   const restricted = Boolean(customer.is_booking_restricted);
   const points = customer.penalty_count ?? 0;
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onClose}>
@@ -58,7 +81,7 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
 
         <section className="mt-5 rounded-2xl border border-pink-100 bg-pink-50/50 p-4">
           <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-zinc-800">Cancellation Penalties</h4><span className={`rounded-full px-3 py-1 text-sm font-bold ${points >= 3 ? "bg-red-100 text-red-700" : points > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{points}/3</span></div>
-          <p className="mt-2 text-xs leading-5 text-zinc-600">Penalty points are separate from account login status. A cancellation less than 3 days before the appointment, or a customer&apos;s 4th+ cancellation in one day, adds 1 point (12-hour restriction); an automatic no-show adds 2 points (2-day restriction); 3 points restrict booking for 1 month.</p>
+          <p className="mt-2 text-xs leading-5 text-zinc-600">Penalty points are separate from account login status. A cancellation less than 3 days before the appointment, or a customer&apos;s 4th+ cancellation in one day, adds 1 point (12-hour restriction); an automatic no-show adds 2 points (2-day restriction); 3 points restrict booking for 1 month. Each point expires after 60 days, and points go back to 0/3 when a 1-month restriction ends.</p>
           <div className="mt-3 rounded-xl bg-white p-3 text-sm">
             <Row label="Booking restriction" value={restricted ? <span className="font-bold text-red-600">Active</span> : <span className="font-bold text-emerald-600">None</span>} />
             {restricted && <Row label="Restriction until" value={customer.booking_restricted_until ? manilaDate(customer.booking_restricted_until) : "Until manually lifted"} />}
@@ -66,6 +89,7 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
             {customer.penalty_restricted_until && <Row label="Automatic restriction" value={manilaDate(customer.penalty_restricted_until)} />}
           </div>
           <button type="button" onClick={() => { setRestrictionAction(restricted ? "lift" : "restrict"); setRestrictionReason(""); setRestrictionError(""); }} className={`mt-3 w-full rounded-full border-2 px-4 py-2.5 text-sm font-bold ${restricted ? "border-emerald-500 text-emerald-700 hover:bg-emerald-50" : "border-red-400 text-red-600 hover:bg-red-50"}`}>{restricted ? "Lift Booking Restriction" : "Restrict Booking"}</button>
+          {isSuperAdmin && (points > 0 || customer.penalty_restricted_until) && <button type="button" onClick={() => { setResetOpen(true); setResetReason(""); setResetError(""); }} className="mt-2 w-full rounded-full border-2 border-brand-pink px-4 py-2.5 text-sm font-bold text-brand-pink hover:bg-brand-tint">Reset Penalties to 0/3</button>}
         </section>
 
         <div className="mt-5 grid grid-cols-2 gap-2">
@@ -82,11 +106,20 @@ export default function CustomerDetailModal({ customer, onClose, onChanged }: { 
     {restrictionAction && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => { if (event.target === event.currentTarget && !restrictionSaving) setRestrictionAction(null); }}>
       <div role="dialog" aria-modal="true" aria-label="Booking restriction" className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
         <h3 className="text-lg font-bold text-zinc-900">{restrictionAction === "restrict" ? "Restrict Customer Booking" : "Lift Booking Restriction"}</h3>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">{restrictionAction === "restrict" ? "This prevents the customer from creating new appointments. Existing appointments remain unchanged." : "This clears the active automatic and manual booking restriction. The penalty history remains recorded."}</p>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">{restrictionAction === "restrict" ? "This prevents the customer from creating new appointments. Existing appointments remain unchanged." : "This clears the active automatic and manual booking restriction. Penalty points stay as they are; a Super Admin can reset them separately."}</p>
         {restrictionAction === "restrict" && <label className="mt-4 block text-sm font-semibold">Restriction duration<select value={duration} onChange={(event) => setDuration(event.target.value)} className="mt-2 w-full rounded-xl border border-pink-200 p-3"><option value="1">1 day</option><option value="7">7 days</option><option value="30">30 days</option><option value="permanent">Until manually lifted</option></select></label>}
         <label className="mt-4 block text-sm font-semibold">Reason *<textarea value={restrictionReason} onChange={(event) => setRestrictionReason(event.target.value)} maxLength={500} rows={3} placeholder="Enter the reason for this action" className="mt-2 w-full rounded-xl border border-pink-200 p-3 font-normal" /></label>
         {restrictionError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{restrictionError}</p>}
         <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" disabled={restrictionSaving} onClick={() => setRestrictionAction(null)} className="rounded-full border border-zinc-300 py-3 text-sm font-semibold">Cancel</button><button type="button" disabled={restrictionSaving || restrictionReason.trim().length < 5} onClick={() => void saveRestriction()} className={`rounded-full py-3 text-sm font-bold text-white disabled:opacity-40 ${restrictionAction === "restrict" ? "bg-red-600" : "bg-emerald-600"}`}>{restrictionSaving ? "Saving…" : restrictionAction === "restrict" ? "Confirm Restriction" : "Confirm Lift"}</button></div>
+      </div>
+    </div>}
+    {resetOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={(event) => event.stopPropagation()} onMouseDown={(event) => { if (event.target === event.currentTarget && !resetSaving) setResetOpen(false); }}>
+      <div role="dialog" aria-modal="true" aria-label="Reset penalty points" className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <h3 className="text-lg font-bold text-zinc-900">Reset Penalty Points</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">{customer.full_name}&apos;s points go from {points}/3 to 0/3 and any automatic penalty restriction ends. A manual restriction set by staff stays in place. The penalty history is kept and this reset is recorded.</p>
+        <label className="mt-4 block text-sm font-semibold">Reason *<textarea value={resetReason} onChange={(event) => setResetReason(event.target.value)} maxLength={500} rows={3} placeholder="Why are the points being reset?" className="mt-2 w-full rounded-xl border border-pink-200 p-3 font-normal" /></label>
+        {resetError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{resetError}</p>}
+        <div className="mt-5 grid grid-cols-2 gap-3"><button type="button" disabled={resetSaving} onClick={() => setResetOpen(false)} className="rounded-full border border-zinc-300 py-3 text-sm font-semibold">Cancel</button><button type="button" disabled={resetSaving || resetReason.trim().length < 5} onClick={() => void resetPenalties()} className="rounded-full bg-brand-pink py-3 text-sm font-bold text-white disabled:opacity-40">{resetSaving ? "Resetting…" : "Reset to 0/3"}</button></div>
       </div>
     </div>}
   </div>;

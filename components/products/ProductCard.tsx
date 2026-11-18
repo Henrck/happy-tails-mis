@@ -1,9 +1,10 @@
+import { productUnitLabel } from "@/lib/constants/product-units";
 import { formatPeso } from "@/lib/utils/currency";
 import Image from "next/image";
 import type { Product } from "@/lib/types/products";
 
 export default function ProductCard({ product, onView }: { product: Product; onView?: () => void }) {
-  const size = product.package_size ?? product.unit;
+  const size = productUnitLabel(product);
   return (
     <article className="group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-pink-100 bg-white shadow-[0_4px_16px_-2px_rgba(236,56,152,0.06),0_2px_6px_-1px_rgba(17,24,39,0.04)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_14px_28px_-6px_rgba(236,56,152,0.14),0_4px_12px_-2px_rgba(17,24,39,0.06)]">
       <button type="button" onClick={onView} className="flex h-full flex-col text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-pink" aria-label={`View details for ${product.name}`}>

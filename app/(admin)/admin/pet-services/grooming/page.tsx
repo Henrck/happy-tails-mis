@@ -104,8 +104,14 @@ export default function GroomingManagementPage() {
       }
       let completionError: string | null = null;
       if ((pets ?? []).length && (pets ?? []).every(p => p.status === "completed")) {
-        const updated = await updateAppointmentStatus(appointmentId, "completed");
-        if (updated.error) completionError = `Pet completed, but the appointment needs attention: ${updated.error.message}`;
+        // The database completes the appointment automatically when its last pet
+        // is completed; only ask the server to do it if that hasn't happened.
+        const { data: appointment } = await createClient().from("appointments")
+          .select("status").eq("id", appointmentId).maybeSingle();
+        if (appointment?.status !== "completed") {
+          const updated = await updateAppointmentStatus(appointmentId, "completed");
+          if (updated.error) completionError = `Pet completed, but the appointment needs attention: ${updated.error.message}`;
+        }
       }
       setCompletedName(petName);
       await load();

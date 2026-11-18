@@ -1,8 +1,7 @@
 "use client";
-import { formatPeso } from "@/lib/utils/currency";
+import ProductDetailDialog from "@/components/products/ProductDetailDialog";
 
 import { useMemo, useState } from "react";
-import Image from "next/image";
 import type { PetType, Product, ProductCategory } from "@/lib/types/products";
 import ProductCard from "@/components/products/ProductCard";
 import PetTypeTabs from "@/components/products/PetTypeTabs";
@@ -194,70 +193,7 @@ export default function ProductsPageContent({ products }: { products: Product[] 
         )}
       </section>
 
-      {selected && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-zinc-950/50 p-3 backdrop-blur-sm sm:p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="product-detail-title"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setSelected(null); }}
-        >
-          <div className="relative my-auto grid w-full max-w-3xl overflow-hidden rounded-3xl border border-pink-100 bg-white shadow-2xl sm:grid-cols-2">
-            <button type="button" onClick={() => setSelected(null)} aria-label="Close product details" className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-100 bg-white/95 text-xl text-zinc-500 shadow-sm hover:text-brand-pink">
-              ×
-            </button>
-            <div className="relative flex min-h-64 items-center justify-center bg-[#F9FAFB] p-8 sm:min-h-[390px]">
-              {selected.image_url ? (
-                <div className="relative h-56 w-full">
-                  <Image src={selected.image_url} alt={selected.name} fill className="object-contain mix-blend-multiply" sizes="(max-width: 640px) 90vw, 360px" />
-                </div>
-              ) : (
-                <div className="flex h-40 w-40 items-center justify-center rounded-full bg-pink-50 text-5xl">🐾</div>
-              )}
-            </div>
-            <div className="flex flex-col p-6 sm:p-8">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-pink-100 bg-brand-tint px-3 py-1 text-[11px] font-bold text-brand-pink">{selected.category}</span>
-                <span className="text-xs text-zinc-400">Product code: {selected.product_code}</span>
-              </div>
-              <h2 id="product-detail-title" className="pr-8 text-xl font-extrabold leading-snug text-zinc-900 sm:text-2xl">{selected.name}</h2>
-              <p className="mt-3 text-2xl font-extrabold text-brand-pink">{formatPeso(selected.price)}</p>
-
-              <div className="mt-5">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Brief Description</h3>
-                <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-zinc-700">
-                  {selected.description?.trim() || "Product details are being updated."}
-                </p>
-              </div>
-
-              <dl className="mt-5 divide-y divide-pink-50 rounded-2xl border border-pink-100 px-4">
-                <div className="flex justify-between gap-4 py-3 text-sm">
-                  <dt className="text-zinc-500">Unit</dt>
-                  <dd className="text-right font-semibold text-zinc-800">{selected.unit}</dd>
-                </div>
-                {selected.package_size && (
-                  <div className="flex justify-between gap-4 py-3 text-sm">
-                    <dt className="text-zinc-500">Package Size</dt>
-                    <dd className="text-right font-semibold text-zinc-800">{selected.package_size}</dd>
-                  </div>
-                )}
-                <div className="flex justify-between gap-4 py-3 text-sm">
-                  <dt className="text-zinc-500">Category</dt>
-                  <dd className="text-right font-semibold text-zinc-800">{selected.category}</dd>
-                </div>
-                <div className="flex justify-between gap-4 py-3 text-sm">
-                  <dt className="text-zinc-500">Availability</dt>
-                  <dd className="text-right font-semibold text-emerald-700">Available in-store</dd>
-                </div>
-              </dl>
-              <p className="mt-4 text-xs leading-relaxed text-zinc-500">Visit HappyTails to purchase this product. Availability may change based on current store inventory.</p>
-              <button type="button" onClick={() => setSelected(null)} className="mt-auto pt-7">
-                <span className="block w-full rounded-xl bg-brand-pink px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-pink-dark">Close details</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {selected && <ProductDetailDialog product={selected} onClose={() => setSelected(null)} />}
     </>
   );
 }

@@ -5,17 +5,28 @@ import {
   PawHeaderIcon, ClipboardIcon, ClockIcon, BackpackIcon, BathDryIcon, ShieldCheckIcon,
 } from "./pricing-icons";
 import { activePackages, boardingTiers, kennelPackageSize, type PublicPricingCatalog } from "@/lib/landing/public-pricing";
+import type { WebsitePackageMedia } from "@/lib/website/catalog";
 
-export default function BoardingPricing({ smallKennelImage, bigKennelImage, catalog }: {
+export default function BoardingPricing({ smallKennelImage, bigKennelImage, catalog, media = [] }: {
   smallKennelImage?: string | null;
   bigKennelImage?: string | null;
   catalog: PublicPricingCatalog;
+  /** Photo, description and visibility set per package in Website Management. */
+  media?: WebsitePackageMedia[];
 }) {
-  const packages = activePackages(catalog, "boarding");
+  const mediaFor = (id: string) => media.find(m => m.package_id === id);
+  const packages = activePackages(catalog, "boarding").filter(pkg => mediaFor(pkg.id)?.published !== false);
   const small = packages.filter(p => kennelPackageSize(p.name) === "small");
   const big = packages.filter(p => kennelPackageSize(p.name) === "big");
   const smallRates = boardingTiers(catalog, small.map(p => p.id));
   const bigRates = boardingTiers(catalog, big.map(p => p.id));
+  // A kennel card can cover several packages; use the first one with its own photo or text.
+  const groupMedia = (group: typeof packages) => ({
+    image: group.map(p => mediaFor(p.id)?.image_url).find(Boolean),
+    description: group.map(p => mediaFor(p.id)?.description?.trim()).find(Boolean),
+  });
+  const smallExtra = groupMedia(small);
+  const bigExtra = groupMedia(big);
   const includes = [
     { icon: <BathDryIcon />, label: "Feeding" },
     { icon: <ShieldCheckIcon />, label: "Water" },
@@ -46,8 +57,8 @@ export default function BoardingPricing({ smallKennelImage, bigKennelImage, cata
             {small.length > 0 && <PricingCard
               headerIcon={<PawHeaderIcon />}
               label="SMALL KENNELS"
-              tagline="A comfortable stay for small and medium pets."
-              imageSrc={smallKennelImage || "/images/small-kennel-dog.png"}
+              tagline={smallExtra.description || "A comfortable stay for small and medium pets."}
+              imageSrc={smallExtra.image || smallKennelImage || "/images/small-kennel-dog.png"}
               imageAlt="Dog relaxing in a small boarding kennel"
               includes={includes}
               tiers={smallRates.length
@@ -57,8 +68,8 @@ export default function BoardingPricing({ smallKennelImage, bigKennelImage, cata
             {big.length > 0 && <PricingCard
               headerIcon={<PawHeaderIcon />}
               label="BIG KENNELS"
-              tagline="Spacious accommodation for eligible pets and shared bookings."
-              imageSrc={bigKennelImage || "/images/big-kennel-dog.png"}
+              tagline={bigExtra.description || "Spacious accommodation for eligible pets and shared bookings."}
+              imageSrc={bigExtra.image || bigKennelImage || "/images/big-kennel-dog.png"}
               imageAlt="Dog resting in a big boarding kennel"
               includes={includes}
               tiers={bigRates.length

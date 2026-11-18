@@ -10,6 +10,9 @@ export async function fetchStaff() {
 
 export async function fetchCustomers() {
   const supabase = createClient();
+  // Expire old penalty points first so the table shows current counts.
+  // Ignored if the database function is not installed yet.
+  await supabase.rpc("happytails_refresh_penalty_counts");
   const [{ data, error }, { data: penalties, error: penaltyError }] = await Promise.all([
     supabase.from("customers").select("*").order("registered_at", { ascending: false }),
     supabase.from("customer_booking_penalties").select("customer_id,penalty_count,penalty_restricted_until,manual_restricted,manual_restricted_until,manual_restriction_reason"),

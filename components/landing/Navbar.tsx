@@ -26,7 +26,7 @@ function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export default function Navbar({ logoUrl }: { logoUrl?: string | null }) {
+export default function Navbar({ logoUrl, translucent = true }: { logoUrl?: string | null; translucent?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [activeLink, setActiveLink] = useState<string>("home");
@@ -108,10 +108,10 @@ export default function Navbar({ logoUrl }: { logoUrl?: string | null }) {
 
     if (href.startsWith("/#")) {
       const id = href.slice(2);
-      if (pathname === "/") {
+      if (pathname === "/" || document.getElementById(id)) {
         e.preventDefault();
         scrollToId(id);
-        window.history.pushState(null, "", href);
+        window.history.pushState(null, "", `#${id}`);
       }
     }
   }
@@ -120,7 +120,7 @@ export default function Navbar({ logoUrl }: { logoUrl?: string | null }) {
   const isRemote = !!logoUrl && logoUrl !== "/images/logo.png";
 
   return (
-    <nav className="sticky top-0 z-50 bg-brand-pink shadow-md">
+    <nav className={`sticky top-0 z-50 shadow-md ${translucent ? "bg-brand-pink/75 shadow-brand-pink/10 backdrop-blur-md backdrop-saturate-150" : "bg-brand-pink"}`}>
       <div className="flex items-center justify-between px-6 py-3 md:px-10">
         <Link href="/" className="flex items-center gap-2" onClick={(e) => handleNavClick(e, "/")}>
           <Image src={resolvedLogo} alt="Happy Tails" width={36} height={36} className="rounded-full bg-white" unoptimized={isRemote} />
@@ -186,7 +186,7 @@ export default function Navbar({ logoUrl }: { logoUrl?: string | null }) {
       </div>
 
       <div className={`overflow-hidden transition-[max-height] duration-300 ease-in-out md:hidden ${isOpen ? "max-h-64" : "max-h-0"}`}>
-        <div className="flex flex-col gap-2 bg-brand-pink-dark px-6 pb-4 pt-1 text-sm font-medium text-white">
+        <div className={`flex flex-col gap-2 px-6 ${translucent ? "bg-brand-pink-dark/90" : "bg-brand-pink-dark"} pb-4 pt-1 text-sm font-medium text-white`}>
           {navLinks.map((link) => {
             const isActive = activeLink === link.key;
             return (

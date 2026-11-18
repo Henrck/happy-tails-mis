@@ -46,6 +46,8 @@ export default function CustomerPenaltyCounter() {
       }
       // Apply any overdue no-show first so the counter shows current points.
       await processOverdueNoShows();
+      // Expire old points (and apply a served-month reset) before reading the count.
+      await supabase.rpc("happytails_refresh_penalty_counts", { p_customer_id: user.id });
       if (!active) return;
 
       const refresh = async () => {
@@ -166,7 +168,7 @@ export default function CustomerPenaltyCounter() {
                 <strong className="text-zinc-800">Maximum penalty:</strong> At 3 penalty points, new bookings are restricted for 1 month.
               </p>
               <p className="rounded-xl bg-pink-50 p-3 text-xs">
-                Penalty points remain on record after a restriction expires; the restriction ending does not reset the counter. An administrator may lift a restriction early, but that does not erase the recorded points. Your other existing appointments are not cancelled by a restriction.
+                Each penalty point expires 60 days after it was given. After a 1-month restriction ends, your points go back to 0/3. An administrator may lift a restriction early, but your points stay until they expire or the month would have ended. Your other existing appointments are not cancelled by a restriction.
               </p>
             </div>
             <button type="button" onClick={() => setOpen(false)} className="mt-5 w-full rounded-full bg-brand-pink py-3 font-bold text-white">

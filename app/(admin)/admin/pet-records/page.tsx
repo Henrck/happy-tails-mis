@@ -1,4 +1,5 @@
 "use client";
+import { petAgeInMonths } from "@/lib/utils/pet-age";
 import { matchesPetId } from "@/lib/utils/pet-id";
 
 import { useState, useEffect, useCallback } from "react";
@@ -63,8 +64,9 @@ export default function PetRecordsPage() {
       const matchesOwner = tab === "walk-in" || ownerFilter === "all" || pet.customer_id === ownerFilter;
       return matchesSearch && matchesSpecies && matchesBreed && matchesOwner;
     });
-    if (filters.ageSort === "youngest") result = [...result].sort((a, b) => (a.age ?? 999) - (b.age ?? 999));
-    if (filters.ageSort === "oldest") result = [...result].sort((a, b) => (b.age ?? -1) - (a.age ?? -1));
+    // Compare full ages (weeks/months/years) in months; pets with no recorded age go last.
+    if (filters.ageSort === "youngest") result = [...result].sort((a, b) => (petAgeInMonths(a) ?? Infinity) - (petAgeInMonths(b) ?? Infinity));
+    if (filters.ageSort === "oldest") result = [...result].sort((a, b) => (petAgeInMonths(b) ?? -Infinity) - (petAgeInMonths(a) ?? -Infinity));
     return result;
   })();
 

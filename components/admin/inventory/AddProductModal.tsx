@@ -1,11 +1,12 @@
 "use client";
+import { PRODUCT_UNITS } from "@/lib/constants/product-units";
 
 import { useState } from "react";
 import { addProduct } from "@/lib/supabase/products";
 import type { PetType, ProductCategory } from "@/lib/types/products";
 
 const categories: ProductCategory[] = ["Food", "Treats", "Grooming", "Accessories", "Hygiene"];
-const unitOptions = ["Piece", "Kilo", "Liters", "Pack", "Bottle", "Can", "Pouch", "Box"] as const;
+const unitOptions = PRODUCT_UNITS;
 const petTypeOptions: { label: string; value: PetType }[] = [
   { label: "Dogs", value: "dog" },
   { label: "Cats", value: "cat" },

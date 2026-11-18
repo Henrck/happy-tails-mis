@@ -1,4 +1,5 @@
 "use client";
+import { PRODUCT_UNITS } from "@/lib/constants/product-units";
 import { formatPeso } from "@/lib/utils/currency";
 
 import { useState } from "react";
@@ -32,7 +33,7 @@ type Mode =
   | "confirmReactivate";
 
 const categories: ProductCategory[] = ["Food", "Treats", "Grooming", "Accessories", "Hygiene"];
-const unitOptions = ["Piece", "Kilo", "Liters", "Pack", "Bottle", "Can", "Pouch", "Box"] as const;
+const unitOptions = PRODUCT_UNITS;
 const petTypeOptions: { label: string; value: PetType }[] = [
   { label: "Dogs", value: "dog" },
   { label: "Cats", value: "cat" },

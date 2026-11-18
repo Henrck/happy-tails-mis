@@ -1,3 +1,4 @@
+import { productUnitLabel } from "@/lib/constants/product-units";
 import { formatPeso } from "@/lib/utils/currency";
 import type { Product } from "@/lib/types/products";
 import ProductImage from "@/components/admin/pos/ProductImage";
@@ -16,7 +17,7 @@ export default function ProductManageCard({
     <div className={`bg-white rounded-xl border-2 p-3 flex flex-col items-center text-center ${archived ? "border-zinc-200 opacity-60" : "border-pink-100"}`}>
       <ProductImage src={product.image_url} alt={product.name} />
       <p className="mt-2 text-xs font-semibold text-zinc-800 uppercase truncate w-full">{product.name}</p>
-      <p className="text-xs text-zinc-500">{product.package_size ?? product.unit}</p>
+      <p className="text-xs text-zinc-500">{productUnitLabel(product)}</p>
       <p className="text-sm font-bold text-brand-pink">{formatPeso(product.price)}</p>
 
       <div className="mt-2 flex items-center gap-3">

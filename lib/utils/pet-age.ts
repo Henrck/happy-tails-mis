@@ -44,3 +44,14 @@ export function petAgeError(input: string, required: boolean): string | null {
   if (!meetsMinimumPetAge(normalized.age_text)) return `${MIN_PET_AGE_MESSAGE} You entered ${normalized.age_text}.`;
   return null;
 }
+
+/** Age in months for sorting ("6 weeks" ≈ 1.4, "6 months" = 6, "2 years" = 24),
+ * or null when unknown. Uses age_text first, then the legacy years field. */
+export function petAgeInMonths(pet: PetAge): number | null {
+  const match = /^(\d+) (week|month|year)s?$/.exec((pet.age_text ?? "").trim().toLowerCase());
+  if (match) {
+    const amount = Number(match[1]);
+    return match[2] === "week" ? amount * 12 / 52 : match[2] === "month" ? amount : amount * 12;
+  }
+  return pet.age == null ? null : pet.age * 12;
+}

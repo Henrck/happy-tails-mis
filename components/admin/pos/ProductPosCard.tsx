@@ -1,3 +1,4 @@
+import { productUnitLabel } from "@/lib/constants/product-units";
 import { formatPeso } from "@/lib/utils/currency";
 import type { Product } from "@/lib/types/products";
 import ProductImage from "./ProductImage";
@@ -35,7 +36,7 @@ export default function ProductPosCard({
       <p className={`mt-2 text-xs font-semibold uppercase truncate w-full ${outOfStock ? "text-zinc-400" : "text-zinc-800"}`} title={product.name}>
         {product.name}
       </p>
-      <p className="text-xs text-zinc-500">{product.package_size ?? product.unit}</p>
+      <p className="text-xs text-zinc-500">{productUnitLabel(product)}</p>
       <p className={`text-sm font-bold ${outOfStock ? "text-zinc-400" : "text-brand-pink"}`}>{formatPeso(product.price)}</p>
 
       {outOfStock ? (

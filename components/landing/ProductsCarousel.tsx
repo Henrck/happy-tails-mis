@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Product, ProductCategory } from "@/lib/types/products";
 import ProductCard from "@/components/products/ProductCard";
+import ProductDetailDialog from "@/components/products/ProductDetailDialog";
 import CategoryTabs from "@/components/products/CategoryTabs";
 
 const PAGE_SIZE = 4;
@@ -13,6 +14,7 @@ export default function ProductsCarousel({ products }: { products: Product[] }) 
   const [category, setCategory] = useState<ProductCategory | "all">("all");
   const [page, setPage] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [selected, setSelected] = useState<Product | null>(null);
 
   const filtered = useMemo(
     () => (category === "all" ? products : products.filter((p) => p.category === category)),
@@ -37,14 +39,15 @@ export default function ProductsCarousel({ products }: { products: Product[] }) 
   }
 
   useEffect(() => {
-    if (pageCount <= 1 || paused) return;
+    // Hold the slide while a product's details are open.
+    if (pageCount <= 1 || paused || selected) return;
 
     const timer = window.setInterval(() => {
       setPage((p) => (p + 1) % pageCount);
     }, AUTOPLAY_MS);
 
     return () => window.clearInterval(timer);
-  }, [pageCount, paused]);
+  }, [pageCount, paused, selected]);
 
   return (
     <section
@@ -75,7 +78,7 @@ export default function ProductsCarousel({ products }: { products: Product[] }) 
 
             <div className="grid min-w-0 flex-1 grid-cols-2 items-stretch gap-3 md:grid-cols-4 md:gap-4">
               {visible.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} onView={() => setSelected(product)} />
               ))}
             </div>
 
@@ -97,6 +100,7 @@ export default function ProductsCarousel({ products }: { products: Product[] }) 
           </Link>
         </div>
       </div>
+      {selected && <ProductDetailDialog product={selected} onClose={() => setSelected(null)} />}
     </section>
   );
 }

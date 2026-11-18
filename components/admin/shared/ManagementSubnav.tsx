@@ -12,8 +12,9 @@ const destinations: Record<ManagementSection, { href: string; label: string; sho
   ],
   website: [
     { href: "/admin/website-management", label: "Website preview" },
-    { href: "/admin/website-management/content", label: "Edit website text, services & package images", shortLabel: "Edit website content" },
-    { href: "/admin/website-management/branches", label: "Manage Other Branches", shortLabel: "Other branches" },
+    { href: "/admin/website-management/content", label: "Text, services & package photos", shortLabel: "Text & photos" },
+    { href: "/admin/website-management/branches", label: "Branches" },
+    { href: "/admin/website-management/faqs", label: "FAQs" },
   ],
 };
 
